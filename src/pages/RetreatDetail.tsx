@@ -196,7 +196,10 @@ const RetreatDetail = () => {
         {/* Book Button */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-card border-t border-border">
           <div className="max-w-4xl mx-auto">
-            <Button className="w-full h-12 text-lg">
+            <Button
+              className="w-full h-12 text-lg"
+              onClick={() => navigate(`/retreat/${id}/book`, { state: { retreat } })}
+            >
               Book This Retreat - ${retreat.price}
             </Button>
           </div>
