@@ -2,8 +2,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Calendar, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface RetreatCardProps {
+  id: number;
   image: string;
   level: "Beginner" | "Intermediate" | "Advanced";
   title: string;
@@ -20,6 +22,7 @@ interface RetreatCardProps {
 }
 
 export const RetreatCard = ({
+  id,
   image,
   level,
   title,
@@ -31,6 +34,8 @@ export const RetreatCard = ({
   totalSpots,
   price,
 }: RetreatCardProps) => {
+  const navigate = useNavigate();
+  
   const levelColors = {
     Beginner: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100",
     Intermediate: "bg-amber-100 text-amber-700 hover:bg-amber-100",
@@ -38,7 +43,10 @@ export const RetreatCard = ({
   };
 
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+    <Card 
+      className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+      onClick={() => navigate(`/retreat/${id}`)}
+    >
       <div className="relative">
         <img
           src={image}
@@ -81,7 +89,14 @@ export const RetreatCard = ({
 
         <div className="flex items-center justify-between pt-2">
           <span className="text-2xl font-bold text-primary">${price}</span>
-          <Button variant="link" className="text-primary">
+          <Button 
+            variant="link" 
+            className="text-primary"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/retreat/${id}`);
+            }}
+          >
             View Details
           </Button>
         </div>

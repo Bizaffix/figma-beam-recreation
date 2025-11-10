@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 const Index = () => {
   const retreats = [
     {
+      id: 1,
       image: "https://images.unsplash.com/photo-1706614452468-d9d7c5b967b6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxxdWlsdGluZyUyMGZhYnJpYyUyMGNvbG9yZnVsfGVufDF8fHx8MTc2MDM4NTc4NXww&ixlib=rb-4.1.0&q=80&w=1080",
       level: "Intermediate" as const,
       title: "Modern Quilting Techniques",
@@ -22,6 +23,7 @@ const Index = () => {
       price: 850,
     },
     {
+      id: 2,
       image: "https://images.unsplash.com/photo-1723074832961-397744da2380?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080",
       level: "Advanced" as const,
       title: "Art Quilt Masterclass",
@@ -37,6 +39,7 @@ const Index = () => {
       price: 950,
     },
     {
+      id: 3,
       image: "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080",
       level: "Beginner" as const,
       title: "Beginner's Quilting Journey",
