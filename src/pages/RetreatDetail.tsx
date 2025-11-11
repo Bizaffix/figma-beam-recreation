@@ -3,42 +3,25 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, MapPin, Calendar, Users, Clock, Heart } from "lucide-react";
+import { getRetreatById } from "@/data/retreats";
 
 const RetreatDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // Mock data - in real app, fetch based on id
-  const retreat = {
-    image: "https://images.unsplash.com/photo-1706614452468-d9d7c5b967b6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxxdWlsdGluZyUyMGZhYnJpYyUyMGNvbG9yZnVsfGVufDF8fHx8MTc2MDM4NTc4NXww&ixlib=rb-4.1.0&q=80&w=1080",
-    level: "Intermediate",
-    title: "Modern Quilting Techniques",
-    instructor: {
-      name: "Emma Thompson",
-      avatar: "https://images.unsplash.com/photo-1543430720-fa600c67e423?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=100&h=100",
-      bio: "Emma has been teaching quilting for over 15 years and specializes in modern techniques. She's passionate about helping students discover their unique quilting style."
-    },
-    location: "Burlington, Vermont",
-    date: "Nov 5-8, 2025",
-    duration: "4 days",
-    spotsAvailable: 3,
-    totalSpots: 12,
-    price: 850,
-    description: "Join us for an immersive 4-day retreat focused on modern quilting techniques. You'll learn innovative piecing methods, explore contemporary color theory, and create stunning modern quilt designs.",
-    includes: [
-      "All materials and fabric",
-      "Daily breakfast and lunch",
-      "Accommodation at the retreat center",
-      "Access to professional sewing equipment",
-      "Take-home project kit"
-    ],
-    schedule: [
-      { day: "Day 1", activities: "Introduction, Color Theory, and Design Basics" },
-      { day: "Day 2", activities: "Modern Piecing Techniques and Pattern Work" },
-      { day: "Day 3", activities: "Advanced Methods and Personal Project" },
-      { day: "Day 4", activities: "Finishing Touches and Showcase" }
-    ]
-  };
+  // Fetch retreat by id from centralized data
+  const retreat = getRetreatById(Number(id));
+
+  if (!retreat) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-2">Retreat Not Found</h1>
+          <Button onClick={() => navigate("/")}>Back to Retreats</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-hero pb-20">
@@ -47,7 +30,7 @@ const RetreatDetail = () => {
         <img
           src={retreat.image}
           alt={retreat.title}
-          className="w-full h-64 object-cover"
+          className="w-full h-80 object-cover"
         />
         <Button
           variant="secondary"
@@ -67,11 +50,11 @@ const RetreatDetail = () => {
       </div>
 
       {/* Content */}
-      <div className="px-6 -mt-8 max-w-4xl mx-auto space-y-6">
+      <div className="px-6 -mt-4 max-w-4xl mx-auto space-y-6 pt-4">
         {/* Main Info Card */}
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <Badge className="mb-3 bg-amber-100 text-amber-700 hover:bg-amber-100">
                   {retreat.level}
@@ -86,7 +69,7 @@ const RetreatDetail = () => {
             </div>
 
             {/* Instructor */}
-            <div className="flex items-center gap-3 py-4 border-y border-border">
+            <div className="flex items-center gap-3 py-6 border-y border-border">
               <img
                 src={retreat.instructor.avatar}
                 alt={retreat.instructor.name}

@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getRetreatById } from "@/data/retreats";
 
 const Payment = () => {
   const { id } = useParams();
@@ -12,14 +13,19 @@ const Payment = () => {
   const retreatFromState = (location.state as any)?.retreat;
   const bookingFromState = (location.state as any)?.booking;
 
-  const retreat =
-    retreatFromState ?? {
-      image: "/placeholder.svg",
-      title: "Coastal Quilting Escape",
-      date: "Feb 14-17, 2026",
-      location: "Mendocino, California",
-      price: 900,
-    };
+  // Try to get retreat from navigation state first, then fetch by id
+  const retreat = retreatFromState ?? getRetreatById(Number(id));
+
+  if (!retreat) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-2">Retreat Not Found</h1>
+          <Button onClick={() => navigate("/")}>Back to Retreats</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-hero pb-32">

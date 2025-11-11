@@ -4,22 +4,27 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getRetreatById } from "@/data/retreats";
 
 const Booking = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const location = useLocation();
-  // In a real app you'd fetch retreat by id. Prefer navigation state if provided.
+  // Try to get retreat from navigation state first, then fetch by id
   const retreatFromState = (location.state as any)?.retreat;
-  const retreat =
-    retreatFromState ?? {
-      image: "/placeholder.svg",
-      title: "Coastal Quilting Escape",
-      date: "Feb 14-17, 2026",
-      location: "Mendocino, California",
-      price: 900,
-    };
+  const retreat = retreatFromState ?? getRetreatById(Number(id));
+
+  if (!retreat) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-2">Retreat Not Found</h1>
+          <Button onClick={() => navigate("/")}>Back to Retreats</Button>
+        </div>
+      </div>
+    );
+  }
 
   // Simple form state
   const [fullName, setFullName] = React.useState("");

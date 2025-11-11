@@ -3,58 +3,9 @@ import { BottomNav } from "@/components/BottomNav";
 import { Input } from "@/components/ui/input";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { retreats } from "@/data/retreats";
 
 const Index = () => {
-  const retreats = [
-    {
-      id: 1,
-      image: "https://images.unsplash.com/photo-1706614452468-d9d7c5b967b6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxxdWlsdGluZyUyMGZhYnJpYyUyMGNvbG9yZnVsfGVufDF8fHx8MTc2MDM4NTc4NXww&ixlib=rb-4.1.0&q=80&w=1080",
-      level: "Intermediate" as const,
-      title: "Modern Quilting Techniques",
-      instructor: {
-        name: "Emma Thompson",
-        avatar: "https://images.unsplash.com/photo-1543430720-fa600c67e423?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=100&h=100",
-      },
-      location: "Burlington, Vermont",
-      date: "Nov 5-8, 2025",
-      duration: "4 days",
-      spotsAvailable: 3,
-      totalSpots: 12,
-      price: 850,
-    },
-    {
-      id: 2,
-      image: "https://images.unsplash.com/photo-1723074832961-397744da2380?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080",
-      level: "Advanced" as const,
-      title: "Art Quilt Masterclass",
-      instructor: {
-        name: "Maria Santos",
-        avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=100&h=100",
-      },
-      location: "Portland, Oregon",
-      date: "Dec 12-15, 2025",
-      duration: "4 days",
-      spotsAvailable: 5,
-      totalSpots: 10,
-      price: 950,
-    },
-    {
-      id: 3,
-      image: "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080",
-      level: "Beginner" as const,
-      title: "Beginner's Quilting Journey",
-      instructor: {
-        name: "Sarah Johnson",
-        avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=100&h=100",
-      },
-      location: "Austin, Texas",
-      date: "Jan 15-18, 2026",
-      duration: "4 days",
-      spotsAvailable: 8,
-      totalSpots: 15,
-      price: 750,
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-gradient-hero pb-20">
