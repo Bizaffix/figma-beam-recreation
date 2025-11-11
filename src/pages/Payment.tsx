@@ -103,7 +103,17 @@ const Payment = () => {
 
       <div className="fixed bottom-4 left-0 right-0 px-6">
         <div className="max-w-4xl mx-auto">
-          <Button className="w-full h-12 text-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white" onClick={() => alert('Payment flow not implemented in demo') }>
+          <Button
+            className="w-full h-12 text-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+            onClick={() =>
+              navigate(`/retreat/${id}/confirmed`, {
+                state: {
+                  retreat,
+                  booking: bookingFromState,
+                },
+              })
+            }
+          >
             Confirm & Pay
           </Button>
         </div>
