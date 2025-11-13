@@ -1,3 +1,33 @@
+# Dependencies
+node_modules
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Production
+/dist
+/build
+/.next
+/out
+
+# Environment variables - NEVER commit these!
+# These contain sensitive keys (Supabase, Stripe, etc.)
+.env
+.env.local
+.env.development
+.env.development.local
+.env.production
+.env.production.local
+.env.test
+.env.test.local
+*.env
+*.env.*
+
+# But allow .env.example (template file with no real keys)
+!.env.example
+
 # Logs
 logs
 *.log
@@ -6,11 +36,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
 
 # Editor directories and files
 .vscode/*
@@ -22,3 +47,49 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.cache
+
+# Vite
+.vite
+vite.config.*.timestamp-*
+
+# TypeScript
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache
+.parcel-cache
+
+# Next.js
+.next
+
+# Nuxt.js
+.nuxt
+
+# Vercel
+.vercel
+
+# Turbo
+.turbo

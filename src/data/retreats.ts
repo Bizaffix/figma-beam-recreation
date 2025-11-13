@@ -20,6 +20,7 @@ export interface Retreat {
     day: string;
     activities: string;
   }[];
+  published: boolean;
 }
 
 export const retreats: Retreat[] = [
@@ -52,7 +53,8 @@ export const retreats: Retreat[] = [
       { day: "Day 2", activities: "Modern Piecing Techniques and Pattern Work" },
       { day: "Day 3", activities: "Advanced Methods and Personal Project" },
       { day: "Day 4", activities: "Finishing Touches and Showcase" }
-    ]
+    ],
+    published: true
   },
   {
     id: 2,
@@ -84,7 +86,8 @@ export const retreats: Retreat[] = [
       { day: "Day 2", activities: "Advanced Textile Techniques" },
       { day: "Day 3", activities: "Mixed Media Integration and Experimentation" },
       { day: "Day 4", activities: "Portfolio Development and Critique" }
-    ]
+    ],
+    published: true
   },
   {
     id: 3,
@@ -116,7 +119,8 @@ export const retreats: Retreat[] = [
       { day: "Day 2", activities: "Cutting, Piecing, and Simple Patterns" },
       { day: "Day 3", activities: "Assembling Your First Quilt Top" },
       { day: "Day 4", activities: "Finishing, Binding, and Care Tips" }
-    ]
+    ],
+    published: true
   },
   {
     id: 4,
@@ -148,7 +152,8 @@ export const retreats: Retreat[] = [
       { day: "Day 2", activities: "Ocean-Inspired Patterns and Piecing" },
       { day: "Day 3", activities: "Beach Walk and Creative Refresh" },
       { day: "Day 4", activities: "Final Touches and Sunset Celebration" }
-    ]
+    ],
+    published: false
   }
 ];
 

@@ -2,8 +2,12 @@ import { BottomNav } from "@/components/BottomNav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, TrendingUp, Star, Award } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const Home = () => {
+  const navigate = useNavigate();
+
+  // This page is now student-only, so it will only be accessible to students
   return (
     <div className="min-h-screen bg-gradient-hero pb-20">
       {/* Header */}

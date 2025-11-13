@@ -1,16 +1,25 @@
-import { Home, Compass, User } from "lucide-react";
+import { Home, Compass, User, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const BottomNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { role } = useAuth();
 
-  const navItems = [
-    { icon: Compass, label: "Discover", path: "/" },
-    { icon: Home, label: "Home", path: "/home" },
-    { icon: User, label: "Profile", path: "/profile" },
-  ];
+  // Different navigation for instructors vs students
+  const navItems = role === 'instructor' 
+    ? [
+        { icon: Compass, label: "Discover", path: "/" },
+        { icon: LayoutDashboard, label: "Dashboard", path: "/instructor/dashboard" },
+        { icon: User, label: "Profile", path: "/profile" },
+      ]
+    : [
+        { icon: Compass, label: "Discover", path: "/" },
+        { icon: Home, label: "Home", path: "/home" },
+        { icon: User, label: "Profile", path: "/profile" },
+      ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">

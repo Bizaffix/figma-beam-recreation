@@ -1,20 +1,231 @@
+import { useState, useEffect } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getRetreatById } from "@/data/retreats";
+import { supabase } from "@/lib/supabase";
+import { useStripe, useElements, CardElement } from "@stripe/react-stripe-js";
+import { createPaymentIntent, confirmPayment } from "@/lib/stripe-payment";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+
+interface RetreatData {
+  id: number;
+  title: string;
+  location: string;
+  date: string;
+  price: number;
+  image: string;
+}
 
 const Payment = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-
   const location = useLocation();
-  const retreatFromState = (location.state as any)?.retreat;
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const stripe = useStripe();
+  const elements = useElements();
+  
+  const [retreat, setRetreat] = useState<RetreatData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const bookingFromState = (location.state as any)?.booking;
 
-  // Try to get retreat from navigation state first, then fetch by id
-  const retreat = retreatFromState ?? getRetreatById(Number(id));
+  // Stripe Card Element error state
+  const [cardError, setCardError] = useState<string>("");
+
+  // Fetch retreat and create payment intent
+  useEffect(() => {
+    const retreatFromState = (location.state as any)?.retreat;
+    
+    const initializePayment = async (retreatData: RetreatData) => {
+      if (!bookingFromState || !user) {
+        toast({
+          title: "Error",
+          description: "Booking information is missing",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        // Create payment intent
+        const { clientSecret: secret, error } = await createPaymentIntent(
+          retreatData.id,
+          retreatData.price,
+          bookingFromState
+        );
+
+        if (error) {
+          toast({
+            title: "Error",
+            description: error,
+            variant: "destructive",
+          });
+        } else if (secret) {
+          setClientSecret(secret);
+        }
+      } catch (error: any) {
+        console.error('Error initializing payment:', error);
+        toast({
+          title: "Error",
+          description: "Failed to initialize payment",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    if (retreatFromState) {
+      setRetreat(retreatFromState);
+      setLoading(false);
+      initializePayment(retreatFromState);
+    } else if (id) {
+      // Fetch from Supabase
+      const fetchRetreat = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('retreats')
+            .select('id, title, location, date, price, image')
+            .eq('id', Number(id))
+            .eq('published', true)
+            .single();
+
+          if (error) {
+            console.error('Error fetching retreat:', error);
+            toast({
+              title: "Error",
+              description: "Failed to load retreat details",
+              variant: "destructive",
+            });
+          } else if (data) {
+            setRetreat(data);
+            await initializePayment(data);
+          }
+        } catch (error) {
+          console.error('Unexpected error:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchRetreat();
+    } else {
+      setLoading(false);
+    }
+  }, [id, location.state, bookingFromState, user, toast]);
+
+  // Handle payment submission
+  const handleConfirmPayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!stripe || !elements || !clientSecret || !retreat || !bookingFromState) {
+      toast({
+        title: "Error",
+        description: "Payment system is not ready. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      toast({
+        title: "Error",
+        description: "Card information is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setProcessing(true);
+    setCardError("");
+
+    try {
+      // Confirm payment with Stripe
+      const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: cardElement,
+          billing_details: {
+            name: bookingFromState.fullName,
+            email: bookingFromState.email,
+          },
+        },
+      });
+
+      if (stripeError) {
+        setCardError(stripeError.message || "Payment failed");
+        toast({
+          title: "Payment Failed",
+          description: stripeError.message || "Your payment could not be processed",
+          variant: "destructive",
+        });
+        setProcessing(false);
+        return;
+      }
+
+      if (paymentIntent && paymentIntent.status === 'succeeded') {
+        // Confirm payment and create booking in database
+        const { success, bookingId, error: confirmError } = await confirmPayment(
+          paymentIntent.id,
+          retreat.id,
+          bookingFromState,
+          user?.id
+        );
+
+        if (success) {
+          toast({
+            title: "Payment Successful",
+            description: "Your booking has been confirmed!",
+          });
+          
+          // Navigate to confirmation page
+          navigate(`/retreat/${id}/confirmed`, {
+            state: {
+              retreat,
+              booking: bookingFromState,
+              paymentIntent: paymentIntent.id,
+              bookingId,
+            },
+          });
+        } else {
+          console.error('Booking creation failed:', confirmError);
+          toast({
+            title: "Error",
+            description: confirmError || "Payment succeeded but booking creation failed. Please contact support.",
+            variant: "destructive",
+          });
+          setProcessing(false);
+        }
+      } else {
+        toast({
+          title: "Payment Pending",
+          description: "Your payment is being processed",
+        });
+        setProcessing(false);
+      }
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      setCardError(error.message || "An unexpected error occurred");
+      toast({
+        title: "Error",
+        description: error.message || "Payment processing failed",
+        variant: "destructive",
+      });
+      setProcessing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-muted-foreground">Loading payment details...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!retreat) {
     return (
@@ -33,7 +244,7 @@ const Payment = () => {
         <Card>
           <CardContent className="p-4 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <img src={retreat.image} alt={retreat.title} className="w-20 h-16 rounded-md object-cover" />
+              <img src={retreat.image || "/placeholder.svg"} alt={retreat.title} className="w-20 h-16 rounded-md object-cover" />
               <div>
                 <p className="font-semibold text-card-foreground">{retreat.title}</p>
                 <p className="text-sm text-muted-foreground">{retreat.date}</p>
@@ -53,21 +264,39 @@ const Payment = () => {
               <p className="text-sm">Secure payment powered by Stripe</p>
             </div>
 
+            <form id="payment-form" onSubmit={handleConfirmPayment}>
             <div className="space-y-4">
-              <div>
-                <Label>Card Number</Label>
-                <Input placeholder="1234 5678 9012 3456" />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2">
-                  <Label>Expiry Date</Label>
-                  <Input placeholder="MM/YY" />
-                </div>
                 <div>
-                  <Label>CVV</Label>
-                  <Input placeholder="123" />
+                  <Label>Card Information *</Label>
+                  <div className="mt-2 p-3 border rounded-md bg-card">
+                    <CardElement
+                      options={{
+                        style: {
+                          base: {
+                            fontSize: '16px',
+                            color: '#424770',
+                            '::placeholder': {
+                              color: '#aab7c4',
+                            },
+                          },
+                          invalid: {
+                            color: '#fa755a',
+                            iconColor: '#fa755a',
+                          },
+                        },
+                      }}
+                      onChange={(e) => {
+                        if (e.error) {
+                          setCardError(e.error.message);
+                        } else {
+                          setCardError("");
+                        }
+                      }}
+                    />
                 </div>
+                  {cardError && (
+                    <p className="text-sm text-destructive mt-1">{cardError}</p>
+                  )}
               </div>
 
               <div className="mt-4 p-3 bg-muted/20 rounded-md text-sm text-muted-foreground">
@@ -77,6 +306,7 @@ const Payment = () => {
                 </div>
               </div>
             </div>
+            </form>
           </CardContent>
         </Card>
 
@@ -104,18 +334,23 @@ const Payment = () => {
       <div className="fixed bottom-4 left-0 right-0 px-6">
         <div className="max-w-4xl mx-auto">
           <Button
+            type="submit"
+            form="payment-form"
             className="w-full h-12 text-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-            onClick={() =>
-              navigate(`/retreat/${id}/confirmed`, {
-                state: {
-                  retreat,
-                  booking: bookingFromState,
-                },
-              })
-            }
+            disabled={!stripe || !elements || processing || !clientSecret}
           >
-            Confirm & Pay
+            {processing ? "Processing..." : `Confirm & Pay $${retreat?.price || 0}`}
           </Button>
+          {cardError && (
+            <p className="text-sm text-destructive text-center mt-2">
+              {cardError}
+            </p>
+          )}
+          {!clientSecret && !loading && (
+            <p className="text-sm text-muted-foreground text-center mt-2">
+              Initializing payment...
+            </p>
+          )}
         </div>
       </div>
     </div>
