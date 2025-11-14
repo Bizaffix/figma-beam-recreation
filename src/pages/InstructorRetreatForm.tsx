@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Upload } from "lucide-react";
 import { Retreat } from "@/data/retreats";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -52,6 +52,7 @@ const InstructorRetreatForm = () => {
   const [fetching, setFetching] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch retreat data from Supabase when editing
   useEffect(() => {
@@ -370,13 +371,26 @@ const InstructorRetreatForm = () => {
             <div>
               <Label>Retreat Image</Label>
               <div className="space-y-2">
-                <Input
+                <input
+                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   onChange={handleImageUpload}
                   disabled={uploadingImage}
-                  className="cursor-pointer"
+                  className="hidden"
                 />
+                {!imagePreview && !formData.image && (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 cursor-pointer hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-3"
+                  >
+                    <Upload className="w-8 h-8 text-muted-foreground" />
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-card-foreground">Upload File</p>
+                      <p className="text-xs text-muted-foreground mt-1">Click to select an image</p>
+                    </div>
+                  </div>
+                )}
                 {uploadingImage && (
                   <p className="text-sm text-muted-foreground">Uploading image...</p>
                 )}
