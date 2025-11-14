@@ -6,11 +6,66 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Upload } from "lucide-react";
+import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import type { DateRange } from "react-day-picker";
 import { Retreat } from "@/data/retreats";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+
+// Helper function to parse date string like "Nov 5-8, 2025" to date range
+const parseDateString = (dateStr: string): DateRange | undefined => {
+  if (!dateStr) return undefined;
+  try {
+    const parts = dateStr.split(",");
+    const year = parts[1]?.trim();
+    const monthAndDays = parts[0].trim();
+    const [monthStr, days] = monthAndDays.split(" ");
+    if (!monthStr || !days || !year) return undefined;
+
+    const dayParts = days.split("-");
+    const startDay = parseInt(dayParts[0]);
+    const endDay = dayParts[1] ? parseInt(dayParts[1]) : startDay;
+
+    const monthMap: { [key: string]: number } = {
+      Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+      Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
+    };
+
+    const month = monthMap[monthStr];
+    if (month === undefined) return undefined;
+
+    const from = new Date(parseInt(year), month, startDay);
+    const to = new Date(parseInt(year), month, endDay);
+    return { from, to };
+  } catch (e) {
+    return undefined;
+  }
+};
+
+// Helper function to format date range to "Nov 5-8, 2025" format
+const formatDateRange = (range: DateRange | undefined): string => {
+  if (!range?.from) return "";
+  if (!range.to) {
+    return format(range.from, "MMM d, yyyy");
+  }
+  const fromMonth = format(range.from, "MMM");
+  const fromDay = format(range.from, "d");
+  const toDay = format(range.to, "d");
+  const year = format(range.from, "yyyy");
+  
+  // If same month, format as "Nov 5-8, 2025"
+  if (format(range.from, "MMM yyyy") === format(range.to, "MMM yyyy")) {
+    return `${fromMonth} ${fromDay}-${toDay}, ${year}`;
+  }
+  // If different months, format as "Nov 5 - Dec 8, 2025"
+  const toMonth = format(range.to, "MMM");
+  return `${fromMonth} ${fromDay} - ${toMonth} ${toDay}, ${year}`;
+};
 
 const InstructorRetreatForm = () => {
   const navigate = useNavigate();
@@ -28,7 +83,7 @@ const InstructorRetreatForm = () => {
   const [formData, setFormData] = useState<Partial<Retreat>>({
     title: "",
     level: "Beginner",
-    location: "",
+    location: "https://maps.app.goo.gl/GNhCfeCM7CHMpHW5A",
     date: "",
     duration: "",
     spotsAvailable: 0,
@@ -53,6 +108,7 @@ const InstructorRetreatForm = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   // Fetch retreat data from Supabase when editing
   useEffect(() => {
@@ -102,6 +158,11 @@ const InstructorRetreatForm = () => {
           if (data.image) {
             setImagePreview(data.image);
           }
+          // Parse and set date range if date exists
+          if (data.date) {
+            const parsed = parseDateString(data.date);
+            setDateRange(parsed);
+          }
         }
       } catch (error) {
         console.error('Unexpected error:', error);
@@ -117,6 +178,21 @@ const InstructorRetreatForm = () => {
 
     fetchRetreat();
   }, [isEdit, id, user, navigate, toast]);
+
+  // Update formData.date and calculate duration when dateRange changes
+  useEffect(() => {
+    const formatted = formatDateRange(dateRange);
+    if (formatted || dateRange === undefined) {
+      setFormData(prev => ({ ...prev, date: formatted }));
+    }
+    
+    // Calculate duration in days
+    if (dateRange?.from && dateRange?.to) {
+      const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days
+      setFormData(prev => ({ ...prev, duration: `${diffDays} days` }));
+    }
+  }, [dateRange]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -462,8 +538,17 @@ const InstructorRetreatForm = () => {
                 <Label>Price ($)</Label>
                 <Input
                   type="number"
-                  value={formData.price}
-                  onChange={(e) => setFormData(prev => ({ ...prev, price: Number(e.target.value) }))}
+                  step="0.01"
+                  min="0"
+                  value={formData.price || ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      price: value === "" ? undefined : Number(value) 
+                    }));
+                  }}
+                  placeholder="Enter price"
                   required
                 />
               </div>
@@ -486,24 +571,88 @@ const InstructorRetreatForm = () => {
           <CardContent className="p-6 space-y-4">
             <h2 className="text-xl font-semibold text-card-foreground mb-4">Location & Dates</h2>
             
-            <div>
-              <Label>Location</Label>
-              <Input
-                value={formData.location}
-                onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                required
-              />
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-primary" />
+                Location
+              </Label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <Input
+                  value={formData.location}
+                  onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                  required
+                  className="pl-10 pr-10 h-12 text-base border-2 focus:border-primary transition-colors rounded-lg"
+                  placeholder="Enter location or Google Maps link"
+                />
+                {formData.location && (formData.location.startsWith('http://') || formData.location.startsWith('https://')) && (
+                  <a
+                    href={formData.location}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-primary hover:text-primary/80 transition-colors"
+                    title="Open location in new tab"
+                  >
+                    <ExternalLink className="w-5 h-5" />
+                  </a>
+                )}
+              </div>
+              {formData.location && (formData.location.startsWith('http://') || formData.location.startsWith('https://')) && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-2 rounded-md">
+                  <MapPin className="w-4 h-4" />
+                  <span className="truncate flex-1">{formData.location}</span>
+                  <a
+                    href={formData.location}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline text-xs font-medium"
+                  >
+                    View on Maps
+                  </a>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Date</Label>
-                <Input
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  placeholder="Nov 5-8, 2025"
-                  required
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !dateRange && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, "LLL dd, y")} -{" "}
+                            {format(dateRange.to, "LLL dd, y")}
+                          </>
+                        ) : (
+                          format(dateRange.from, "LLL dd, y")
+                        )
+                      ) : (
+                        <span>Pick a date range</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={2}
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
                 <Label>Duration</Label>
