@@ -7,6 +7,9 @@ export interface Retreat {
     name: string;
     avatar: string;
     bio: string;
+    facebook?: string;
+    instagram?: string;
+    pinterest?: string;
   };
   location: string;
   date: string;
