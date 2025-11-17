@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Facebook, Instagram } from "lucide-react";
+import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -86,16 +86,10 @@ const InstructorRetreatForm = () => {
     location: "https://maps.app.goo.gl/GNhCfeCM7CHMpHW5A",
     date: "",
     duration: "",
-    spotsAvailable: 0,
     totalSpots: 0,
     price: 0,
     description: "",
     image: "",
-    instructor: {
-      name: "",
-      avatar: "",
-      bio: "",
-    },
     includes: [],
     schedule: [],
     published: false,
@@ -108,9 +102,6 @@ const InstructorRetreatForm = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingProfileImage, setUploadingProfileImage] = useState(false);
-  const [profileImagePreview, setProfileImagePreview] = useState<string>("");
-  const profileImageInputRef = useRef<HTMLInputElement>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   // Fetch retreat data from Supabase when editing
@@ -143,19 +134,10 @@ const InstructorRetreatForm = () => {
             location: data.location,
             date: data.date,
             duration: data.duration,
-            spotsAvailable: data.spots_available,
             totalSpots: data.total_spots,
             price: data.price,
             description: data.description,
             image: data.image,
-            instructor: {
-              name: "", // Will be fetched from profiles if needed
-              avatar: "",
-              bio: "",
-              facebook: "",
-              instagram: "",
-              pinterest: "",
-            },
             includes: data.includes || [],
             schedule: data.schedule || [],
             published: data.published || false,
@@ -163,11 +145,6 @@ const InstructorRetreatForm = () => {
           // Set image preview if image exists
           if (data.image) {
             setImagePreview(data.image);
-          }
-          // Set profile image preview if avatar exists (check both formData and data)
-          const avatarUrl = formData.instructor?.avatar || data.instructor?.avatar;
-          if (avatarUrl) {
-            setProfileImagePreview(avatarUrl);
           }
           // Parse and set date range if date exists
           if (data.date) {
@@ -282,86 +259,6 @@ const InstructorRetreatForm = () => {
     }
   };
 
-  const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast({
-        title: "Error",
-        description: "Please select an image file",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "Error",
-        description: "Image size must be less than 5MB",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setUploadingProfileImage(true);
-
-    try {
-      // Create a unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-      const filePath = `profiles/${fileName}`;
-
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Error uploading image:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload image",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-images')
-        .getPublicUrl(filePath);
-
-      // Update form data with the image URL
-      setFormData(prev => ({
-        ...prev,
-        instructor: { ...prev.instructor!, avatar: publicUrl }
-      }));
-      setProfileImagePreview(publicUrl);
-
-      toast({
-        title: "Success",
-        description: "Profile image uploaded successfully",
-      });
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred while uploading image",
-        variant: "destructive",
-      });
-    } finally {
-      setUploadingProfileImage(false);
-      // Reset file input
-      e.target.value = '';
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -387,7 +284,7 @@ const InstructorRetreatForm = () => {
         level: formData.level,
         price: formData.price || 0,
         total_spots: formData.totalSpots || 0,
-        spots_available: formData.spotsAvailable || 0,
+        spots_available: formData.totalSpots || 0, // Set available spots equal to total spots
         image: formData.image || "",
         includes: formData.includes || [],
         schedule: formData.schedule || [],
@@ -396,11 +293,12 @@ const InstructorRetreatForm = () => {
       };
 
       if (isEdit && id) {
-        // Update existing retreat
+        // Update existing retreat - exclude spots_available to preserve current bookings
+        const { spots_available, ...updateData } = retreatData;
         const { error } = await supabase
           .from('retreats')
           .update({
-            ...retreatData,
+            ...updateData,
             updated_at: new Date().toISOString(),
           })
           .eq('id', Number(id))
@@ -772,171 +670,6 @@ const InstructorRetreatForm = () => {
                   onChange={(e) => setFormData(prev => ({ ...prev, totalSpots: Number(e.target.value) }))}
                   required
                 />
-              </div>
-              <div>
-                <Label>Spots Available</Label>
-                <Input
-                  type="number"
-                  value={formData.spotsAvailable}
-                  onChange={(e) => setFormData(prev => ({ ...prev, spotsAvailable: Number(e.target.value) }))}
-                  required
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Instructor Info */}
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <h2 className="text-xl font-semibold text-card-foreground mb-4">Instructor Information</h2>
-            
-            <div>
-              <Label>Instructor Name</Label>
-              <Input
-                value={formData.instructor?.name}
-                onChange={(e) => setFormData(prev => ({
-                  ...prev,
-                  instructor: { ...prev.instructor!, name: e.target.value }
-                }))}
-                required
-              />
-            </div>
-
-            <div>
-              <Label>Profile Image</Label>
-              <div className="space-y-2">
-                <input
-                  ref={profileImageInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleProfileImageUpload}
-                  disabled={uploadingProfileImage}
-                  className="hidden"
-                />
-                {!profileImagePreview && !formData.instructor?.avatar && (
-                  <div
-                    onClick={() => profileImageInputRef.current?.click()}
-                    className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 cursor-pointer hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-3"
-                  >
-                    <Upload className="w-8 h-8 text-muted-foreground" />
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-card-foreground">Upload File</p>
-                      <p className="text-xs text-muted-foreground mt-1">Click to select an image</p>
-                    </div>
-                  </div>
-                )}
-                {uploadingProfileImage && (
-                  <p className="text-sm text-muted-foreground">Uploading image...</p>
-                )}
-                {profileImagePreview && (
-                  <div className="mt-2">
-                    <img
-                      src={profileImagePreview}
-                      alt="Preview"
-                      className="w-full h-48 object-cover rounded-lg border"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() => {
-                        setProfileImagePreview("");
-                        setFormData(prev => ({
-                          ...prev,
-                          instructor: { ...prev.instructor!, avatar: "" }
-                        }));
-                      }}
-                    >
-                      Remove Image
-                    </Button>
-                  </div>
-                )}
-                {formData.instructor?.avatar && !profileImagePreview && (
-                  <div className="mt-2">
-                    <img
-                      src={formData.instructor.avatar}
-                      alt="Current"
-                      className="w-full h-48 object-cover rounded-lg border"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() => {
-                        setFormData(prev => ({
-                          ...prev,
-                          instructor: { ...prev.instructor!, avatar: "" }
-                        }));
-                      }}
-                    >
-                      Remove Image
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <Label>Instructor Bio</Label>
-              <Textarea
-                value={formData.instructor?.bio}
-                onChange={(e) => setFormData(prev => ({
-                  ...prev,
-                  instructor: { ...prev.instructor!, bio: e.target.value }
-                }))}
-                rows={3}
-                required
-              />
-            </div>
-
-            <div className="space-y-4">
-              <Label className="text-sm font-semibold text-foreground">Social Media</Label>
-              <div className="space-y-3">
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    <Facebook className="w-5 h-5" />
-                  </div>
-                  <Input
-                    value={formData.instructor?.facebook || ""}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      instructor: { ...prev.instructor!, facebook: e.target.value }
-                    }))}
-                    className="pl-10"
-                    placeholder="Facebook URL"
-                  />
-                </div>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    <Instagram className="w-5 h-5" />
-                  </div>
-                  <Input
-                    value={formData.instructor?.instagram || ""}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      instructor: { ...prev.instructor!, instagram: e.target.value }
-                    }))}
-                    className="pl-10"
-                    placeholder="Instagram URL"
-                  />
-                </div>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    <span className="text-lg font-bold text-red-600">P</span>
-                  </div>
-                  <Input
-                    value={formData.instructor?.pinterest || ""}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      instructor: { ...prev.instructor!, pinterest: e.target.value }
-                    }))}
-                    className="pl-10"
-                    placeholder="Pinterest URL"
-                  />
-                </div>
               </div>
             </div>
           </CardContent>

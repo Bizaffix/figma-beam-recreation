@@ -50,7 +50,10 @@ const RetreatDetail = () => {
             instructor:profiles!instructor_id(
               full_name,
               avatar_url,
-              bio
+              bio,
+              facebook_url,
+              instagram_url,
+              pinterest_url
             )
           `)
           .eq('id', Number(id));
@@ -89,6 +92,9 @@ const RetreatDetail = () => {
               name: data.instructor?.full_name || 'Instructor',
               avatar: data.instructor?.avatar_url || '',
               bio: data.instructor?.bio || '',
+              facebook: data.instructor?.facebook_url || '',
+              instagram: data.instructor?.instagram_url || '',
+              pinterest: data.instructor?.pinterest_url || '',
             },
           };
           setRetreat(transformedRetreat);

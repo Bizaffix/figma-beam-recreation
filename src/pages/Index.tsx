@@ -48,7 +48,10 @@ const Index = () => {
             instructor:profiles!instructor_id(
               full_name,
               avatar_url,
-              bio
+              bio,
+              facebook_url,
+              instagram_url,
+              pinterest_url
             )
           `)
           .eq('published', true)
@@ -78,6 +81,9 @@ const Index = () => {
               name: retreat.instructor?.full_name || 'Instructor',
               avatar: retreat.instructor?.avatar_url || '',
               bio: retreat.instructor?.bio || '',
+              facebook: retreat.instructor?.facebook_url || '',
+              instagram: retreat.instructor?.instagram_url || '',
+              pinterest: retreat.instructor?.pinterest_url || '',
             },
           }));
           setRetreats(transformedRetreats);
