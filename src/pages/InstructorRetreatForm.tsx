@@ -552,6 +552,78 @@ const InstructorRetreatForm = () => {
                 required
               />
             </div>
+
+            {/* What's Included */}
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-card-foreground">What's Included</h2>
+              
+              <div className="flex gap-2">
+                <Input
+                  value={includeItem}
+                  onChange={(e) => setIncludeItem(e.target.value)}
+                  placeholder="Add an item..."
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addIncludeItem())}
+                />
+                <Button type="button" onClick={addIncludeItem}>Add</Button>
+              </div>
+
+              <div className="space-y-2">
+                {formData.includes?.map((item, index) => (
+                  <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
+                    <span className="text-sm">{item}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeIncludeItem(index)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Schedule */}
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-card-foreground">Schedule</h2>
+              
+              <div className="space-y-2">
+                <Input
+                  value={scheduleDay}
+                  onChange={(e) => setScheduleDay(e.target.value)}
+                  placeholder="Day (e.g., Day 1)"
+                />
+                <Textarea
+                  value={scheduleActivities}
+                  onChange={(e) => setScheduleActivities(e.target.value)}
+                  placeholder="Activities for this day..."
+                  rows={2}
+                />
+                <Button type="button" onClick={addScheduleItem}>Add Schedule Item</Button>
+              </div>
+
+              <div className="space-y-2">
+                {formData.schedule?.map((item, index) => (
+                  <div key={index} className="p-3 bg-muted rounded">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold text-sm">{item.day}</p>
+                        <p className="text-sm text-muted-foreground">{item.activities}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeScheduleItem(index)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -671,82 +743,6 @@ const InstructorRetreatForm = () => {
                   required
                 />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* What's Included */}
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <h2 className="text-xl font-semibold text-card-foreground mb-4">What's Included</h2>
-            
-            <div className="flex gap-2">
-              <Input
-                value={includeItem}
-                onChange={(e) => setIncludeItem(e.target.value)}
-                placeholder="Add an item..."
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addIncludeItem())}
-              />
-              <Button type="button" onClick={addIncludeItem}>Add</Button>
-            </div>
-
-            <div className="space-y-2">
-              {formData.includes?.map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
-                  <span className="text-sm">{item}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeIncludeItem(index)}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Schedule */}
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <h2 className="text-xl font-semibold text-card-foreground mb-4">Schedule</h2>
-            
-            <div className="space-y-2">
-              <Input
-                value={scheduleDay}
-                onChange={(e) => setScheduleDay(e.target.value)}
-                placeholder="Day (e.g., Day 1)"
-              />
-              <Textarea
-                value={scheduleActivities}
-                onChange={(e) => setScheduleActivities(e.target.value)}
-                placeholder="Activities for this day..."
-                rows={2}
-              />
-              <Button type="button" onClick={addScheduleItem}>Add Schedule Item</Button>
-            </div>
-
-            <div className="space-y-2">
-              {formData.schedule?.map((item, index) => (
-                <div key={index} className="p-3 bg-muted rounded">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold text-sm">{item.day}</p>
-                      <p className="text-sm text-muted-foreground">{item.activities}</p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeScheduleItem(index)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              ))}
             </div>
           </CardContent>
         </Card>

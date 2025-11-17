@@ -1,14 +1,21 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { RetreatCard } from "@/components/RetreatCard";
+import { useState, useEffect, useRef } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Eye, EyeOff } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import type { DateRange } from "react-day-picker";
 
 interface Retreat {
   id: number;
@@ -28,12 +35,97 @@ interface Retreat {
   instructor_id: string;
 }
 
+interface FormData {
+  title: string;
+  level: "Beginner" | "Intermediate" | "Advanced";
+  location: string;
+  date: string;
+  duration: string;
+  totalSpots: number;
+  price: number;
+  description: string;
+  image: string;
+  includes: string[];
+  schedule: { day: string; activities: string }[];
+  published: boolean;
+}
+
+const parseDateString = (dateStr: string): DateRange | undefined => {
+  if (!dateStr) return undefined;
+  try {
+    const parts = dateStr.split(",");
+    const year = parts[1]?.trim();
+    const monthAndDays = parts[0].trim();
+    const [monthStr, days] = monthAndDays.split(" ");
+    if (!monthStr || !days || !year) return undefined;
+
+    const dayParts = days.split("-");
+    const startDay = parseInt(dayParts[0]);
+    const endDay = dayParts[1] ? parseInt(dayParts[1]) : startDay;
+
+    const monthMap: { [key: string]: number } = {
+      Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+      Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
+    };
+
+    const month = monthMap[monthStr];
+    if (month === undefined) return undefined;
+
+    const from = new Date(parseInt(year), month, startDay);
+    const to = new Date(parseInt(year), month, endDay);
+    return { from, to };
+  } catch (e) {
+    return undefined;
+  }
+};
+
+const formatDateRange = (range: DateRange | undefined): string => {
+  if (!range?.from) return "";
+  if (!range.to) {
+    return format(range.from, "MMM d, yyyy");
+  }
+  const fromMonth = format(range.from, "MMM");
+  const fromDay = format(range.from, "d");
+  const toDay = format(range.to, "d");
+  const year = format(range.from, "yyyy");
+  
+  if (format(range.from, "MMM yyyy") === format(range.to, "MMM yyyy")) {
+    return `${fromMonth} ${fromDay}-${toDay}, ${year}`;
+  }
+  const toMonth = format(range.to, "MMM");
+  return `${fromMonth} ${fromDay} - ${toMonth} ${toDay}, ${year}`;
+};
+
 const InstructorDashboard = () => {
-  const navigate = useNavigate();
   const { role, user } = useAuth();
   const { toast } = useToast();
   const [allRetreats, setAllRetreats] = useState<Retreat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<number | 'new' | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [formData, setFormData] = useState<FormData>({
+    title: "",
+    level: "Beginner",
+    location: "https://maps.app.goo.gl/GNhCfeCM7CHMpHW5A",
+    date: "",
+    duration: "",
+    totalSpots: 0,
+    price: 0,
+    description: "",
+    image: "",
+    includes: [],
+    schedule: [],
+    published: false,
+  });
+
+  const [includeItem, setIncludeItem] = useState("");
+  const [scheduleDay, setScheduleDay] = useState("");
+  const [scheduleActivities, setScheduleActivities] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [imagePreview, setImagePreview] = useState<string>("");
 
   // Only show this page to instructors
   if (role !== 'instructor') {
@@ -71,6 +163,277 @@ const InstructorDashboard = () => {
 
     fetchRetreats();
   }, [user, toast]);
+
+  // Update formData.date and calculate duration when dateRange changes
+  useEffect(() => {
+    const formatted = formatDateRange(dateRange);
+    if (formatted || dateRange === undefined) {
+      setFormData(prev => ({ ...prev, date: formatted }));
+    }
+    
+    if (dateRange?.from && dateRange?.to) {
+      const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      setFormData(prev => ({ ...prev, duration: `${diffDays} days` }));
+    }
+  }, [dateRange]);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Image size must be less than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingImage(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      const filePath = `retreats/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('retreat-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error uploading image:', uploadError);
+        toast({
+          title: "Error",
+          description: uploadError.message || "Failed to upload image",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('retreat-images')
+        .getPublicUrl(filePath);
+
+      setFormData(prev => ({ ...prev, image: publicUrl }));
+      setImagePreview(publicUrl);
+
+      toast({
+        title: "Success",
+        description: "Image uploaded successfully",
+      });
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while uploading image",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const startEditing = (retreat?: Retreat) => {
+    if (retreat) {
+      setFormData({
+        title: retreat.title,
+        level: retreat.level,
+        location: retreat.location,
+        date: retreat.date,
+        duration: retreat.duration,
+        totalSpots: retreat.total_spots,
+        price: retreat.price,
+        description: retreat.description,
+        image: retreat.image,
+        includes: retreat.includes || [],
+        schedule: retreat.schedule || [],
+        published: retreat.published || false,
+      });
+      setDateRange(parseDateString(retreat.date));
+      setImagePreview("");
+      setEditingId(retreat.id);
+    } else {
+      setFormData({
+        title: "",
+        level: "Beginner",
+        location: "https://maps.app.goo.gl/GNhCfeCM7CHMpHW5A",
+        date: "",
+        duration: "",
+        totalSpots: 0,
+        price: 0,
+        description: "",
+        image: "",
+        includes: [],
+        schedule: [],
+        published: false,
+      });
+      setDateRange(undefined);
+      setImagePreview("");
+      setIncludeItem("");
+      setScheduleDay("");
+      setScheduleActivities("");
+      setEditingId('new');
+    }
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setFormData({
+      title: "",
+      level: "Beginner",
+      location: "https://maps.app.goo.gl/GNhCfeCM7CHMpHW5A",
+      date: "",
+      duration: "",
+      totalSpots: 0,
+      price: 0,
+      description: "",
+      image: "",
+      includes: [],
+      schedule: [],
+      published: false,
+    });
+    setDateRange(undefined);
+    setImagePreview("");
+    setIncludeItem("");
+    setScheduleDay("");
+    setScheduleActivities("");
+  };
+
+  const addIncludeItem = () => {
+    if (includeItem.trim()) {
+      setFormData(prev => ({
+        ...prev,
+        includes: [...(prev.includes || []), includeItem.trim()]
+      }));
+      setIncludeItem("");
+    }
+  };
+
+  const removeIncludeItem = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      includes: prev.includes?.filter((_, i) => i !== index) || []
+    }));
+  };
+
+  const addScheduleItem = () => {
+    if (scheduleDay.trim() && scheduleActivities.trim()) {
+      setFormData(prev => ({
+        ...prev,
+        schedule: [...(prev.schedule || []), { day: scheduleDay.trim(), activities: scheduleActivities.trim() }]
+      }));
+      setScheduleDay("");
+      setScheduleActivities("");
+    }
+  };
+
+  const removeScheduleItem = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      schedule: prev.schedule?.filter((_, i) => i !== index) || []
+    }));
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+
+    setSaving(true);
+
+    try {
+      const retreatData = {
+        title: formData.title,
+        description: formData.description || "",
+        location: formData.location,
+        date: formData.date,
+        duration: formData.duration,
+        level: formData.level,
+        price: formData.price || 0,
+        total_spots: formData.totalSpots || 0,
+        spots_available: formData.totalSpots || 0,
+        image: formData.image || "",
+        includes: formData.includes || [],
+        schedule: formData.schedule || [],
+        published: formData.published || false,
+        instructor_id: user.id,
+      };
+
+      if (editingId === 'new') {
+        const { data, error } = await supabase
+          .from('retreats')
+          .insert([retreatData])
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error creating retreat:', error);
+          toast({
+            title: "Error",
+            description: error.message || "Failed to create retreat",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Success",
+            description: "Retreat created successfully!",
+          });
+          setAllRetreats(prev => [data, ...prev]);
+          cancelEditing();
+        }
+      } else if (typeof editingId === 'number') {
+        const { spots_available, ...updateData } = retreatData;
+        const { error } = await supabase
+          .from('retreats')
+          .update({
+            ...updateData,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editingId)
+          .eq('instructor_id', user.id);
+
+        if (error) {
+          console.error('Error updating retreat:', error);
+          toast({
+            title: "Error",
+            description: error.message || "Failed to update retreat",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Success",
+            description: "Retreat updated successfully!",
+          });
+          setAllRetreats(prev => prev.map(r => 
+            r.id === editingId ? { ...r, ...updateData, spots_available: r.spots_available } : r
+          ));
+          cancelEditing();
+        }
+      }
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleTogglePublish = async (id: number) => {
     const retreat = allRetreats.find(r => r.id === id);
@@ -148,7 +511,341 @@ const InstructorDashboard = () => {
   };
 
   const publishedCount = allRetreats.filter(r => r.published).length;
-  const unpublishedCount = allRetreats.filter(r => !r.published).length;
+
+  const renderEditableCard = () => {
+    const isNew = editingId === 'new';
+    
+    return (
+      <Card className="overflow-hidden">
+        <CardContent className="p-6 space-y-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-card-foreground">
+              {isNew ? "Create New Retreat" : "Edit Retreat"}
+            </h2>
+            <Button variant="ghost" size="sm" onClick={cancelEditing}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Basic Information */}
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                required
+              />
+            </div>
+
+            <div>
+              <Label>Retreat Image</Label>
+              <div className="space-y-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={uploadingImage}
+                  className="hidden"
+                />
+                {!imagePreview && !formData.image && (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 cursor-pointer hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-3"
+                  >
+                    <Upload className="w-8 h-8 text-muted-foreground" />
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-card-foreground">Upload File</p>
+                      <p className="text-xs text-muted-foreground mt-1">Click to select an image</p>
+                    </div>
+                  </div>
+                )}
+                {uploadingImage && (
+                  <p className="text-sm text-muted-foreground">Uploading image...</p>
+                )}
+                {(imagePreview || formData.image) && (
+                  <div className="mt-2">
+                    <img
+                      src={imagePreview || formData.image}
+                      alt="Preview"
+                      className="w-full h-48 object-cover rounded-lg border"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => {
+                        setImagePreview("");
+                        setFormData(prev => ({ ...prev, image: "" }));
+                      }}
+                    >
+                      Remove Image
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Level</Label>
+                <Select
+                  value={formData.level}
+                  onValueChange={(value: "Beginner" | "Intermediate" | "Advanced") =>
+                    setFormData(prev => ({ ...prev, level: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Beginner">Beginner</SelectItem>
+                    <SelectItem value="Intermediate">Intermediate</SelectItem>
+                    <SelectItem value="Advanced">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Price ($)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.price || ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      price: value === "" ? undefined : Number(value) 
+                    }));
+                  }}
+                  placeholder="Enter price"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                rows={4}
+                required
+              />
+            </div>
+
+            {/* What's Included */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-card-foreground">What's Included</h3>
+              <div className="flex gap-2">
+                <Input
+                  value={includeItem}
+                  onChange={(e) => setIncludeItem(e.target.value)}
+                  placeholder="Add an item..."
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addIncludeItem())}
+                />
+                <Button type="button" onClick={addIncludeItem}>Add</Button>
+              </div>
+              <div className="space-y-2">
+                {formData.includes?.map((item, index) => (
+                  <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
+                    <span className="text-sm">{item}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeIncludeItem(index)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Schedule */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-card-foreground">Schedule</h3>
+              <div className="space-y-2">
+                <Input
+                  value={scheduleDay}
+                  onChange={(e) => setScheduleDay(e.target.value)}
+                  placeholder="Day (e.g., Day 1)"
+                />
+                <Textarea
+                  value={scheduleActivities}
+                  onChange={(e) => setScheduleActivities(e.target.value)}
+                  placeholder="Activities for this day..."
+                  rows={2}
+                />
+                <Button type="button" onClick={addScheduleItem}>Add Schedule Item</Button>
+              </div>
+              <div className="space-y-2">
+                {formData.schedule?.map((item, index) => (
+                  <div key={index} className="p-3 bg-muted rounded">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold text-sm">{item.day}</p>
+                        <p className="text-sm text-muted-foreground">{item.activities}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeScheduleItem(index)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Location & Dates */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-card-foreground">Location & Dates</h3>
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-primary" />
+                Location
+              </Label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <Input
+                  value={formData.location}
+                  onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                  required
+                  className="pl-10 pr-10 h-12 text-base border-2 focus:border-primary transition-colors rounded-lg"
+                  placeholder="Enter location or Google Maps link"
+                />
+                {formData.location && (formData.location.startsWith('http://') || formData.location.startsWith('https://')) && (
+                  <a
+                    href={formData.location}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-primary hover:text-primary/80 transition-colors"
+                    title="Open location in new tab"
+                  >
+                    <ExternalLink className="w-5 h-5" />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !dateRange && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, "LLL dd, y")} -{" "}
+                            {format(dateRange.to, "LLL dd, y")}
+                          </>
+                        ) : (
+                          format(dateRange.from, "LLL dd, y")
+                        )
+                      ) : (
+                        <span>Pick a date range</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={2}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <Label>Duration</Label>
+                <Input
+                  value={formData.duration}
+                  onChange={(e) => setFormData(prev => ({ ...prev, duration: e.target.value }))}
+                  placeholder="4 days"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Availability */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-card-foreground">Availability</h3>
+            <div>
+              <Label>Total Spots</Label>
+              <Input
+                type="number"
+                value={formData.totalSpots}
+                onChange={(e) => setFormData(prev => ({ ...prev, totalSpots: Number(e.target.value) }))}
+                required
+              />
+            </div>
+          </div>
+
+          {/* Publish Status */}
+          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+            <div>
+              <h3 className="font-semibold text-card-foreground">Publish Status</h3>
+              <p className="text-sm text-muted-foreground">
+                {formData.published ? "This retreat is visible to students" : "This retreat is a draft"}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant={formData.published ? "default" : "outline"}
+              onClick={() => setFormData(prev => ({ ...prev, published: !prev.published }))}
+            >
+              {formData.published ? "Published" : "Draft"}
+            </Button>
+          </div>
+
+          {/* Save/Cancel Buttons */}
+          <div className="flex gap-4 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={cancelEditing}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="flex-1"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {saving ? (isNew ? "Creating..." : "Saving...") : (isNew ? "Create Retreat" : "Save Changes")}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-hero pb-20">
@@ -176,90 +873,103 @@ const InstructorDashboard = () => {
         </div>
       </div>
 
-      {/* Create New Button */}
-      <div className="px-6 mb-6">
-        <Button 
-          className="w-full h-12 text-lg"
-          onClick={() => navigate('/instructor/retreats/new')}
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Create New Retreat
-        </Button>
-      </div>
-
       {/* Retreats List */}
       <div className="px-6 space-y-6 max-w-4xl mx-auto">
         {loading ? (
           <div className="text-center py-8">
             <p className="text-muted-foreground text-lg">Loading retreats...</p>
           </div>
-        ) : allRetreats.length > 0 ? (
-          allRetreats.map((retreat) => (
-            <Card key={retreat.id} className="overflow-hidden">
-              <div className="relative">
-                <img
-                  src={retreat.image || "/placeholder.svg"}
-                  alt={retreat.title}
-                  className="w-full h-48 object-cover"
-                />
-                <div className="absolute top-3 right-3 flex gap-2">
-                  <Badge className={retreat.published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
-                    {retreat.published ? "Published" : "Draft"}
-                  </Badge>
-                </div>
-              </div>
-              
-              <CardContent className="p-5">
-                <h3 className="text-xl font-semibold text-card-foreground mb-4">{retreat.title}</h3>
-                
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigate(`/instructor/retreats/${retreat.id}/edit`)}
-                  >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleTogglePublish(retreat.id)}
-                  >
-                    {retreat.published ? (
-                      <>
-                        <EyeOff className="w-4 h-4 mr-2" />
-                        Unpublish
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="w-4 h-4 mr-2" />
-                        Publish
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDelete(retreat.id)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete
-                  </Button>
-                </div>
-
-                <div className="text-sm text-muted-foreground">
-                  <p>{retreat.location} • {retreat.date}</p>
-                  <p className="mt-1">{retreat.spots_available} of {retreat.total_spots} spots available</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))
         ) : (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground text-lg">No retreats yet. Create your first one!</p>
-          </div>
+          <>
+            {/* Create New Button - only show if not editing */}
+            {editingId === null && (
+              <Button 
+                className="w-full h-12 text-lg"
+                onClick={() => startEditing()}
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Create New Retreat
+              </Button>
+            )}
+
+            {/* Editable Card */}
+            {editingId !== null && renderEditableCard()}
+
+            {/* Existing Retreats */}
+            {allRetreats.map((retreat) => {
+              // Skip if this retreat is being edited
+              if (editingId === retreat.id) return null;
+
+              return (
+                <Card key={retreat.id} className="overflow-hidden">
+                  <div className="relative">
+                    <img
+                      src={retreat.image || "/placeholder.svg"}
+                      alt={retreat.title}
+                      className="w-full h-48 object-cover"
+                    />
+                    <div className="absolute top-3 right-3 flex gap-2">
+                      <Badge className={retreat.published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
+                        {retreat.published ? "Published" : "Draft"}
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  <CardContent className="p-5">
+                    <h3 className="text-xl font-semibold text-card-foreground mb-4">{retreat.title}</h3>
+                    
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => startEditing(retreat)}
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleTogglePublish(retreat.id)}
+                      >
+                        {retreat.published ? (
+                          <>
+                            <EyeOff className="w-4 h-4 mr-2" />
+                            Unpublish
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-4 h-4 mr-2" />
+                            Publish
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(retreat.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </Button>
+                    </div>
+
+                    <div className="text-sm text-muted-foreground">
+                      <p>{retreat.location} • {retreat.date}</p>
+                      <p className="mt-1">{retreat.spots_available} of {retreat.total_spots} spots available</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+
+            {allRetreats.length === 0 && editingId === null && (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground text-lg">No retreats yet. Create your first one!</p>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -270,4 +980,3 @@ const InstructorDashboard = () => {
 };
 
 export default InstructorDashboard;
-
