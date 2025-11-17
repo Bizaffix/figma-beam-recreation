@@ -1,4 +1,4 @@
-import { Home, Compass, User, LayoutDashboard } from "lucide-react";
+import { Home, Compass, User, LayoutDashboard, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,7 +11,7 @@ export const BottomNav = () => {
   // Different navigation for instructors vs students
   const navItems = role === 'instructor' 
     ? [
-        { icon: Compass, label: "Discover", path: "/" },
+        { icon: Search, label: "Browse", path: "/instructor/browse" },
         { icon: LayoutDashboard, label: "Dashboard", path: "/instructor/dashboard" },
         { icon: User, label: "Profile", path: "/profile" },
       ]

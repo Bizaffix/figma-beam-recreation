@@ -13,6 +13,7 @@ import Confirmation from "./pages/Confirmation";
 import NotFound from "./pages/NotFound";
 import InstructorDashboard from "./pages/InstructorDashboard";
 import InstructorRetreatForm from "./pages/InstructorRetreatForm";
+import InstructorBrowse from "./pages/InstructorBrowse";
 import Login from "./pages/Login";
 import EmailConfirm from "./pages/EmailConfirm";
 import { useAuth } from "./contexts/AuthContext";
@@ -124,6 +125,7 @@ const App = () => (
           <Route path="/retreat/:id/confirmed" element={<StudentRoute><Confirmation /></StudentRoute>} />
           
           {/* Protected Instructor Routes */}
+          <Route path="/instructor/browse" element={<InstructorRoute><InstructorBrowse /></InstructorRoute>} />
           <Route path="/instructor/dashboard" element={<InstructorRoute><InstructorDashboard /></InstructorRoute>} />
           <Route path="/instructor/retreats/new" element={<InstructorRoute><InstructorRetreatForm /></InstructorRoute>} />
           <Route path="/instructor/retreats/:id/edit" element={<InstructorRoute><InstructorRetreatForm /></InstructorRoute>} />
