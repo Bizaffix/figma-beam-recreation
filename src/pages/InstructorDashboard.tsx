@@ -105,6 +105,12 @@ const InstructorDashboard = () => {
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [totalRevenue, setTotalRevenue] = useState<number>(0);
+  const [studentsServed, setStudentsServed] = useState<number>(0);
+  const [expectedRevenue, setExpectedRevenue] = useState<number>(0);
+  const [publishedCount, setPublishedCount] = useState<number>(0);
+  const [draftCount, setDraftCount] = useState<number>(0);
+  const [invitesCount, setInvitesCount] = useState<number>(0);
   
   const [formData, setFormData] = useState<FormData>({
     title: "",
@@ -132,27 +138,69 @@ const InstructorDashboard = () => {
     return null;
   }
 
-  // Fetch retreats from Supabase
+  // Fetch retreats and stats from Supabase
   useEffect(() => {
-    const fetchRetreats = async () => {
+    const fetchData = async () => {
       if (!user) return;
 
       try {
-        const { data, error } = await supabase
+        // Fetch retreats
+        const { data: retreatsData, error: retreatsError } = await supabase
           .from('retreats')
           .select('*')
           .eq('instructor_id', user.id)
           .order('created_at', { ascending: false });
 
-        if (error) {
-          console.error('Error fetching retreats:', error);
+        if (retreatsError) {
+          console.error('Error fetching retreats:', retreatsError);
           toast({
             title: "Error",
             description: "Failed to load retreats",
             variant: "destructive",
           });
         } else {
-          setAllRetreats(data || []);
+          setAllRetreats(retreatsData || []);
+        }
+
+        // Calculate published and draft counts
+        const published = retreatsData?.filter(r => r.published) || [];
+        const drafts = retreatsData?.filter(r => !r.published) || [];
+        setPublishedCount(published.length);
+        setDraftCount(drafts.length);
+
+        // Calculate expected revenue from published retreats (price * total_spots)
+        const expected = published.reduce((sum, retreat) => {
+          return sum + (Number(retreat.price || 0) * Number(retreat.total_spots || 0));
+        }, 0);
+        setExpectedRevenue(expected);
+
+        // Fetch bookings for stats
+        const retreatIds = retreatsData?.map(r => r.id) || [];
+        if (retreatIds.length > 0) {
+          const { data: bookingsData, error: bookingsError } = await supabase
+            .from('bookings')
+            .select('amount, status')
+            .in('retreat_id', retreatIds)
+            .eq('status', 'confirmed');
+
+          if (!bookingsError && bookingsData) {
+            const revenue = bookingsData.reduce((sum, booking) => sum + Number(booking.amount || 0), 0);
+            const students = bookingsData.length;
+            setTotalRevenue(revenue);
+            setStudentsServed(students);
+          }
+        }
+
+        // Fetch invites count (users referred by this instructor)
+        // For now, we'll check if there's a referred_by field in profiles
+        // If not, we'll just show 0 and the UI for now
+        const { data: referredUsers, error: invitesError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('referred_by', user.id);
+
+        if (!invitesError && referredUsers) {
+          setInvitesCount(referredUsers.length);
         }
       } catch (error) {
         console.error('Unexpected error:', error);
@@ -161,7 +209,7 @@ const InstructorDashboard = () => {
       }
     };
 
-    fetchRetreats();
+    fetchData();
   }, [user, toast]);
 
   // Update formData.date and calculate duration when dateRange changes
@@ -459,7 +507,7 @@ const InstructorDashboard = () => {
         ));
         toast({
           title: "Success",
-          description: retreat.published ? "Retreat unpublished" : "Retreat published",
+          description: retreat.published ? "Retreat saved as draft" : "Retreat is now live!",
         });
       }
     } catch (error) {
@@ -510,7 +558,6 @@ const InstructorDashboard = () => {
     }
   };
 
-  const publishedCount = allRetreats.filter(r => r.published).length;
 
   const renderEditableCard = () => {
     const isNew = editingId === 'new';
@@ -585,124 +632,6 @@ const InstructorDashboard = () => {
                     </Button>
                   </div>
                 )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Level</Label>
-                <Select
-                  value={formData.level}
-                  onValueChange={(value: "Beginner" | "Intermediate" | "Advanced") =>
-                    setFormData(prev => ({ ...prev, level: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Beginner">Beginner</SelectItem>
-                    <SelectItem value="Intermediate">Intermediate</SelectItem>
-                    <SelectItem value="Advanced">Advanced</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Price ($)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.price || ""}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      price: value === "" ? undefined : Number(value) 
-                    }));
-                  }}
-                  placeholder="Enter price"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                rows={4}
-                required
-              />
-            </div>
-
-            {/* What's Included */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-card-foreground">What's Included</h3>
-              <div className="flex gap-2">
-                <Input
-                  value={includeItem}
-                  onChange={(e) => setIncludeItem(e.target.value)}
-                  placeholder="Add an item..."
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addIncludeItem())}
-                />
-                <Button type="button" onClick={addIncludeItem}>Add</Button>
-              </div>
-              <div className="space-y-2">
-                {formData.includes?.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
-                    <span className="text-sm">{item}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeIncludeItem(index)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Schedule */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-card-foreground">Schedule</h3>
-              <div className="space-y-2">
-                <Input
-                  value={scheduleDay}
-                  onChange={(e) => setScheduleDay(e.target.value)}
-                  placeholder="Day (e.g., Day 1)"
-                />
-                <Textarea
-                  value={scheduleActivities}
-                  onChange={(e) => setScheduleActivities(e.target.value)}
-                  placeholder="Activities for this day..."
-                  rows={2}
-                />
-                <Button type="button" onClick={addScheduleItem}>Add Schedule Item</Button>
-              </div>
-              <div className="space-y-2">
-                {formData.schedule?.map((item, index) => (
-                  <div key={index} className="p-3 bg-muted rounded">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-semibold text-sm">{item.day}</p>
-                        <p className="text-sm text-muted-foreground">{item.activities}</p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeScheduleItem(index)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -791,9 +720,103 @@ const InstructorDashboard = () => {
             </div>
           </div>
 
-          {/* Availability */}
+          {/* Price and Skill Level */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Availability</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Price ($)</Label>
+                <p className="text-xs text-muted-foreground mb-2">Per Student</p>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.price || ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      price: value === "" ? undefined : Number(value) 
+                    }));
+                  }}
+                  placeholder="Enter price"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label>Skill Level</Label>
+                <p className="text-xs text-muted-foreground mb-2">Who is this for?</p>
+                <Select
+                  value={formData.level}
+                  onValueChange={(value: "Beginner" | "Intermediate" | "Advanced") =>
+                    setFormData(prev => ({ ...prev, level: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Beginner">Beginner</SelectItem>
+                    <SelectItem value="Intermediate">Intermediate</SelectItem>
+                    <SelectItem value="Advanced">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {/* Schedule */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-card-foreground">Schedule</h3>
+            <div className="space-y-2">
+              <Input
+                value={scheduleDay}
+                onChange={(e) => setScheduleDay(e.target.value)}
+                placeholder="Day (e.g., Day 1)"
+              />
+              <Textarea
+                value={scheduleActivities}
+                onChange={(e) => setScheduleActivities(e.target.value)}
+                placeholder="Activities for this day..."
+                rows={2}
+              />
+              <Button type="button" onClick={addScheduleItem}>Add Schedule Item</Button>
+            </div>
+            <div className="space-y-2">
+              {formData.schedule?.map((item, index) => (
+                <div key={index} className="p-3 bg-muted rounded">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-semibold text-sm">{item.day}</p>
+                      <p className="text-sm text-muted-foreground">{item.activities}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeScheduleItem(index)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Label>Description</Label>
+            <Textarea
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              rows={4}
+              required
+            />
+          </div>
+
+          {/* Class Size */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-card-foreground">Class Size</h3>
             <div>
               <Label>Total Spots</Label>
               <Input
@@ -808,9 +831,9 @@ const InstructorDashboard = () => {
           {/* Publish Status */}
           <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
             <div>
-              <h3 className="font-semibold text-card-foreground">Publish Status</h3>
+              <h3 className="font-semibold text-card-foreground">Status</h3>
               <p className="text-sm text-muted-foreground">
-                {formData.published ? "This retreat is visible to students" : "This retreat is a draft"}
+                {formData.published ? "This retreat will be LIVE and visible to students" : "This retreat will be saved as a DRAFT"}
               </p>
             </div>
             <Button
@@ -818,7 +841,7 @@ const InstructorDashboard = () => {
               variant={formData.published ? "default" : "outline"}
               onClick={() => setFormData(prev => ({ ...prev, published: !prev.published }))}
             >
-              {formData.published ? "Published" : "Draft"}
+              {formData.published ? "Go Live" : "Save as Draft"}
             </Button>
           </div>
 
@@ -855,23 +878,70 @@ const InstructorDashboard = () => {
         <p className="text-white/90 text-lg">Manage your retreats and events</p>
       </div>
 
-      {/* Stats */}
-      <div className="px-6 -mt-4 mb-6">
-        <div className="grid grid-cols-2 gap-4">
+      {/* Stats - Only show when not editing */}
+      {editingId === null && (
+        <div className="px-6 -mt-4 mb-6">
+          {/* Revenue Focused Stats */}
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-card-foreground">${totalRevenue.toLocaleString()}</p>
+                <p className="text-sm text-muted-foreground">Total Revenue Earned</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-card-foreground">${expectedRevenue.toLocaleString()}</p>
+                <p className="text-sm text-muted-foreground">Expected Revenue</p>
+                <p className="text-xs text-muted-foreground mt-1">{publishedCount} Published</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Retreats and Revenue Opportunity */}
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-card-foreground">{allRetreats.length}</p>
+                <p className="text-sm text-muted-foreground">Total Retreats</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-card-foreground">{draftCount}</p>
+                <p className="text-sm text-muted-foreground">Retreats in Draft</p>
+                <p className="text-xs text-muted-foreground mt-1">Revenue Opportunity</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Invites */}
           <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-card-foreground">{allRetreats.length}</p>
-              <p className="text-sm text-muted-foreground">Total Retreats</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-card-foreground">{publishedCount}</p>
-              <p className="text-sm text-muted-foreground">Published</p>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xl font-bold text-card-foreground">{invitesCount}</p>
+                  <p className="text-sm text-muted-foreground">Invites</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const referralLink = `${window.location.origin}/login?ref=${user?.id}`;
+                    navigator.clipboard.writeText(referralLink);
+                    toast({
+                      title: "Link Copied!",
+                      description: "Share this link with your friends to invite them to the platform.",
+                    });
+                  }}
+                >
+                  Get Invite Link
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
-      </div>
+      )}
 
       {/* Retreats List */}
       <div className="px-6 space-y-6 max-w-4xl mx-auto">
@@ -909,8 +979,8 @@ const InstructorDashboard = () => {
                       className="w-full h-48 object-cover"
                     />
                     <div className="absolute top-3 right-3 flex gap-2">
-                      <Badge className={retreat.published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
-                        {retreat.published ? "Published" : "Draft"}
+                      <Badge className={retreat.published ? "bg-green-500 text-white font-semibold" : "bg-gray-400 text-white font-semibold"}>
+                        {retreat.published ? "LIVE" : "DRAFT"}
                       </Badge>
                     </div>
                   </div>
@@ -928,19 +998,19 @@ const InstructorDashboard = () => {
                         Edit
                       </Button>
                       <Button
-                        variant="outline"
+                        variant={retreat.published ? "outline" : "default"}
                         size="sm"
                         onClick={() => handleTogglePublish(retreat.id)}
                       >
                         {retreat.published ? (
                           <>
                             <EyeOff className="w-4 h-4 mr-2" />
-                            Unpublish
+                            Save as Draft
                           </>
                         ) : (
                           <>
                             <Eye className="w-4 h-4 mr-2" />
-                            Publish
+                            Go Live
                           </>
                         )}
                       </Button>

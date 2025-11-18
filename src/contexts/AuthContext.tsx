@@ -7,7 +7,7 @@ interface AuthContextType {
   session: Session | null;
   role: 'instructor' | 'student' | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<{ error: any; needsConfirmation?: boolean }>;
+  signUp: (email: string, password: string, referralCode?: string) => Promise<{ error: any; needsConfirmation?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: any; role?: 'instructor' | 'student' | undefined; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<{ error: any }>;
@@ -108,18 +108,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, referralCode?: string) => {
     // Get the redirect URL - use production URL in production, current origin in dev
     const isProduction = import.meta.env.PROD;
     const redirectUrl = isProduction 
       ? 'https://quilting-retreats.vercel.app/auth/confirm'
       : `${window.location.origin}/auth/confirm`;
     
+    // Store referral code in user metadata so the database trigger can use it
+    const userMetadata: { referred_by?: string } = {};
+    if (referralCode) {
+      userMetadata.referred_by = referralCode;
+    }
+    
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
+        data: userMetadata,
       },
     });
 

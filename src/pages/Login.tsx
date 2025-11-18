@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,6 +80,8 @@ const Login = () => {
   const { signIn, signUp } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const referralCode = searchParams.get('ref') || undefined;
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +122,7 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { error, needsConfirmation } = await signUp(email, password);
+      const { error, needsConfirmation } = await signUp(email, password, referralCode);
       if (error) {
         toast({
           title: "Error",
