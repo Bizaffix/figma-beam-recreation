@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Mail } from "lucide-react";
@@ -77,6 +79,10 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<'student' | 'instructor'>('student');
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [bio, setBio] = useState("");
   const { signIn, signUp } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -120,9 +126,28 @@ const Login = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate instructor fields
+    if (selectedRole === 'instructor') {
+      if (!firstName.trim() || !lastName.trim()) {
+        toast({
+          title: "Error",
+          description: "Please enter your first and last name",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     setLoading(true);
     try {
-      const { error, needsConfirmation } = await signUp(email, password, referralCode);
+      const instructorData = selectedRole === 'instructor' ? {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        bio: bio.trim(),
+      } : undefined;
+      
+      const { error, needsConfirmation } = await signUp(email, password, selectedRole, referralCode, instructorData);
       if (error) {
         toast({
           title: "Error",
@@ -139,6 +164,10 @@ const Login = () => {
         // Clear the form
         setEmail("");
         setPassword("");
+        setSelectedRole('student');
+        setFirstName("");
+        setLastName("");
+        setBio("");
       }
     } catch (error) {
       toast({
@@ -199,6 +228,67 @@ const Login = () => {
             
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
+                <div className="space-y-3">
+                  <Label>I am a...</Label>
+                  <RadioGroup
+                    value={selectedRole}
+                    onValueChange={(value) => setSelectedRole(value as 'student' | 'instructor')}
+                    className="flex gap-4"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="student" id="role-student" />
+                      <Label htmlFor="role-student" className="font-normal cursor-pointer">
+                        Student
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="instructor" id="role-instructor" />
+                      <Label htmlFor="role-instructor" className="font-normal cursor-pointer">
+                        Instructor
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+                
+                {selectedRole === 'instructor' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-firstname">First Name</Label>
+                        <Input
+                          id="signup-firstname"
+                          type="text"
+                          placeholder="First name"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          required={selectedRole === 'instructor'}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-lastname">Last Name</Label>
+                        <Input
+                          id="signup-lastname"
+                          type="text"
+                          placeholder="Last name"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          required={selectedRole === 'instructor'}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-bio">Bio</Label>
+                      <Textarea
+                        id="signup-bio"
+                        placeholder="Tell us about yourself..."
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value)}
+                        rows={4}
+                      />
+                    </div>
+                  </>
+                )}
+                
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
                   <Input
@@ -228,9 +318,6 @@ const Login = () => {
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Creating account..." : "Sign Up"}
                 </Button>
-                <p className="text-xs text-center text-muted-foreground">
-                  By signing up, you'll automatically be assigned the student role
-                </p>
               </form>
             </TabsContent>
             

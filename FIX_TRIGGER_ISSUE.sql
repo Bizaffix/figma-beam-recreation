@@ -1,16 +1,13 @@
+-- If you're getting 500 errors, try this fix
 -- Run this in Supabase SQL Editor
--- Go to: Supabase Dashboard → SQL Editor → New Query
--- This updates the profile creation trigger to handle:
--- 1. Referral codes (referred_by)
--- 2. Instructor signup data (first_name, last_name, bio)
 
--- Note: This assumes you already have the referred_by column and index
--- If not, run these first:
--- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referred_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;
--- CREATE INDEX IF NOT EXISTS idx_profiles_referred_by ON profiles(referred_by);
+-- First, drop the trigger and function if they exist
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user();
 
--- Update or create the profile creation trigger function
--- This function will be called when a new user is created in auth.users
+-- Then run the full migration from REFERRAL_SYSTEM_MIGRATION.sql
+-- Or run this complete version:
+
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -85,8 +82,7 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Create or replace the trigger
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+-- Create the trigger
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW

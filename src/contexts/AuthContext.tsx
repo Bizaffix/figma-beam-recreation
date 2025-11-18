@@ -7,7 +7,7 @@ interface AuthContextType {
   session: Session | null;
   role: 'instructor' | 'student' | null;
   loading: boolean;
-  signUp: (email: string, password: string, referralCode?: string) => Promise<{ error: any; needsConfirmation?: boolean }>;
+  signUp: (email: string, password: string, role?: 'student' | 'instructor', referralCode?: string, instructorData?: { firstName: string; lastName: string; bio: string }) => Promise<{ error: any; needsConfirmation?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: any; role?: 'instructor' | 'student' | undefined; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<{ error: any }>;
@@ -108,17 +108,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string, referralCode?: string) => {
+  const signUp = async (email: string, password: string, role: 'student' | 'instructor' = 'student', referralCode?: string, instructorData?: { firstName: string; lastName: string; bio: string }) => {
     // Get the redirect URL - use production URL in production, current origin in dev
     const isProduction = import.meta.env.PROD;
     const redirectUrl = isProduction 
       ? 'https://quilting-retreats.vercel.app/auth/confirm'
       : `${window.location.origin}/auth/confirm`;
     
-    // Store referral code in user metadata so the database trigger can use it
-    const userMetadata: { referred_by?: string } = {};
+    // Store role, referral code, and instructor data in user metadata so the database trigger can use it
+    const userMetadata: { role?: string; referred_by?: string; first_name?: string; last_name?: string; bio?: string } = {
+      role: role,
+    };
     if (referralCode) {
       userMetadata.referred_by = referralCode;
+    }
+    if (instructorData && role === 'instructor') {
+      userMetadata.first_name = instructorData.firstName;
+      userMetadata.last_name = instructorData.lastName;
+      userMetadata.bio = instructorData.bio;
     }
     
     const { data, error } = await supabase.auth.signUp({
