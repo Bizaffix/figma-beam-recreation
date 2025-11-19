@@ -240,40 +240,46 @@ const Payment = () => {
 
   return (
     <div className="min-h-screen bg-gradient-hero pb-32">
-      <div className="px-6 max-w-4xl mx-auto space-y-6 pt-6">
+      <div className="px-4 sm:px-6 max-w-4xl mx-auto space-y-4 sm:space-y-6 pt-4 sm:pt-6">
         <Card>
-          <CardContent className="p-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <img src={retreat.image || "/placeholder.svg"} alt={retreat.title} className="w-20 h-16 rounded-md object-cover" />
-              <div>
-                <p className="font-semibold text-card-foreground">{retreat.title}</p>
-                <p className="text-sm text-muted-foreground">{retreat.date}</p>
-                <p className="text-sm text-muted-foreground">{retreat.location}</p>
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                <img 
+                  src={retreat.image || "/placeholder.svg"} 
+                  alt={retreat.title} 
+                  className="w-16 h-12 sm:w-20 sm:h-16 rounded-md object-cover flex-shrink-0" 
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-card-foreground text-sm sm:text-base truncate">{retreat.title}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground truncate">{retreat.date}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground truncate break-words break-all">{retreat.location}</p>
+                </div>
               </div>
-            </div>
-            <div className="text-right">
-              <p className="text-lg font-bold text-primary">${retreat.price}</p>
+              <div className="text-left sm:text-right w-full sm:w-auto flex-shrink-0">
+                <p className="text-base sm:text-lg font-bold text-primary">${retreat.price}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center gap-3 text-muted-foreground mb-4">
-              <div className="w-5 h-5 rounded border border-border flex items-center justify-center">💳</div>
-              <p className="text-sm">Secure payment powered by Stripe</p>
+              <div className="w-5 h-5 rounded border border-border flex items-center justify-center flex-shrink-0">💳</div>
+              <p className="text-xs sm:text-sm">Secure payment powered by Stripe</p>
             </div>
 
             <form id="payment-form" onSubmit={handleConfirmPayment}>
             <div className="space-y-4">
                 <div>
-                  <Label>Card Information *</Label>
-                  <div className="mt-2 p-3 border rounded-md bg-card">
+                  <Label className="text-sm sm:text-base">Card Information *</Label>
+                  <div className="mt-2 p-2 sm:p-3 border rounded-md bg-card">
                     <CardElement
                       options={{
                         style: {
                           base: {
-                            fontSize: '16px',
+                            fontSize: '14px',
                             color: '#424770',
                             '::placeholder': {
                               color: '#aab7c4',
@@ -295,13 +301,13 @@ const Payment = () => {
                     />
                 </div>
                   {cardError && (
-                    <p className="text-sm text-destructive mt-1">{cardError}</p>
+                    <p className="text-xs sm:text-sm text-destructive mt-1">{cardError}</p>
                   )}
               </div>
 
-              <div className="mt-4 p-3 bg-muted/20 rounded-md text-sm text-muted-foreground">
+              <div className="mt-4 p-2 sm:p-3 bg-muted/20 rounded-md text-xs sm:text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <span className="w-4">🔒</span>
+                  <span className="w-4 flex-shrink-0">🔒</span>
                   <span>Your payment information is encrypted and secure</span>
                 </div>
               </div>
@@ -311,17 +317,17 @@ const Payment = () => {
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-muted-foreground">
+              <div className="flex items-center justify-between text-sm sm:text-base text-muted-foreground">
                 <span>Retreat price</span>
                 <span>${retreat.price}</span>
               </div>
-              <div className="flex items-center justify-between text-muted-foreground">
+              <div className="flex items-center justify-between text-sm sm:text-base text-muted-foreground">
                 <span>Service fee</span>
                 <span>$0</span>
               </div>
-              <div className="flex items-center justify-between font-semibold text-card-foreground">
+              <div className="flex items-center justify-between text-base sm:text-lg font-semibold text-card-foreground">
                 <span>Total</span>
                 <span className="text-primary">${retreat.price}</span>
               </div>
@@ -331,23 +337,23 @@ const Payment = () => {
 
       </div>
 
-      <div className="fixed bottom-4 left-0 right-0 px-6">
+      <div className="fixed bottom-4 left-0 right-0 px-4 sm:px-6 pb-safe">
         <div className="max-w-4xl mx-auto">
           <Button
             type="submit"
             form="payment-form"
-            className="w-full h-12 text-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+            className="w-full h-12 text-base sm:text-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white"
             disabled={!stripe || !elements || processing || !clientSecret}
           >
             {processing ? "Processing..." : `Confirm & Pay $${retreat?.price || 0}`}
           </Button>
           {cardError && (
-            <p className="text-sm text-destructive text-center mt-2">
+            <p className="text-xs sm:text-sm text-destructive text-center mt-2">
               {cardError}
             </p>
           )}
           {!clientSecret && !loading && (
-            <p className="text-sm text-muted-foreground text-center mt-2">
+            <p className="text-xs sm:text-sm text-muted-foreground text-center mt-2">
               Initializing payment...
             </p>
           )}

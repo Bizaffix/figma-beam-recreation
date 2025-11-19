@@ -4,7 +4,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface RetreatData {
   id: number;
@@ -22,13 +24,14 @@ const Booking = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const [retreat, setRetreat] = useState<RetreatData | null>(null);
   const [loading, setLoading] = useState(true);
   
   // Form state - must be declared before any conditional returns
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [skillLevel, setSkillLevel] = useState("");
+  const [skillLevel, setSkillLevel] = useState<"Beginner" | "Intermediate" | "Advanced" | "">("");
   
   // Form validation errors
   const [errors, setErrors] = useState({
@@ -69,7 +72,7 @@ const Booking = () => {
     }
     
     // Validate skill level
-    if (!skillLevel.trim()) {
+    if (!skillLevel) {
       newErrors.skillLevel = "Skill level is required";
       isValid = false;
     }
@@ -105,7 +108,7 @@ const Booking = () => {
         }
         break;
       case 'skillLevel':
-        if (!skillLevel.trim()) {
+        if (!skillLevel) {
           newErrors.skillLevel = "Skill level is required";
         } else {
           newErrors.skillLevel = "";
@@ -122,11 +125,41 @@ const Booking = () => {
       navigate(`/retreat/${id}/payment`, {
         state: {
           retreat,
-          booking: { fullName: fullName.trim(), email: email.trim(), skillLevel: skillLevel.trim() },
+          booking: { fullName: fullName.trim(), email: email.trim(), skillLevel: skillLevel },
         },
       });
     }
   };
+
+  // Fetch user profile to auto-fill name and email
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching user profile:', error);
+        } else if (data) {
+          if (data.full_name) {
+            setFullName(data.full_name);
+          }
+          if (data.email || user.email) {
+            setEmail(data.email || user.email || "");
+          }
+        }
+      } catch (error) {
+        console.error('Unexpected error fetching profile:', error);
+      }
+    };
+
+    fetchUserProfile();
+  }, [user]);
 
   // Try to get retreat from navigation state first, then fetch by id
   useEffect(() => {
@@ -212,25 +245,31 @@ const Booking = () => {
 
   return (
     <div className="min-h-screen bg-gradient-hero pb-32">
-      <div className="px-6 max-w-4xl mx-auto space-y-6 pt-6">
+      <div className="px-4 sm:px-6 max-w-4xl mx-auto space-y-4 sm:space-y-6 pt-4 sm:pt-6">
         <Card>
-          <CardContent className="p-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <img src={retreat.image || "/placeholder.svg"} alt={retreat.title} className="w-20 h-16 rounded-md object-cover" />
-              <div>
-                <p className="font-semibold text-card-foreground">{retreat.title}</p>
-                <p className="text-sm text-muted-foreground">{retreat.date}</p>
-                <p className="text-sm text-muted-foreground">{retreat.location}</p>
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                <img 
+                  src={retreat.image || "/placeholder.svg"} 
+                  alt={retreat.title} 
+                  className="w-16 h-12 sm:w-20 sm:h-16 rounded-md object-cover flex-shrink-0" 
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-card-foreground text-sm sm:text-base truncate">{retreat.title}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground truncate">{retreat.date}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground truncate">{retreat.location}</p>
+                </div>
               </div>
-            </div>
-            <div className="text-right">
-              <p className="text-lg font-bold text-primary">${retreat.price}</p>
+              <div className="text-left sm:text-right w-full sm:w-auto flex-shrink-0">
+                <p className="text-base sm:text-lg font-bold text-primary">${retreat.price}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="space-y-4">
               <div>
                 <Label htmlFor="fullName">Full Name *</Label>
@@ -275,19 +314,24 @@ const Booking = () => {
 
               <div>
                 <Label htmlFor="skillLevel">Your Skill Level *</Label>
-                <Input
-                  id="skillLevel"
-                  placeholder="e.g., Beginner, Intermediate, Advanced"
+                <Select
                   value={skillLevel}
-                  onChange={(e) => {
-                    setSkillLevel(e.target.value);
+                  onValueChange={(value: "Beginner" | "Intermediate" | "Advanced") => {
+                    setSkillLevel(value);
                     if (errors.skillLevel) {
                       setErrors({ ...errors, skillLevel: "" });
                     }
                   }}
-                  onBlur={() => handleBlur('skillLevel')}
-                  className={errors.skillLevel ? "border-destructive" : ""}
-                />
+                >
+                  <SelectTrigger id="skillLevel" className={errors.skillLevel ? "border-destructive" : ""}>
+                    <SelectValue placeholder="Select your skill level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Beginner">Beginner</SelectItem>
+                    <SelectItem value="Intermediate">Intermediate</SelectItem>
+                    <SelectItem value="Advanced">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
                 {errors.skillLevel && (
                   <p className="text-sm text-destructive mt-1">{errors.skillLevel}</p>
                 )}
@@ -297,7 +341,7 @@ const Booking = () => {
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="space-y-2">
               <div className="flex items-center justify-between text-muted-foreground">
                 <span>Retreat price</span>
@@ -317,16 +361,16 @@ const Booking = () => {
 
       </div>
 
-      <div className="fixed bottom-4 left-0 right-0 px-6">
-          <div className="max-w-4xl mx-auto">
+      <div className="fixed bottom-4 left-0 right-0 px-4 sm:px-6 pb-safe">
+        <div className="max-w-4xl mx-auto">
           <Button
-            className="w-full h-12 text-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+            className="w-full h-12 text-base sm:text-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white"
             onClick={handleContinue}
           >
             Continue to Payment
           </Button>
           {(errors.fullName || errors.email || errors.skillLevel) && (
-            <p className="text-sm text-destructive text-center mt-2">
+            <p className="text-xs sm:text-sm text-destructive text-center mt-2">
               Please fill in all required fields correctly
             </p>
           )}

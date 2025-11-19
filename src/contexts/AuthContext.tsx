@@ -7,7 +7,7 @@ interface AuthContextType {
   session: Session | null;
   role: 'instructor' | 'student' | null;
   loading: boolean;
-  signUp: (email: string, password: string, role?: 'student' | 'instructor', referralCode?: string, instructorData?: { firstName: string; lastName: string; bio: string }) => Promise<{ error: any; needsConfirmation?: boolean }>;
+  signUp: (email: string, password: string, role?: 'student' | 'instructor', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }) => Promise<{ error: any; needsConfirmation?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: any; role?: 'instructor' | 'student' | undefined; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<{ error: any }>;
@@ -108,24 +108,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string, role: 'student' | 'instructor' = 'student', referralCode?: string, instructorData?: { firstName: string; lastName: string; bio: string }) => {
+  const signUp = async (email: string, password: string, role: 'student' | 'instructor' = 'student', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }) => {
     // Get the redirect URL - use production URL in production, current origin in dev
     const isProduction = import.meta.env.PROD;
     const redirectUrl = isProduction 
       ? 'https://quilting-retreats.vercel.app/auth/confirm'
       : `${window.location.origin}/auth/confirm`;
     
-    // Store role, referral code, and instructor data in user metadata so the database trigger can use it
+    // Store role, referral code, and user data in user metadata so the database trigger can use it
     const userMetadata: { role?: string; referred_by?: string; first_name?: string; last_name?: string; bio?: string } = {
       role: role,
     };
     if (referralCode) {
       userMetadata.referred_by = referralCode;
     }
-    if (instructorData && role === 'instructor') {
+    
+    // For students, use studentData; for instructors, use instructorData (which includes bio)
+    if (role === 'instructor' && instructorData) {
       userMetadata.first_name = instructorData.firstName;
       userMetadata.last_name = instructorData.lastName;
       userMetadata.bio = instructorData.bio;
+    } else if (role === 'student' && studentData) {
+      userMetadata.first_name = studentData.firstName;
+      userMetadata.last_name = studentData.lastName;
     }
     
     const { data, error } = await supabase.auth.signUp({

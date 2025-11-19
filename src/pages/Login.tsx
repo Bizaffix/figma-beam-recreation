@@ -127,27 +127,29 @@ const Login = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate instructor fields
-    if (selectedRole === 'instructor') {
-      if (!firstName.trim() || !lastName.trim()) {
-        toast({
-          title: "Error",
-          description: "Please enter your first and last name",
-          variant: "destructive",
-        });
-        return;
-      }
+    // Validate name fields (required for both students and instructors)
+    if (!firstName.trim() || !lastName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter your first and last name",
+        variant: "destructive",
+      });
+      return;
     }
     
     setLoading(true);
     try {
-      const instructorData = selectedRole === 'instructor' ? {
+      const studentData = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
+      };
+      
+      const instructorData = selectedRole === 'instructor' ? {
+        ...studentData,
         bio: bio.trim(),
       } : undefined;
       
-      const { error, needsConfirmation } = await signUp(email, password, selectedRole, referralCode, instructorData);
+      const { error, needsConfirmation } = await signUp(email, password, selectedRole, referralCode, studentData, instructorData);
       if (error) {
         toast({
           title: "Error",
@@ -250,43 +252,42 @@ const Login = () => {
                   </RadioGroup>
                 </div>
                 
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-firstname">First Name</Label>
+                    <Input
+                      id="signup-firstname"
+                      type="text"
+                      placeholder="First name"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-lastname">Last Name</Label>
+                    <Input
+                      id="signup-lastname"
+                      type="text"
+                      placeholder="Last name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                
                 {selectedRole === 'instructor' && (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="signup-firstname">First Name</Label>
-                        <Input
-                          id="signup-firstname"
-                          type="text"
-                          placeholder="First name"
-                          value={firstName}
-                          onChange={(e) => setFirstName(e.target.value)}
-                          required={selectedRole === 'instructor'}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="signup-lastname">Last Name</Label>
-                        <Input
-                          id="signup-lastname"
-                          type="text"
-                          placeholder="Last name"
-                          value={lastName}
-                          onChange={(e) => setLastName(e.target.value)}
-                          required={selectedRole === 'instructor'}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-bio">Bio</Label>
-                      <Textarea
-                        id="signup-bio"
-                        placeholder="Tell us about yourself..."
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                        rows={4}
-                      />
-                    </div>
-                  </>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-bio">Bio</Label>
+                    <Textarea
+                      id="signup-bio"
+                      placeholder="Tell us about yourself..."
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
+                      rows={4}
+                    />
+                  </div>
                 )}
                 
                 <div className="space-y-2">

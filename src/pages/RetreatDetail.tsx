@@ -170,67 +170,67 @@ const RetreatDetail = () => {
       </div>
 
       {/* Content */}
-      <div className="px-6 -mt-4 max-w-4xl mx-auto space-y-6 pt-4">
+      <div className="px-4 sm:px-6 -mt-4 max-w-4xl mx-auto space-y-4 sm:space-y-6 pt-4 pb-24 sm:pb-20">
         {/* Main Info Card */}
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+              <div className="flex-1">
                 <Badge className="mb-3 bg-amber-100 text-amber-700 hover:bg-amber-100">
                   {retreat.level}
                 </Badge>
-                <h1 className="text-3xl font-bold text-card-foreground mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-card-foreground mb-2">
                   {retreat.title}
                 </h1>
               </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold text-primary">${retreat.price}</p>
+              <div className="text-left sm:text-right">
+                <p className="text-2xl sm:text-3xl font-bold text-primary">${retreat.price}</p>
               </div>
             </div>
 
             {/* Instructor */}
-            <div className="flex items-center gap-3 py-6 border-y border-border">
+            <div className="flex items-center gap-3 py-4 sm:py-6 border-y border-border">
               <img
                 src={retreat.instructor.avatar || "/placeholder.svg"}
                 alt={retreat.instructor.name}
-                className="w-12 h-12 rounded-full object-cover"
+                className="w-12 h-12 rounded-full object-cover flex-shrink-0"
               />
-              <div>
-                <p className="font-semibold text-card-foreground">{retreat.instructor.name}</p>
+              <div className="min-w-0">
+                <p className="font-semibold text-card-foreground truncate">{retreat.instructor.name}</p>
                 <p className="text-sm text-muted-foreground">Instructor</p>
               </div>
             </div>
 
             {/* Details */}
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <MapPin className="w-5 h-5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Location</p>
-                  <p className="text-sm font-medium text-card-foreground">{retreat.location}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div className="flex items-start gap-2 text-muted-foreground">
+                <MapPin className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted-foreground mb-1">Location</p>
+                  <p className="text-sm font-medium text-card-foreground break-words break-all">{retreat.location}</p>
                 </div>
               </div>
               
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="w-5 h-5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Dates</p>
-                  <p className="text-sm font-medium text-card-foreground">{retreat.date}</p>
+              <div className="flex items-start gap-2 text-muted-foreground">
+                <Calendar className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted-foreground mb-1">Dates</p>
+                  <p className="text-sm font-medium text-card-foreground break-words">{retreat.date}</p>
                 </div>
               </div>
               
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Clock className="w-5 h-5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Duration</p>
+              <div className="flex items-start gap-2 text-muted-foreground">
+                <Clock className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted-foreground mb-1">Duration</p>
                   <p className="text-sm font-medium text-card-foreground">{retreat.duration}</p>
                 </div>
               </div>
               
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Users className="w-5 h-5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Availability</p>
+              <div className="flex items-start gap-2 text-muted-foreground">
+                <Users className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted-foreground mb-1">Availability</p>
                   <p className="text-sm font-medium text-card-foreground">
                     {retreat.spots_available} of {retreat.total_spots} spots
                   </p>
@@ -242,19 +242,19 @@ const RetreatDetail = () => {
 
         {/* About */}
         <Card>
-          <CardContent className="p-6">
-            <h2 className="text-xl font-semibold text-card-foreground mb-3">About This Retreat</h2>
-            <p className="text-muted-foreground leading-relaxed">{retreat.description}</p>
+          <CardContent className="p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">About This Retreat</h2>
+            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">{retreat.description}</p>
           </CardContent>
         </Card>
 
         {/* What's Included */}
         <Card>
-          <CardContent className="p-6">
-            <h2 className="text-xl font-semibold text-card-foreground mb-3">What's Included</h2>
+          <CardContent className="p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">What's Included</h2>
             <ul className="space-y-2">
               {retreat.includes.map((item, idx) => (
-                <li key={idx} className="flex items-start gap-2 text-muted-foreground">
+                <li key={idx} className="flex items-start gap-2 text-sm sm:text-base text-muted-foreground">
                   <span className="text-primary mt-1">✓</span>
                   <span>{item}</span>
                 </li>
@@ -265,13 +265,13 @@ const RetreatDetail = () => {
 
         {/* Schedule */}
         <Card>
-          <CardContent className="p-6">
-            <h2 className="text-xl font-semibold text-card-foreground mb-3">Schedule</h2>
+          <CardContent className="p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">Schedule</h2>
             <div className="space-y-3">
               {retreat.schedule.map((item, idx) => (
                 <div key={idx} className="pb-3 border-b border-border last:border-0 last:pb-0">
-                  <p className="font-semibold text-card-foreground mb-1">{item.day}</p>
-                  <p className="text-sm text-muted-foreground">{item.activities}</p>
+                  <p className="font-semibold text-sm sm:text-base text-card-foreground mb-1">{item.day}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{item.activities}</p>
                 </div>
               ))}
             </div>
@@ -280,17 +280,17 @@ const RetreatDetail = () => {
 
         {/* About Instructor */}
         <Card>
-          <CardContent className="p-6">
-            <h2 className="text-xl font-semibold text-card-foreground mb-3">About the Instructor</h2>
-            <div className="flex items-start gap-4">
+          <CardContent className="p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">About the Instructor</h2>
+            <div className="flex items-start gap-3 sm:gap-4">
               <img
                 src={retreat.instructor.avatar || "/placeholder.svg"}
                 alt={retreat.instructor.name}
-                className="w-16 h-16 rounded-full object-cover"
+                className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover flex-shrink-0"
               />
-              <div>
-                <p className="font-semibold text-card-foreground mb-1">{retreat.instructor.name}</p>
-                <p className="text-sm text-muted-foreground">{retreat.instructor.bio || "Experienced quilting instructor"}</p>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm sm:text-base text-card-foreground mb-1">{retreat.instructor.name}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">{retreat.instructor.bio || "Experienced quilting instructor"}</p>
               </div>
             </div>
           </CardContent>
@@ -298,10 +298,10 @@ const RetreatDetail = () => {
 
         {/* Book Button - Only show to students */}
         {role === 'student' && (
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-card border-t border-border">
+          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-card border-t border-border pb-safe">
             <div className="max-w-4xl mx-auto">
               <Button
-                className="w-full h-12 text-lg"
+                className="w-full h-12 text-base sm:text-lg"
                 onClick={() => navigate(`/retreat/${id}/book`, { 
                   state: { 
                     retreat: {
@@ -320,10 +320,10 @@ const RetreatDetail = () => {
         
         {/* Edit Button for Instructors */}
         {role === 'instructor' && (
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-card border-t border-border">
+          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-card border-t border-border pb-safe">
             <div className="max-w-4xl mx-auto">
               <Button
-                className="w-full h-12 text-lg"
+                className="w-full h-12 text-base sm:text-lg"
                 onClick={() => navigate(`/instructor/retreats/${id}/edit`)}
               >
                 Edit This Retreat

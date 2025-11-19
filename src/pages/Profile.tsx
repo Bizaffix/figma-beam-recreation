@@ -149,16 +149,30 @@ const Profile = () => {
     setLoading(true);
 
     try {
+      // For students, don't update bio (keep existing or null)
+      const updateData: {
+        full_name: string;
+        avatar_url: string;
+        facebook_url: string | null;
+        instagram_url: string | null;
+        pinterest_url: string | null;
+        bio?: string;
+      } = {
+        full_name: profileData.full_name,
+        avatar_url: profileData.avatar_url,
+        facebook_url: profileData.facebook_url || null,
+        instagram_url: profileData.instagram_url || null,
+        pinterest_url: profileData.pinterest_url || null,
+      };
+
+      // Only include bio for instructors
+      if (role === 'instructor') {
+        updateData.bio = profileData.bio;
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .update({
-          full_name: profileData.full_name,
-          avatar_url: profileData.avatar_url,
-          bio: profileData.bio,
-          facebook_url: profileData.facebook_url || null,
-          instagram_url: profileData.instagram_url || null,
-          pinterest_url: profileData.pinterest_url || null,
-        })
+        .update(updateData)
         .eq('id', user.id);
 
       if (error) {
@@ -259,19 +273,19 @@ const Profile = () => {
                   </div>
                 )}
 
-                {role === 'instructor' && (
-                  <Button variant="outline" className="mt-2" onClick={() => setIsEditing(true)}>
-                    <Edit className="w-4 h-4 mr-2" />
-                    Edit Profile
-                  </Button>
-                )}
+                <Button variant="outline" className="mt-2" onClick={() => setIsEditing(true)}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit Profile
+                </Button>
               </div>
             ) : (
               <div className="space-y-4">
-                <h2 className="text-xl font-semibold text-card-foreground mb-4">Instructor Information</h2>
+                <h2 className="text-xl font-semibold text-card-foreground mb-4">
+                  {role === 'instructor' ? 'Instructor Information' : 'Profile Information'}
+                </h2>
                 
                 <div>
-                  <Label>Instructor Name</Label>
+                  <Label>{role === 'instructor' ? 'Instructor Name' : 'Name'}</Label>
                   <Input
                     value={profileData.full_name}
                     onChange={(e) => setProfileData(prev => ({ ...prev, full_name: e.target.value }))}
@@ -327,15 +341,17 @@ const Profile = () => {
                   </div>
                 </div>
 
-                <div>
-                  <Label>Instructor Bio</Label>
-                  <Textarea
-                    value={profileData.bio}
-                    onChange={(e) => setProfileData(prev => ({ ...prev, bio: e.target.value }))}
-                    rows={3}
-                    placeholder="Tell us about yourself..."
-                  />
-                </div>
+                {role === 'instructor' && (
+                  <div>
+                    <Label>Instructor Bio</Label>
+                    <Textarea
+                      value={profileData.bio}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, bio: e.target.value }))}
+                      rows={3}
+                      placeholder="Tell us about yourself..."
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   <Label className="text-sm font-semibold text-foreground">Social Media</Label>
