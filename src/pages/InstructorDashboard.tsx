@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -96,6 +96,22 @@ const formatDateRange = (range: DateRange | undefined): string => {
   return `${fromMonth} ${fromDay} - ${toMonth} ${toDay}, ${year}`;
 };
 
+// Helper function to check if a retreat date has passed
+const isRetreatCompleted = (dateStr: string): boolean => {
+  if (!dateStr) return false;
+  try {
+    const dateRange = parseDateString(dateStr);
+    if (!dateRange?.to) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endDate = new Date(dateRange.to);
+    endDate.setHours(0, 0, 0, 0);
+    return endDate < today;
+  } catch (e) {
+    return false;
+  }
+};
+
 const InstructorDashboard = () => {
   const { role, user } = useAuth();
   const { toast } = useToast();
@@ -111,6 +127,8 @@ const InstructorDashboard = () => {
   const [publishedCount, setPublishedCount] = useState<number>(0);
   const [draftCount, setDraftCount] = useState<number>(0);
   const [invitesCount, setInvitesCount] = useState<number>(0);
+  const [completedEvents, setCompletedEvents] = useState<number>(0);
+  const [bookedSeats, setBookedSeats] = useState<number>(0);
   
   const [formData, setFormData] = useState<FormData>({
     title: "",
@@ -168,28 +186,44 @@ const InstructorDashboard = () => {
         setPublishedCount(published.length);
         setDraftCount(drafts.length);
 
-        // Calculate expected revenue from published retreats (price * total_spots)
-        const expected = published.reduce((sum, retreat) => {
-          return sum + (Number(retreat.price || 0) * Number(retreat.total_spots || 0));
-        }, 0);
-        setExpectedRevenue(expected);
+        // Calculate completed events (retreats where end date has passed)
+        const completed = retreatsData?.filter(r => isRetreatCompleted(r.date)) || [];
+        setCompletedEvents(completed.length);
 
         // Fetch bookings for stats
         const retreatIds = retreatsData?.map(r => r.id) || [];
+        let totalBookedSeats = 0;
         if (retreatIds.length > 0) {
           const { data: bookingsData, error: bookingsError } = await supabase
             .from('bookings')
-            .select('amount, status')
+            .select('amount, status, retreat_id')
             .in('retreat_id', retreatIds)
             .eq('status', 'confirmed');
 
           if (!bookingsError && bookingsData) {
             const revenue = bookingsData.reduce((sum, booking) => sum + Number(booking.amount || 0), 0);
             const students = bookingsData.length;
+            totalBookedSeats = students;
             setTotalRevenue(revenue);
             setStudentsServed(students);
+            setBookedSeats(totalBookedSeats);
           }
         }
+
+        // Calculate expected revenue from published events and booked seats ratio
+        // Expected Revenue = (Total potential revenue from published events) * (Booked Seats / Total Seats)
+        const publishedRetreats = published || [];
+        const totalSpotsForPublished = publishedRetreats.reduce((sum, retreat) => sum + Number(retreat.total_spots || 0), 0);
+        const bookedSeatsCount = totalBookedSeats;
+        const totalRevenuePotential = publishedRetreats.reduce((sum, retreat) => {
+          return sum + (Number(retreat.price || 0) * Number(retreat.total_spots || 0));
+        }, 0);
+        
+        // Expected revenue based on booking rate
+        const expected = totalSpotsForPublished > 0 
+          ? Math.round(totalRevenuePotential * (bookedSeatsCount / totalSpotsForPublished))
+          : 0;
+        setExpectedRevenue(expected);
 
         // Fetch invites count (users referred by this instructor)
         // For now, we'll check if there's a referred_by field in profiles
@@ -881,65 +915,118 @@ const InstructorDashboard = () => {
       {/* Stats - Only show when not editing */}
       {editingId === null && (
         <div className="px-6 -mt-4 mb-6">
-          {/* Revenue Focused Stats */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          {/* Row 1: Total Revenue, Completed Events, Students */}
+          <div className="grid grid-cols-3 gap-4 mb-4">
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold text-card-foreground">${totalRevenue.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground">Total Revenue Earned</p>
+                <p className="text-sm text-muted-foreground">Total Revenue</p>
               </CardContent>
             </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-card-foreground">{completedEvents}</p>
+                <p className="text-sm text-muted-foreground">Completed Events</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-card-foreground">{studentsServed}</p>
+                <p className="text-sm text-muted-foreground">Students</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Row 2: Expected Revenue, Published Events, Booked Seats */}
+          <div className="grid grid-cols-3 gap-4 mb-4">
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold text-card-foreground">${expectedRevenue.toLocaleString()}</p>
                 <p className="text-sm text-muted-foreground">Expected Revenue</p>
-                <p className="text-xs text-muted-foreground mt-1">{publishedCount} Published</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-card-foreground">{publishedCount}</p>
+                <p className="text-sm text-muted-foreground">Published Events</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-2xl font-bold text-card-foreground">{bookedSeats}</p>
+                <p className="text-sm text-muted-foreground">Booked Seats</p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Retreats and Revenue Opportunity */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <Card>
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-card-foreground">{allRetreats.length}</p>
-                <p className="text-sm text-muted-foreground">Total Retreats</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
+          {/* Event Draft (Left) and Links (Right Stacked) */}
+          <div className="grid grid-cols-[1fr_1.2fr] gap-4">
+            {/* Event Draft - Left Side */}
+            <Card className="h-full">
+              <CardContent className="p-4 text-center h-full flex flex-col justify-center">
                 <p className="text-2xl font-bold text-card-foreground">{draftCount}</p>
-                <p className="text-sm text-muted-foreground">Retreats in Draft</p>
-                <p className="text-xs text-muted-foreground mt-1">Revenue Opportunity</p>
+                <p className="text-sm text-muted-foreground">Event Draft</p>
               </CardContent>
             </Card>
-          </div>
 
-          {/* Invites */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-2xl font-bold text-card-foreground">{invitesCount}</p>
-                  <p className="text-sm text-muted-foreground">Invites</p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const referralLink = `${window.location.origin}/login?ref=${user?.id}`;
-                    navigator.clipboard.writeText(referralLink);
-                    toast({
-                      title: "Link Copied!",
-                      description: "Share this link with your friends to invite them to the platform.",
-                    });
-                  }}
-                >
-                  Get Invite Link
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            {/* Right Side - Stacked Links */}
+            <div className="flex flex-col gap-4">
+              {/* Share Instructor Link */}
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-card-foreground">Share the Instructor Link</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-sm font-semibold text-card-foreground">{invitesCount}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-2 h-auto"
+                        onClick={() => {
+                          const instructorLink = `${window.location.origin}/login?ref=${user?.id}`;
+                          navigator.clipboard.writeText(instructorLink);
+                          toast({
+                            title: "Link Copied!",
+                            description: "Instructor referral link copied to clipboard.",
+                          });
+                        }}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Share Student Link */}
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-card-foreground">Share the Student Link</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="p-2 h-auto flex-shrink-0"
+                      onClick={() => {
+                        const studentLink = `${window.location.origin}/login`;
+                        navigator.clipboard.writeText(studentLink);
+                        toast({
+                          title: "Link Copied!",
+                          description: "Student signup link copied to clipboard.",
+                        });
+                      }}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       )}
 
