@@ -985,14 +985,15 @@ const InstructorDashboard = () => {
                     </div>
                   </div>
                   
-                  <CardContent className="p-5">
+                  <CardContent className="p-5 relative">
                     <h3 className="text-xl font-semibold text-card-foreground mb-4">{retreat.title}</h3>
                     
-                    <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="flex gap-2 mb-4">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => startEditing(retreat)}
+                        className="flex-1"
                       >
                         <Edit className="w-4 h-4 mr-2" />
                         Edit
@@ -1001,6 +1002,7 @@ const InstructorDashboard = () => {
                         variant={retreat.published ? "outline" : "default"}
                         size="sm"
                         onClick={() => handleTogglePublish(retreat.id)}
+                        className="flex-1"
                       >
                         {retreat.published ? (
                           <>
@@ -1014,21 +1016,22 @@ const InstructorDashboard = () => {
                           </>
                         )}
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDelete(retreat.id)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete
-                      </Button>
                     </div>
 
                     <div className="text-sm text-muted-foreground">
                       <p>{retreat.location} • {retreat.date}</p>
                       <p className="mt-1">{retreat.spots_available} of {retreat.total_spots} spots available</p>
                     </div>
+
+                    {/* Delete button in bottom right corner */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(retreat.id)}
+                      className="absolute bottom-4 right-4 text-destructive hover:text-destructive hover:bg-destructive/10 p-2 h-auto"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </CardContent>
                 </Card>
               );
