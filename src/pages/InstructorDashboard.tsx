@@ -702,45 +702,46 @@ const InstructorDashboard = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-[1.8fr_1fr] gap-4">
-              <div>
-                <Label>Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal text-xs sm:text-sm",
-                        !dateRange && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                      {dateRange?.from ? (
-                        dateRange.to ? (
-                          <>
-                            {format(dateRange.from, "LLL dd, y")} -{" "}
-                            {format(dateRange.to, "LLL dd, y")}
-                          </>
-                        ) : (
-                          format(dateRange.from, "LLL dd, y")
-                        )
+            <div>
+              <Label>Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal text-xs sm:text-sm",
+                      !dateRange && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "LLL dd, y")} -{" "}
+                          {format(dateRange.to, "LLL dd, y")}
+                        </>
                       ) : (
-                        <span>Pick a date range</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      initialFocus
-                      mode="range"
-                      defaultMonth={dateRange?.from}
-                      selected={dateRange}
-                      onSelect={setDateRange}
-                      numberOfMonths={2}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
+                        format(dateRange.from, "LLL dd, y")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Duration</Label>
                 <Input
@@ -750,21 +751,20 @@ const InstructorDashboard = () => {
                   required
                 />
               </div>
+              <div>
+                <Label># of Seats</Label>
+                <Input
+                  type="number"
+                  value={formData.totalSpots}
+                  onChange={(e) => setFormData(prev => ({ ...prev, totalSpots: Number(e.target.value) }))}
+                  required
+                />
+              </div>
             </div>
           </div>
 
-          {/* Class Size, Price and Skill Level */}
+          {/* Price and Skill Level */}
           <div className="space-y-4">
-            <div>
-              <Label># of Seats</Label>
-              <Input
-                type="number"
-                value={formData.totalSpots}
-                onChange={(e) => setFormData(prev => ({ ...prev, totalSpots: Number(e.target.value) }))}
-                required
-              />
-            </div>
-            
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Price ($)</Label>
