@@ -973,7 +973,7 @@ const InstructorDashboard = () => {
               <CardContent className="p-4 h-full flex flex-col justify-center">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-card-foreground">Share the Instructor Link</p>
+                    <p className="text-sm font-medium text-card-foreground">Share the Link</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-sm font-semibold text-card-foreground">{invitesCount}</span>
