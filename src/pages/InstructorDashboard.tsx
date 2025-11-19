@@ -753,8 +753,18 @@ const InstructorDashboard = () => {
             </div>
           </div>
 
-          {/* Price and Skill Level */}
+          {/* Class Size, Price and Skill Level */}
           <div className="space-y-4">
+            <div>
+              <Label># of Seats</Label>
+              <Input
+                type="number"
+                value={formData.totalSpots}
+                onChange={(e) => setFormData(prev => ({ ...prev, totalSpots: Number(e.target.value) }))}
+                required
+              />
+            </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Price ($)</Label>
@@ -845,20 +855,6 @@ const InstructorDashboard = () => {
               rows={4}
               required
             />
-          </div>
-
-          {/* Class Size */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Class Size</h3>
-            <div>
-              <Label>Total Spots</Label>
-              <Input
-                type="number"
-                value={formData.totalSpots}
-                onChange={(e) => setFormData(prev => ({ ...prev, totalSpots: Number(e.target.value) }))}
-                required
-              />
-            </div>
           </div>
 
           {/* Publish Status */}
