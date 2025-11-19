@@ -127,8 +127,7 @@ const InstructorDashboard = () => {
   const [publishedCount, setPublishedCount] = useState<number>(0);
   const [draftCount, setDraftCount] = useState<number>(0);
   const [invitesCount, setInvitesCount] = useState<number>(0);
-  const [studentLinkCount, setStudentLinkCount] = useState<number>(0);
-  const [completedEvents, setCompletedEvents] = useState<number>(0);
+  const [completedRetreats, setCompletedRetreats] = useState<number>(0);
   const [bookedSeats, setBookedSeats] = useState<number>(0);
   
   const [formData, setFormData] = useState<FormData>({
@@ -187,9 +186,9 @@ const InstructorDashboard = () => {
         setPublishedCount(published.length);
         setDraftCount(drafts.length);
 
-        // Calculate completed events (retreats where end date has passed)
+        // Calculate completed retreats (retreats where end date has passed)
         const completed = retreatsData?.filter(r => isRetreatCompleted(r.date)) || [];
-        setCompletedEvents(completed.length);
+        setCompletedRetreats(completed.length);
 
         // Fetch bookings for stats
         const retreatIds = retreatsData?.map(r => r.id) || [];
@@ -211,8 +210,8 @@ const InstructorDashboard = () => {
           }
         }
 
-        // Calculate expected revenue from published events and booked seats ratio
-        // Expected Revenue = (Total potential revenue from published events) * (Booked Seats / Total Seats)
+        // Calculate expected revenue from published retreats and booked seats ratio
+        // Expected Revenue = (Total potential revenue from published retreats) * (Booked Seats / Total Seats)
         const publishedRetreats = published || [];
         const totalSpotsForPublished = publishedRetreats.reduce((sum, retreat) => sum + Number(retreat.total_spots || 0), 0);
         const bookedSeatsCount = totalBookedSeats;
@@ -236,16 +235,6 @@ const InstructorDashboard = () => {
           setInvitesCount(referredUsers.length);
         }
 
-        // Fetch student link count (students who signed up without referral)
-        const { data: studentUsers, error: studentError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('role', 'student')
-          .is('referred_by', null);
-
-        if (!studentError && studentUsers) {
-          setStudentLinkCount(studentUsers.length);
-        }
       } catch (error) {
         console.error('Unexpected error:', error);
       } finally {
@@ -919,13 +908,13 @@ const InstructorDashboard = () => {
       {/* Header */}
       <div className="bg-gradient-primary text-white px-6 py-8">
         <h1 className="text-3xl font-bold mb-2">Instructor Dashboard</h1>
-        <p className="text-white/90 text-lg">Manage your retreats and events</p>
+        <p className="text-white/90 text-lg">Manage your retreats</p>
       </div>
 
       {/* Stats - Only show when not editing */}
       {editingId === null && (
         <div className="px-6 -mt-4 mb-6">
-          {/* Row 1: Total Revenue, Completed Events, Students */}
+          {/* Row 1: Total Revenue, Completed Retreats, Students */}
           <div className="grid grid-cols-3 gap-4 mb-4">
             <Card>
               <CardContent className="p-4 text-center">
@@ -935,8 +924,8 @@ const InstructorDashboard = () => {
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-card-foreground">{completedEvents}</p>
-                <p className="text-sm text-muted-foreground">Completed Events</p>
+                <p className="text-2xl font-bold text-card-foreground">{completedRetreats}</p>
+                <p className="text-sm text-muted-foreground">Completed Retreats</p>
               </CardContent>
             </Card>
             <Card>
@@ -947,7 +936,7 @@ const InstructorDashboard = () => {
             </Card>
           </div>
 
-          {/* Row 2: Expected Revenue, Published Events, Booked Seats */}
+          {/* Row 2: Expected Revenue, Published Retreats, Booked Seats */}
           <div className="grid grid-cols-3 gap-4 mb-4">
             <Card>
               <CardContent className="p-4 text-center">
@@ -958,7 +947,7 @@ const InstructorDashboard = () => {
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold text-card-foreground">{publishedCount}</p>
-                <p className="text-sm text-muted-foreground">Published Events</p>
+                <p className="text-sm text-muted-foreground">Published Retreats</p>
               </CardContent>
             </Card>
             <Card>
@@ -969,76 +958,44 @@ const InstructorDashboard = () => {
             </Card>
           </div>
 
-          {/* Event Draft (Left) and Links (Right Stacked) */}
-          <div className="grid grid-cols-[1fr_1.2fr] gap-4">
-            {/* Event Draft - Left Side */}
+          {/* Retreat Draft (Left) and Instructor Link (Right) */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Retreat Draft - Left Side */}
             <Card className="h-full">
               <CardContent className="p-4 text-center h-full flex flex-col justify-center">
                 <p className="text-2xl font-bold text-card-foreground">{draftCount}</p>
-                <p className="text-sm text-muted-foreground">Event Draft</p>
+                <p className="text-sm text-muted-foreground">Retreat Draft</p>
               </CardContent>
             </Card>
 
-            {/* Right Side - Stacked Links */}
-            <div className="flex flex-col gap-4">
-              {/* Share Instructor Link */}
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-card-foreground">Share the Instructor Link</p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-sm font-semibold text-card-foreground">{invitesCount}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="p-2 h-auto"
-                        onClick={() => {
-                          const instructorLink = `${window.location.origin}/login?ref=${user?.id}`;
-                          navigator.clipboard.writeText(instructorLink);
-                          toast({
-                            title: "Link Copied!",
-                            description: "Instructor referral link copied to clipboard.",
-                          });
-                        }}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    </div>
+            {/* Share Instructor Link - Right Side */}
+            <Card className="h-full">
+              <CardContent className="p-4 h-full flex flex-col justify-center">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-card-foreground">Share the Instructor Link</p>
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Share Student Link */}
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-card-foreground">Share the Student Link</p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-sm font-semibold text-card-foreground">{studentLinkCount}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="p-2 h-auto"
-                        onClick={() => {
-                          const studentLink = `${window.location.origin}/login`;
-                          navigator.clipboard.writeText(studentLink);
-                          toast({
-                            title: "Link Copied!",
-                            description: "Student signup link copied to clipboard.",
-                          });
-                        }}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-sm font-semibold text-card-foreground">{invitesCount}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="p-2 h-auto"
+                      onClick={() => {
+                        const instructorLink = `${window.location.origin}/login?ref=${user?.id}`;
+                        navigator.clipboard.writeText(instructorLink);
+                        toast({
+                          title: "Link Copied!",
+                          description: "Instructor referral link copied to clipboard.",
+                        });
+                      }}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
