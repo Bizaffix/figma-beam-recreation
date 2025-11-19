@@ -702,7 +702,7 @@ const InstructorDashboard = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-[1.8fr_1fr] gap-4">
               <div>
                 <Label>Date</Label>
                 <Popover>
@@ -710,11 +710,11 @@ const InstructorDashboard = () => {
                     <Button
                       variant="outline"
                       className={cn(
-                        "w-full justify-start text-left font-normal",
+                        "w-full justify-start text-left font-normal text-xs sm:text-sm",
                         !dateRange && "text-muted-foreground"
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
                       {dateRange?.from ? (
                         dateRange.to ? (
                           <>
