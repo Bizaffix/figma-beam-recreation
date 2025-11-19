@@ -507,7 +507,7 @@ const InstructorDashboard = () => {
         ));
         toast({
           title: "Success",
-          description: retreat.published ? "Retreat saved as draft" : "Retreat is now live!",
+          description: retreat.published ? "Retreat unpublished" : "Retreat published!",
         });
       }
     } catch (error) {
@@ -841,7 +841,7 @@ const InstructorDashboard = () => {
               variant={formData.published ? "default" : "outline"}
               onClick={() => setFormData(prev => ({ ...prev, published: !prev.published }))}
             >
-              {formData.published ? "Go Live" : "Save as Draft"}
+              {formData.published ? "Unpublish" : "Publish"}
             </Button>
           </div>
 
@@ -1007,12 +1007,12 @@ const InstructorDashboard = () => {
                         {retreat.published ? (
                           <>
                             <EyeOff className="w-4 h-4 mr-2" />
-                            Save as Draft
+                            Unpublish
                           </>
                         ) : (
                           <>
                             <Eye className="w-4 h-4 mr-2" />
-                            Go Live
+                            Publish
                           </>
                         )}
                       </Button>
