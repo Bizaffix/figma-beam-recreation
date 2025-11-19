@@ -127,6 +127,7 @@ const InstructorDashboard = () => {
   const [publishedCount, setPublishedCount] = useState<number>(0);
   const [draftCount, setDraftCount] = useState<number>(0);
   const [invitesCount, setInvitesCount] = useState<number>(0);
+  const [studentLinkCount, setStudentLinkCount] = useState<number>(0);
   const [completedEvents, setCompletedEvents] = useState<number>(0);
   const [bookedSeats, setBookedSeats] = useState<number>(0);
   
@@ -226,8 +227,6 @@ const InstructorDashboard = () => {
         setExpectedRevenue(expected);
 
         // Fetch invites count (users referred by this instructor)
-        // For now, we'll check if there's a referred_by field in profiles
-        // If not, we'll just show 0 and the UI for now
         const { data: referredUsers, error: invitesError } = await supabase
           .from('profiles')
           .select('id')
@@ -235,6 +234,17 @@ const InstructorDashboard = () => {
 
         if (!invitesError && referredUsers) {
           setInvitesCount(referredUsers.length);
+        }
+
+        // Fetch student link count (students who signed up without referral)
+        const { data: studentUsers, error: studentError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'student')
+          .is('referred_by', null);
+
+        if (!studentError && studentUsers) {
+          setStudentLinkCount(studentUsers.length);
         }
       } catch (error) {
         console.error('Unexpected error:', error);
@@ -1007,21 +1017,24 @@ const InstructorDashboard = () => {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-card-foreground">Share the Student Link</p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="p-2 h-auto flex-shrink-0"
-                      onClick={() => {
-                        const studentLink = `${window.location.origin}/login`;
-                        navigator.clipboard.writeText(studentLink);
-                        toast({
-                          title: "Link Copied!",
-                          description: "Student signup link copied to clipboard.",
-                        });
-                      }}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-sm font-semibold text-card-foreground">{studentLinkCount}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-2 h-auto"
+                        onClick={() => {
+                          const studentLink = `${window.location.origin}/login`;
+                          navigator.clipboard.writeText(studentLink);
+                          toast({
+                            title: "Link Copied!",
+                            description: "Student signup link copied to clipboard.",
+                          });
+                        }}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
