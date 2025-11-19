@@ -960,7 +960,7 @@ const InstructorDashboard = () => {
             <Card className="h-full">
               <CardContent className="p-4 text-center h-full flex flex-col justify-center">
                 <p className="text-2xl font-bold text-card-foreground">{draftCount}</p>
-                <p className="text-sm text-muted-foreground">Retreat Draft</p>
+                <p className="text-sm text-muted-foreground">Retreat Drafts</p>
               </CardContent>
             </Card>
 
@@ -1006,13 +1006,15 @@ const InstructorDashboard = () => {
           <>
             {/* Create New Button - only show if not editing */}
             {editingId === null && (
-              <Button 
-                className="w-full h-12 text-lg"
-                onClick={() => startEditing()}
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                Create New Retreat
-              </Button>
+              <div className="border-4 border-primary/30 bg-primary/5 rounded-lg p-1 shadow-lg">
+                <Button 
+                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white shadow-md"
+                  onClick={() => startEditing()}
+                >
+                  <Plus className="w-6 h-6 mr-2" />
+                  Create New Retreat
+                </Button>
+              </div>
             )}
 
             {/* Editable Card */}
