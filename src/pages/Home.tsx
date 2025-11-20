@@ -1,7 +1,7 @@
 import { BottomNav } from "@/components/BottomNav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, TrendingUp, Star, Award } from "lucide-react";
+import { Calendar, Star, Award } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const Home = () => {
@@ -59,30 +59,6 @@ const Home = () => {
             </p>
             
             <Button className="w-full">View Details</Button>
-          </CardContent>
-        </Card>
-
-        {/* Popular This Month */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="w-5 h-5 text-primary" />
-              <h3 className="text-xl font-semibold text-card-foreground">Popular This Month</h3>
-            </div>
-            
-            <div className="space-y-3">
-              {["Art Quilt Masterclass", "Coastal Quilting Escape", "Traditional Patterns Revival"].map((title, idx) => (
-                <div key={idx} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <div className="w-16 h-16 bg-primary/20 rounded-lg flex items-center justify-center">
-                    <Calendar className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-card-foreground">{title}</p>
-                    <p className="text-sm text-muted-foreground">High demand</p>
-                  </div>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
       </div>
