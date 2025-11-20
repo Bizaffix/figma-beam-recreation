@@ -430,7 +430,7 @@ const InstructorDashboard = () => {
     }));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (published?: boolean) => {
     if (!user) return;
 
     setSaving(true);
@@ -449,7 +449,7 @@ const InstructorDashboard = () => {
         image: formData.image || "",
         includes: formData.includes || [],
         schedule: formData.schedule || [],
-        published: formData.published || false,
+        published: published !== undefined ? published : (formData.published || false),
         instructor_id: user.id,
       };
 
@@ -470,7 +470,7 @@ const InstructorDashboard = () => {
         } else {
           toast({
             title: "Success",
-            description: "Retreat created successfully!",
+            description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
           });
           setAllRetreats(prev => [data, ...prev]);
           cancelEditing();
@@ -496,7 +496,7 @@ const InstructorDashboard = () => {
         } else {
           toast({
             title: "Success",
-            description: "Retreat updated successfully!",
+            description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
           });
           setAllRetreats(prev => prev.map(r => 
             r.id === editingId ? { ...r, ...updateData, spots_available: r.spots_available } : r
@@ -614,6 +614,16 @@ const InstructorDashboard = () => {
               <Input
                 value={formData.title}
                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                required
+              />
+            </div>
+
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                rows={4}
                 required
               />
             </div>
@@ -847,34 +857,15 @@ const InstructorDashboard = () => {
             </div>
           </div>
 
-          <div>
-            <Label>Description</Label>
-            <Textarea
-              value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              rows={4}
-              required
-            />
-          </div>
-
           {/* Publish Status */}
-          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-            <div>
-              <h3 className="font-semibold text-card-foreground">Status</h3>
-              <p className="text-sm text-muted-foreground">
-                {formData.published ? "This retreat will be LIVE and visible to students" : "This retreat will be saved as a DRAFT"}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant={formData.published ? "default" : "outline"}
-              onClick={() => setFormData(prev => ({ ...prev, published: !prev.published }))}
-            >
-              {formData.published ? "Unpublish" : "Publish"}
-            </Button>
+          <div className="p-4 bg-muted rounded-lg">
+            <h3 className="font-semibold text-card-foreground mb-1">Status</h3>
+            <p className="text-sm text-muted-foreground">
+              {formData.published ? "This retreat will be LIVE and visible to students" : "This retreat will be saved as a DRAFT"}
+            </p>
           </div>
 
-          {/* Save/Cancel Buttons */}
+          {/* Save/Cancel/Publish Buttons */}
           <div className="flex gap-4 pt-4">
             <Button
               type="button"
@@ -886,12 +877,21 @@ const InstructorDashboard = () => {
             </Button>
             <Button
               type="button"
+              variant="outline"
               className="flex-1"
-              onClick={handleSave}
+              onClick={() => handleSave(false)}
               disabled={saving}
             >
               <Save className="w-4 h-4 mr-2" />
-              {saving ? (isNew ? "Creating..." : "Saving...") : (isNew ? "Create Retreat" : "Save Changes")}
+              Save
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+              onClick={() => handleSave(true)}
+              disabled={saving}
+            >
+              {saving ? "Publishing..." : "Publish"}
             </Button>
           </div>
         </CardContent>
