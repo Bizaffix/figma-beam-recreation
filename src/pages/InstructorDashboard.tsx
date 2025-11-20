@@ -859,9 +859,16 @@ const InstructorDashboard = () => {
 
           {/* Publish Status */}
           <div className="p-4 bg-muted rounded-lg">
-            <h3 className="font-semibold text-card-foreground mb-1">Status</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-card-foreground">Status</h3>
+              <Badge variant={formData.published ? "default" : "secondary"}>
+                {formData.published ? "Published" : "Draft"}
+              </Badge>
+            </div>
             <p className="text-sm text-muted-foreground">
-              {formData.published ? "This retreat will be LIVE and visible to students" : "This retreat will be saved as a DRAFT"}
+              {formData.published 
+                ? "This retreat is LIVE and visible to students" 
+                : "Not ready to publish? Save your draft"}
             </p>
           </div>
 
