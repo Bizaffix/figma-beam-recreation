@@ -1,18 +1,53 @@
+import { useState, useEffect } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, Star, Award } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 const Home = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [firstName, setFirstName] = useState<string>("");
+
+  // Fetch user's first name from profile
+  useEffect(() => {
+    const fetchFirstName = async () => {
+      if (!user) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching user profile:', error);
+        } else if (data?.full_name) {
+          // Extract first name from full_name
+          const nameParts = data.full_name.trim().split(' ');
+          const first = nameParts[0] || "";
+          setFirstName(first);
+        }
+      } catch (error) {
+        console.error('Unexpected error fetching profile:', error);
+      }
+    };
+
+    fetchFirstName();
+  }, [user]);
 
   // This page is now student-only, so it will only be accessible to students
   return (
     <div className="min-h-screen bg-gradient-hero pb-20">
       {/* Header */}
       <div className="bg-gradient-primary text-white px-6 py-8">
-        <h1 className="text-3xl font-bold mb-2">Welcome Back!</h1>
+        <h1 className="text-3xl font-bold mb-2">
+          {firstName ? `Welcome ${firstName}!` : "Welcome Back!"}
+        </h1>
         <p className="text-white/90 text-lg">Ready to continue your quilting journey?</p>
       </div>
 
