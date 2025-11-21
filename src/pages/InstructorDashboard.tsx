@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight, Share2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -1040,7 +1040,26 @@ const InstructorDashboard = () => {
                       alt={retreat.title}
                       className="w-full h-48 object-cover"
                     />
-                    <div className="absolute top-3 right-3 flex gap-2">
+                    <div className="absolute top-3 right-3 flex gap-2 items-center">
+                      {retreat.published && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="bg-white/90 hover:bg-white text-foreground shadow-md backdrop-blur-sm"
+                          onClick={() => {
+                            const retreatLink = `${window.location.origin}/retreat/${retreat.id}${user?.id ? `?ref=${user.id}` : ''}`;
+                            navigator.clipboard.writeText(retreatLink);
+                            toast({
+                              title: "Link Copied!",
+                              description: "Retreat link copied to clipboard. Share it on social media!",
+                            });
+                          }}
+                          title="Share this retreat"
+                        >
+                          <Share2 className="w-4 h-4 mr-1.5" />
+                          Share
+                        </Button>
+                      )}
                       <Badge className={retreat.published ? "bg-green-500 text-white font-semibold" : "bg-gray-400 text-white font-semibold"}>
                         {retreat.published ? "LIVE" : "DRAFT"}
                       </Badge>
