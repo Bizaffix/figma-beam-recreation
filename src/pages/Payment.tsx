@@ -277,6 +277,7 @@ const Payment = () => {
                   <div className="mt-2 p-2 sm:p-3 border rounded-md bg-card">
                     <CardElement
                       options={{
+                        hidePostalCode: true,
                         style: {
                           base: {
                             fontSize: '14px',
