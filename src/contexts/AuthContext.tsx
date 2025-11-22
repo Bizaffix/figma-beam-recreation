@@ -111,10 +111,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signUp = async (email: string, password: string, role: 'student' | 'instructor' = 'student', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }) => {
-    // Get the redirect URL - use production URL in production, current origin in dev
-    const isProduction = import.meta.env.PROD;
-    const redirectUrl = isProduction 
-      ? 'https://quilting-retreats.vercel.app/auth/confirm'
+    // Get the redirect URL - use production URL from env or current origin
+    const productionUrl = import.meta.env.VITE_SUPABASE_CONFIRM_URL || 'https://www.bookmyquiltretreat.com';
+    const redirectUrl = import.meta.env.PROD 
+      ? `${productionUrl}/auth/confirm`
       : `${window.location.origin}/auth/confirm`;
     
     // Store role, referral code, and user data in user metadata so the database trigger can use it
@@ -209,10 +209,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const resendConfirmationEmail = async (email: string) => {
-    // Get the redirect URL - use production URL in production, current origin in dev
-    const isProduction = import.meta.env.PROD;
-    const redirectUrl = isProduction 
-      ? 'https://quilting-retreats.vercel.app/auth/confirm'
+    // Get the redirect URL - use production URL from env or current origin
+    const productionUrl = import.meta.env.VITE_SUPABASE_CONFIRM_URL || 'https://www.bookmyquiltretreat.com';
+    const redirectUrl = import.meta.env.PROD 
+      ? `${productionUrl}/auth/confirm`
       : `${window.location.origin}/auth/confirm`;
     
     const { error } = await supabase.auth.resend({
@@ -226,10 +226,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const resetPassword = async (email: string) => {
-    // Get the redirect URL - use production URL in production, current origin in dev
-    const isProduction = import.meta.env.PROD;
-    const redirectUrl = isProduction 
-      ? 'https://quilting-retreats.vercel.app/auth/reset-password'
+    // Get the redirect URL - use production URL from env or current origin
+    const productionUrl = import.meta.env.VITE_SUPABASE_CONFIRM_URL || 'https://www.bookmyquiltretreat.com';
+    const redirectUrl = import.meta.env.PROD 
+      ? `${productionUrl}/auth/reset-password`
       : `${window.location.origin}/auth/reset-password`;
     
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
