@@ -5,10 +5,10 @@ import { supabase } from '@/lib/supabase';
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  role: 'instructor' | 'student' | null;
+  role: 'instructor' | 'student' | 'admin' | null;
   loading: boolean;
   signUp: (email: string, password: string, role?: 'student' | 'instructor', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }) => Promise<{ error: any; needsConfirmation?: boolean }>;
-  signIn: (email: string, password: string) => Promise<{ error: any; role?: 'instructor' | 'student' | undefined; needsConfirmation?: boolean }>;
+  signIn: (email: string, password: string) => Promise<{ error: any; role?: 'instructor' | 'student' | 'admin' | undefined; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<{ error: any }>;
   resetPassword: (email: string) => Promise<{ error: any }>;
@@ -20,7 +20,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [role, setRole] = useState<'instructor' | 'student' | null>(null);
+  const [role, setRole] = useState<'instructor' | 'student' | 'admin' | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -96,7 +96,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (error) {
         console.error('Error fetching user role:', error);
         setRole('student'); // Default to student on error
-      } else if (profile?.role === 'instructor' || profile?.role === 'student') {
+      } else if (profile?.role === 'instructor' || profile?.role === 'student' || profile?.role === 'admin') {
         setRole(profile.role);
       } else {
         // Default to student if no role is set
@@ -195,7 +195,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', data.user.id)
         .single();
       
-      return { error, role: profile?.role as 'instructor' | 'student' | undefined };
+      return { error, role: profile?.role as 'instructor' | 'student' | 'admin' | undefined };
     }
 
     return { error, role: undefined };

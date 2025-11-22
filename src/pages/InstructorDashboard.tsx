@@ -193,6 +193,8 @@ const InstructorDashboard = () => {
         // Fetch bookings for stats
         const retreatIds = retreatsData?.map(r => r.id) || [];
         let totalBookedSeats = 0;
+        console.log('Instructor retreat IDs:', retreatIds);
+        
         if (retreatIds.length > 0) {
           const { data: bookingsData, error: bookingsError } = await supabase
             .from('bookings')
@@ -200,14 +202,24 @@ const InstructorDashboard = () => {
             .in('retreat_id', retreatIds)
             .eq('status', 'confirmed');
 
-          if (!bookingsError && bookingsData) {
-            const revenue = bookingsData.reduce((sum, booking) => sum + Number(booking.amount || 0), 0);
-            const students = bookingsData.length;
+          if (bookingsError) {
+            console.error('Error fetching bookings for instructor:', bookingsError);
+            toast({
+              title: "Error",
+              description: bookingsError.message || "Failed to load bookings",
+              variant: "destructive",
+            });
+          } else {
+            console.log('Bookings fetched for instructor:', bookingsData?.length || 0, bookingsData);
+            const revenue = bookingsData?.reduce((sum, booking) => sum + Number(booking.amount || 0), 0) || 0;
+            const students = bookingsData?.length || 0;
             totalBookedSeats = students;
             setTotalRevenue(revenue);
             setStudentsServed(students);
             setBookedSeats(totalBookedSeats);
           }
+        } else {
+          console.log('No retreat IDs found for instructor');
         }
 
         // Calculate expected revenue from published retreats and booked seats ratio

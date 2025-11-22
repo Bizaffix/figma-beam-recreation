@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 import InstructorDashboard from "./pages/InstructorDashboard";
 import InstructorRetreatForm from "./pages/InstructorRetreatForm";
 import InstructorBrowse from "./pages/InstructorBrowse";
+import AdminDashboard from "./pages/AdminDashboard";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import EmailConfirm from "./pages/EmailConfirm";
@@ -32,7 +33,9 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
 
   // If authenticated, redirect based on role
   if (user) {
-    if (role === 'instructor') {
+    if (role === 'admin') {
+      return <Navigate to="/admin/dashboard" replace />;
+    } else if (role === 'instructor') {
       return <Navigate to="/instructor/dashboard" replace />;
     } else if (role === 'student') {
       return <Navigate to="/home" replace />;
@@ -50,7 +53,7 @@ const ProtectedRoute = ({
   allowedRoles 
 }: { 
   children: React.ReactNode; 
-  allowedRoles?: ('instructor' | 'student')[] 
+  allowedRoles?: ('instructor' | 'student' | 'admin')[] 
 }) => {
   const { user, role, loading } = useAuth();
 
@@ -74,7 +77,9 @@ const ProtectedRoute = ({
   // If roles are specified and user doesn't have the right role, redirect
   if (allowedRoles && role && !allowedRoles.includes(role)) {
     // Redirect to role-appropriate page
-    if (role === 'instructor') {
+    if (role === 'admin') {
+      return <Navigate to="/admin/dashboard" replace />;
+    } else if (role === 'instructor') {
       return <Navigate to="/instructor/dashboard" replace />;
     } else {
       return <Navigate to="/home" replace />;
@@ -106,6 +111,11 @@ const InstructorRoute = ({ children }: { children: React.ReactNode }) => {
   return <ProtectedRoute allowedRoles={['instructor']}>{children}</ProtectedRoute>;
 };
 
+// Admin-only routes
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  return <ProtectedRoute allowedRoles={['admin']}>{children}</ProtectedRoute>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -135,6 +145,9 @@ const App = () => (
           <Route path="/instructor/dashboard" element={<InstructorRoute><InstructorDashboard /></InstructorRoute>} />
           <Route path="/instructor/retreats/new" element={<InstructorRoute><InstructorRetreatForm /></InstructorRoute>} />
           <Route path="/instructor/retreats/:id/edit" element={<InstructorRoute><InstructorRetreatForm /></InstructorRoute>} />
+          
+          {/* Protected Admin Routes */}
+          <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           
           {/* Catch-all route - redirect to login if not authenticated */}
           <Route path="*" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />
