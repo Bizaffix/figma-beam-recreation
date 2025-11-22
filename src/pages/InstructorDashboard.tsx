@@ -961,6 +961,31 @@ const InstructorDashboard = () => {
             </Card>
           </div>
 
+          {/* Payout Statement */}
+          {totalRevenue > 0 && (
+            <Card className="mb-4">
+              <CardContent className="p-4 sm:p-6">
+                <h3 className="text-lg font-semibold text-card-foreground mb-4">Payout Statement</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm sm:text-base text-muted-foreground">
+                    <span>Total Revenue</span>
+                    <span>${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm sm:text-base text-muted-foreground">
+                    <span>Service Fee</span>
+                    <span>-${(totalRevenue * 0.1229).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="border-t border-border pt-2 mt-2">
+                    <div className="flex items-center justify-between text-base sm:text-lg font-semibold text-card-foreground">
+                      <span>Your Payout</span>
+                      <span className="text-primary">${(totalRevenue * (1 - 0.1229)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Retreat Draft (Left) and Instructor Link (Right) */}
           <div className="grid grid-cols-2 gap-4">
             {/* Retreat Draft - Left Side */}

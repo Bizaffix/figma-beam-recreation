@@ -347,10 +347,6 @@ const Booking = () => {
                 <span>Retreat price</span>
                 <span>${retreat.price}</span>
               </div>
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span>Service fee</span>
-                <span>$0</span>
-              </div>
               <div className="flex items-center justify-between font-semibold text-card-foreground">
                 <span>Total</span>
                 <span className="text-primary">${retreat.price}</span>
