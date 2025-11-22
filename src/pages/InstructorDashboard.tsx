@@ -934,7 +934,7 @@ const InstructorDashboard = () => {
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold text-card-foreground">{studentsServed}</p>
-                <p className="text-sm text-muted-foreground">Students</p>
+                <p className="text-sm text-muted-foreground">Students Taught</p>
               </CardContent>
             </Card>
           </div>
