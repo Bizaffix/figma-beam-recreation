@@ -11,6 +11,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any; role?: 'instructor' | 'student' | undefined; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<{ error: any }>;
+  resetPassword: (email: string) => Promise<{ error: any }>;
+  updatePassword: (password: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -223,8 +225,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error };
   };
 
+  const resetPassword = async (email: string) => {
+    // Get the redirect URL - use production URL in production, current origin in dev
+    const isProduction = import.meta.env.PROD;
+    const redirectUrl = isProduction 
+      ? 'https://quilting-retreats.vercel.app/auth/reset-password'
+      : `${window.location.origin}/auth/reset-password`;
+    
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl,
+    });
+    return { error };
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: password,
+    });
+    return { error };
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, role, loading, signUp, signIn, signOut, resendConfirmationEmail }}>
+    <AuthContext.Provider value={{ user, session, role, loading, signUp, signIn, signOut, resendConfirmationEmail, resetPassword, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );

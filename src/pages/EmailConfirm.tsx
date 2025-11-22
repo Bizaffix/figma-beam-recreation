@@ -41,11 +41,14 @@ const EmailConfirm = () => {
             }
 
             if (session) {
+              // Email is verified, but sign the user out so they must manually sign in
+              await supabase.auth.signOut();
+              
               setStatus('success');
               setMessage('Email verified successfully! You can now sign in.');
               toast({
                 title: "Email Verified",
-                description: "Your email has been confirmed. You can now sign in.",
+                description: "Your email has been confirmed. Please sign in to continue.",
               });
               
               // Clear the hash from URL
@@ -72,11 +75,14 @@ const EmailConfirm = () => {
             setStatus('error');
             setMessage(error.message || 'Failed to verify email. The link may have expired.');
           } else {
+            // Email is verified, but sign the user out so they must manually sign in
+            await supabase.auth.signOut();
+            
             setStatus('success');
             setMessage('Email verified successfully! You can now sign in.');
             toast({
               title: "Email Verified",
-              description: "Your email has been confirmed. You can now sign in.",
+              description: "Your email has been confirmed. Please sign in to continue.",
             });
             
             setTimeout(() => {
@@ -87,8 +93,16 @@ const EmailConfirm = () => {
           // Check if there's already a session (user might have confirmed elsewhere)
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
+            // Sign out to ensure user must manually sign in
+            await supabase.auth.signOut();
+            
             setStatus('success');
             setMessage('Email already verified! You can sign in.');
+            toast({
+              title: "Email Verified",
+              description: "Your email has been confirmed. Please sign in to continue.",
+            });
+            
             setTimeout(() => {
               navigate('/login');
             }, 2000);

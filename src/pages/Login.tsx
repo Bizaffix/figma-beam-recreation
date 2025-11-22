@@ -1,12 +1,9 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Eye, EyeOff } from "lucide-react";
@@ -79,17 +76,13 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'student' | 'instructor'>('student');
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [bio, setBio] = useState("");
-  const [showSignInPassword, setShowSignInPassword] = useState(false);
-  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const { signIn, resetPassword } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const referralCode = searchParams.get('ref') || undefined;
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,52 +119,34 @@ const Login = () => {
     }
   };
 
-  const handleSignUp = async (e: React.FormEvent) => {
+  const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate name fields (required for both students and instructors)
-    if (!firstName.trim() || !lastName.trim()) {
+    if (!resetEmail) {
       toast({
         title: "Error",
-        description: "Please enter your first and last name",
+        description: "Please enter your email address",
         variant: "destructive",
       });
       return;
     }
-    
-    setLoading(true);
+
+    setResetLoading(true);
     try {
-      const studentData = {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-      };
-      
-      const instructorData = selectedRole === 'instructor' ? {
-        ...studentData,
-        bio: bio.trim(),
-      } : undefined;
-      
-      const { error, needsConfirmation } = await signUp(email, password, selectedRole, referralCode, studentData, instructorData);
+      const { error } = await resetPassword(resetEmail);
       if (error) {
         toast({
           title: "Error",
-          description: error.message || "Failed to sign up",
+          description: error.message || "Failed to send password reset email",
           variant: "destructive",
         });
       } else {
         toast({
-          title: "Account Created",
-          description: "Please check your email and click the confirmation link to verify your account before signing in.",
-          duration: 10000,
+          title: "Email Sent",
+          description: "Password reset link has been sent to your email. Please check your inbox.",
+          duration: 8000,
         });
-        // Don't redirect - user needs to confirm email first
-        // Clear the form
-        setEmail("");
-        setPassword("");
-        setSelectedRole('student');
-        setFirstName("");
-        setLastName("");
-        setBio("");
+        setResetEmail("");
+        setShowForgotPassword(false);
       }
     } catch (error) {
       toast({
@@ -180,7 +155,7 @@ const Login = () => {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setResetLoading(false);
     }
   };
 
@@ -190,22 +165,52 @@ const Login = () => {
         <CardHeader>
           <CardTitle className="text-2xl text-center">Quilting Retreats</CardTitle>
           <CardDescription className="text-center">
-            Sign in to your account or create a new one
+            {showForgotPassword ? "Reset your password" : "Sign in to your account"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="signin">
+          {showForgotPassword ? (
+            <>
+              {/* Forgot Password Form */}
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Enter your email address and we'll send you a link to reset your password.
+                </p>
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reset-email">Email</Label>
+                    <Input
+                      id="reset-email"
+                      type="email"
+                      placeholder="your.email@example.com"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={resetLoading}>
+                    {resetLoading ? "Sending..." : "Send Reset Link"}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setResetEmail("");
+                    }}
+                    className="w-full text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    Back to Sign In
+                  </button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <>
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
-                    id="signin-email"
+                    id="email"
                     type="email"
                     placeholder="your.email@example.com"
                     value={email}
@@ -214,11 +219,20 @@ const Login = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signin-password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotPassword(true)}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
                   <div className="relative">
                     <Input
-                      id="signin-password"
-                      type={showSignInPassword ? "text" : "password"}
+                      id="password"
+                      type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -227,11 +241,11 @@ const Login = () => {
                     />
                     <button
                       type="button"
-                      onClick={() => setShowSignInPassword(!showSignInPassword)}
+                      onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                       tabIndex={-1}
                     >
-                      {showSignInPassword ? (
+                      {showPassword ? (
                         <EyeOff className="w-4 h-4" />
                       ) : (
                         <Eye className="w-4 h-4" />
@@ -243,125 +257,23 @@ const Login = () => {
                   {loading ? "Signing in..." : "Sign In"}
                 </Button>
               </form>
-            </TabsContent>
-            
-            <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-3">
-                  <Label>I am a...</Label>
-                  <RadioGroup
-                    value={selectedRole}
-                    onValueChange={(value) => setSelectedRole(value as 'student' | 'instructor')}
-                    className="flex gap-4"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="student" id="role-student" />
-                      <Label htmlFor="role-student" className="font-normal cursor-pointer">
-                        Student
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="instructor" id="role-instructor" />
-                      <Label htmlFor="role-instructor" className="font-normal cursor-pointer">
-                        Instructor
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-firstname">First Name</Label>
-                    <Input
-                      id="signup-firstname"
-                      type="text"
-                      placeholder="First name"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-lastname">Last Name</Label>
-                    <Input
-                      id="signup-lastname"
-                      type="text"
-                      placeholder="Last name"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-                
-                {selectedRole === 'instructor' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-bio">Bio</Label>
-                    <Textarea
-                      id="signup-bio"
-                      placeholder="Tell us about yourself..."
-                      value={bio}
-                      onChange={(e) => setBio(e.target.value)}
-                      rows={4}
-                    />
-                  </div>
-                )}
-                
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="your.email@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="signup-password"
-                      type={showSignUpPassword ? "text" : "password"}
-                      placeholder="Create a password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={6}
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowSignUpPassword(!showSignUpPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      tabIndex={-1}
-                    >
-                      {showSignUpPassword ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Password must be at least 6 characters
-                  </p>
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Creating account..." : "Sign Up"}
-                </Button>
-              </form>
-            </TabsContent>
-            
-            {/* Resend confirmation email section */}
-            <div className="mt-4 pt-4 border-t">
-              <p className="text-sm text-center text-muted-foreground mb-2">
-                Didn't receive the confirmation email?
-              </p>
-              <ResendConfirmationForm />
-            </div>
-          </Tabs>
+
+              <div className="mt-4 text-center text-sm">
+                <span className="text-muted-foreground">Don't have an account? </span>
+                <Link to="/signup" className="text-primary hover:underline font-medium">
+                  Sign up
+                </Link>
+              </div>
+
+              {/* Resend confirmation email section */}
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-sm text-center text-muted-foreground mb-2">
+                  Didn't receive the confirmation email?
+                </p>
+                <ResendConfirmationForm />
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -369,4 +281,3 @@ const Login = () => {
 };
 
 export default Login;
-

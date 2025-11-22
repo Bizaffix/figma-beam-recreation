@@ -15,7 +15,9 @@ import InstructorDashboard from "./pages/InstructorDashboard";
 import InstructorRetreatForm from "./pages/InstructorRetreatForm";
 import InstructorBrowse from "./pages/InstructorBrowse";
 import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 import EmailConfirm from "./pages/EmailConfirm";
+import ResetPassword from "./pages/ResetPassword";
 import { useAuth } from "./contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -113,7 +115,11 @@ const App = () => (
         <Routes>
           {/* Public Routes - Only Login/Signup and Email Confirmation */}
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/auth/confirm" element={<PublicRoute><EmailConfirm /></PublicRoute>} />
+          <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
+          {/* Email confirmation route - accessible to all (needs to handle sign-out) */}
+          <Route path="/auth/confirm" element={<EmailConfirm />} />
+          {/* Password reset route - accessible to all (needs to handle sign-out) */}
+          <Route path="/auth/reset-password" element={<ResetPassword />} />
           
           {/* Protected Student Routes */}
           <Route path="/" element={<StudentRoute><Index /></StudentRoute>} />
