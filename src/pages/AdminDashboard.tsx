@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2 } from "lucide-react";
 
 interface Booking {
   id: string;
@@ -22,6 +24,13 @@ interface Booking {
   };
 }
 
+interface UserProfile {
+  id: string;
+  full_name: string | null;
+  email: string;
+  created_at: string;
+}
+
 const AdminDashboard = () => {
   const { role, user, signOut } = useAuth();
   const { toast } = useToast();
@@ -32,6 +41,12 @@ const AdminDashboard = () => {
   const [totalInstructors, setTotalInstructors] = useState<number>(0);
   const [totalStudents, setTotalStudents] = useState<number>(0);
   const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
+  const [studentsDialogOpen, setStudentsDialogOpen] = useState(false);
+  const [instructorsDialogOpen, setInstructorsDialogOpen] = useState(false);
+  const [studentsList, setStudentsList] = useState<UserProfile[]>([]);
+  const [instructorsList, setInstructorsList] = useState<UserProfile[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [loadingInstructors, setLoadingInstructors] = useState(false);
 
   useEffect(() => {
     if (role !== 'admin' || !user) return;
@@ -123,6 +138,82 @@ const AdminDashboard = () => {
     navigate("/login");
   };
 
+  const fetchStudentsList = async () => {
+    setLoadingStudents(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, created_at')
+        .eq('role', 'student')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching students:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load students list",
+          variant: "destructive",
+        });
+      } else {
+        setStudentsList(data || []);
+      }
+    } catch (error) {
+      console.error('Unexpected error fetching students:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
+
+  const fetchInstructorsList = async () => {
+    setLoadingInstructors(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, created_at')
+        .eq('role', 'instructor')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching instructors:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load instructors list",
+          variant: "destructive",
+        });
+      } else {
+        setInstructorsList(data || []);
+      }
+    } catch (error) {
+      console.error('Unexpected error fetching instructors:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingInstructors(false);
+    }
+  };
+
+  const handleStudentsCardClick = () => {
+    setStudentsDialogOpen(true);
+    if (studentsList.length === 0) {
+      fetchStudentsList();
+    }
+  };
+
+  const handleInstructorsCardClick = () => {
+    setInstructorsDialogOpen(true);
+    if (instructorsList.length === 0) {
+      fetchInstructorsList();
+    }
+  };
+
   if (role !== 'admin') {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -136,9 +227,37 @@ const AdminDashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-muted-foreground">Loading admin dashboard...</p>
+      <div className="min-h-screen bg-gradient-hero pb-20">
+        <div className="bg-gradient-primary text-white px-4 sm:px-6 py-6 sm:py-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <Skeleton className="h-8 w-48 mb-2 bg-white/20" />
+              <Skeleton className="h-5 w-64 bg-white/20" />
+            </div>
+            <Skeleton className="h-10 w-24 bg-white/20" />
+          </div>
+        </div>
+        <div className="px-4 sm:px-6 -mt-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i}>
+                <CardContent className="p-4 text-center">
+                  <Skeleton className="h-8 w-20 mx-auto mb-2" />
+                  <Skeleton className="h-4 w-24 mx-auto" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <Skeleton className="h-6 w-32 mb-4" />
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
@@ -147,16 +266,17 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-hero pb-20">
       {/* Header */}
-      <div className="bg-gradient-primary text-white px-6 py-8">
-        <div className="flex items-center justify-between">
+      <div className="bg-gradient-primary text-white px-4 sm:px-6 py-6 sm:py-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
-            <p className="text-white/90 text-lg">Monitor and manage platform activity</p>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Admin Dashboard</h1>
+            <p className="text-white/90 text-sm sm:text-lg">Monitor and manage platform activity</p>
           </div>
           <Button
             variant="outline"
             onClick={handleLogout}
-            className="bg-white/10 hover:bg-white/20 text-white border-white/20"
+            className="bg-white/10 hover:bg-white/20 text-white border-white/20 w-full sm:w-auto"
+            size="sm"
           >
             <LogOut className="w-4 h-4 mr-2" />
             Log Out
@@ -165,30 +285,52 @@ const AdminDashboard = () => {
       </div>
 
       {/* Stats */}
-      <div className="px-6 -mt-4 mb-6">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-card-foreground">${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-              <p className="text-sm text-muted-foreground">Total Revenue</p>
+      <div className="px-4 sm:px-6 -mt-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4 sm:p-5 text-center">
+              <div className="flex items-center justify-center mb-2">
+                <DollarSign className="w-5 h-5 text-muted-foreground mr-2" />
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1">
+                ${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Total Revenue</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-card-foreground">{totalBookings}</p>
-              <p className="text-sm text-muted-foreground">Total Bookings</p>
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4 sm:p-5 text-center">
+              <div className="flex items-center justify-center mb-2">
+                <BookOpen className="w-5 h-5 text-muted-foreground mr-2" />
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1">{totalBookings}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Total Bookings</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-card-foreground">{totalInstructors}</p>
-              <p className="text-sm text-muted-foreground">Instructors</p>
+          <Card 
+            className="cursor-pointer hover:bg-accent hover:shadow-md transition-all active:scale-95"
+            onClick={handleInstructorsCardClick}
+          >
+            <CardContent className="p-4 sm:p-5 text-center">
+              <div className="flex items-center justify-center mb-2">
+                <GraduationCap className="w-5 h-5 text-muted-foreground mr-2" />
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1">{totalInstructors}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Instructors</p>
+              <p className="text-xs text-muted-foreground mt-1 opacity-0 group-hover:opacity-100">Tap to view</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-card-foreground">{totalStudents}</p>
-              <p className="text-sm text-muted-foreground">Students</p>
+          <Card 
+            className="cursor-pointer hover:bg-accent hover:shadow-md transition-all active:scale-95"
+            onClick={handleStudentsCardClick}
+          >
+            <CardContent className="p-4 sm:p-5 text-center">
+              <div className="flex items-center justify-center mb-2">
+                <Users className="w-5 h-5 text-muted-foreground mr-2" />
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1">{totalStudents}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Students</p>
+              <p className="text-xs text-muted-foreground mt-1 opacity-0 group-hover:opacity-100">Tap to view</p>
             </CardContent>
           </Card>
         </div>
@@ -196,47 +338,49 @@ const AdminDashboard = () => {
         {/* Recent Bookings */}
         <Card>
           <CardContent className="p-4 sm:p-6">
-            <h2 className="text-xl font-semibold text-card-foreground mb-4">Recent Bookings</h2>
-            <div className="overflow-x-auto">
+            <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-4">Recent Bookings</h2>
+            
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
-                    <th className="text-left p-2">Date</th>
-                    <th className="text-left p-2">Name</th>
-                    <th className="text-left p-2">Email</th>
-                    <th className="text-left p-2">Skill Level</th>
-                    <th className="text-left p-2">Retreat</th>
-                    <th className="text-right p-2">Amount</th>
-                    <th className="text-left p-2">Status</th>
+                    <th className="text-left p-3">Date</th>
+                    <th className="text-left p-3">Name</th>
+                    <th className="text-left p-3">Email</th>
+                    <th className="text-left p-3">Skill Level</th>
+                    <th className="text-left p-3">Retreat</th>
+                    <th className="text-right p-3">Amount</th>
+                    <th className="text-left p-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentBookings.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center p-4 text-muted-foreground">
+                      <td colSpan={7} className="text-center p-8 text-muted-foreground">
                         No bookings yet
                       </td>
                     </tr>
                   ) : (
                     recentBookings.map((booking) => (
-                      <tr key={booking.id} className="border-b">
-                        <td className="p-2 text-muted-foreground">
+                      <tr key={booking.id} className="border-b hover:bg-muted/50 transition-colors">
+                        <td className="p-3 text-muted-foreground">
                           {new Date(booking.created_at).toLocaleDateString()}
                         </td>
-                        <td className="p-2">{booking.full_name}</td>
-                        <td className="p-2 text-muted-foreground">{booking.email}</td>
-                        <td className="p-2 text-muted-foreground">{booking.skill_level}</td>
-                        <td className="p-2 text-muted-foreground">
+                        <td className="p-3 font-medium">{booking.full_name}</td>
+                        <td className="p-3 text-muted-foreground">{booking.email}</td>
+                        <td className="p-3 text-muted-foreground">{booking.skill_level}</td>
+                        <td className="p-3 text-muted-foreground">
                           {booking.retreat?.title || `Retreat #${booking.retreat_id}`}
                         </td>
-                        <td className="p-2 text-right font-semibold">
+                        <td className="p-3 text-right font-semibold">
                           ${Number(booking.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="p-2">
-                          <span className={`px-2 py-1 rounded text-xs ${
+                        <td className="p-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                             booking.status === 'confirmed' 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-gray-100 text-gray-800'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
                           }`}>
                             {booking.status}
                           </span>
@@ -247,9 +391,202 @@ const AdminDashboard = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile Card View */}
+            <div className="sm:hidden space-y-3">
+              {recentBookings.length === 0 ? (
+                <div className="text-center p-8 text-muted-foreground">
+                  No bookings yet
+                </div>
+              ) : (
+                recentBookings.map((booking) => (
+                  <Card key={booking.id} className="border">
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-semibold text-sm">{booking.full_name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{booking.email}</p>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium shrink-0 ${
+                          booking.status === 'confirmed' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {booking.status}
+                        </span>
+                      </div>
+                      <div className="pt-2 border-t space-y-1.5 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Date:</span>
+                          <span>{new Date(booking.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Skill Level:</span>
+                          <span>{booking.skill_level}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Retreat:</span>
+                          <span className="text-right max-w-[60%] truncate">
+                            {booking.retreat?.title || `Retreat #${booking.retreat_id}`}
+                          </span>
+                        </div>
+                        <div className="flex justify-between pt-1">
+                          <span className="text-muted-foreground font-medium">Amount:</span>
+                          <span className="font-semibold">
+                            ${Number(booking.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Students Dialog */}
+      <Dialog open={studentsDialogOpen} onOpenChange={setStudentsDialogOpen}>
+        <DialogContent className="max-w-2xl h-[100vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0 m-0 sm:m-auto rounded-none sm:rounded-lg w-full sm:w-auto left-0 top-0 sm:left-[50%] sm:top-[50%] translate-x-0 translate-y-0 sm:translate-x-[-50%] sm:translate-y-[-50%]">
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Students ({totalStudents})
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
+            {loadingStudents ? (
+              <div className="flex flex-col items-center justify-center p-8 space-y-3">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Loading students...</p>
+              </div>
+            ) : studentsList.length === 0 ? (
+              <div className="text-center p-8">
+                <Users className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                <p className="text-muted-foreground">No students found</p>
+              </div>
+            ) : (
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-3 font-semibold">Name</th>
+                        <th className="text-left p-3 font-semibold">Email</th>
+                        <th className="text-left p-3 font-semibold">Signed Up</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {studentsList.map((student) => (
+                        <tr key={student.id} className="border-b hover:bg-muted/50 transition-colors">
+                          <td className="p-3 font-medium">{student.full_name || 'N/A'}</td>
+                          <td className="p-3 text-muted-foreground">{student.email}</td>
+                          <td className="p-3 text-muted-foreground">
+                            {new Date(student.created_at).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="sm:hidden space-y-3">
+                  {studentsList.map((student) => (
+                    <Card key={student.id} className="border">
+                      <CardContent className="p-4 space-y-2">
+                        <div>
+                          <p className="font-semibold text-sm">{student.full_name || 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 break-all">{student.email}</p>
+                        </div>
+                        <div className="pt-2 border-t">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Signed Up:</span>
+                            <span>{new Date(student.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Instructors Dialog */}
+      <Dialog open={instructorsDialogOpen} onOpenChange={setInstructorsDialogOpen}>
+        <DialogContent className="max-w-2xl h-[100vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0 m-0 sm:m-auto rounded-none sm:rounded-lg w-full sm:w-auto left-0 top-0 sm:left-[50%] sm:top-[50%] translate-x-0 translate-y-0 sm:translate-x-[-50%] sm:translate-y-[-50%]">
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="w-5 h-5" />
+              Instructors ({totalInstructors})
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
+            {loadingInstructors ? (
+              <div className="flex flex-col items-center justify-center p-8 space-y-3">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Loading instructors...</p>
+              </div>
+            ) : instructorsList.length === 0 ? (
+              <div className="text-center p-8">
+                <GraduationCap className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                <p className="text-muted-foreground">No instructors found</p>
+              </div>
+            ) : (
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-3 font-semibold">Name</th>
+                        <th className="text-left p-3 font-semibold">Email</th>
+                        <th className="text-left p-3 font-semibold">Signed Up</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {instructorsList.map((instructor) => (
+                        <tr key={instructor.id} className="border-b hover:bg-muted/50 transition-colors">
+                          <td className="p-3 font-medium">{instructor.full_name || 'N/A'}</td>
+                          <td className="p-3 text-muted-foreground">{instructor.email}</td>
+                          <td className="p-3 text-muted-foreground">
+                            {new Date(instructor.created_at).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="sm:hidden space-y-3">
+                  {instructorsList.map((instructor) => (
+                    <Card key={instructor.id} className="border">
+                      <CardContent className="p-4 space-y-2">
+                        <div>
+                          <p className="font-semibold text-sm">{instructor.full_name || 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 break-all">{instructor.email}</p>
+                        </div>
+                        <div className="pt-2 border-t">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Signed Up:</span>
+                            <span>{new Date(instructor.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
