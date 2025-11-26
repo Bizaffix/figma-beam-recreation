@@ -308,29 +308,29 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
           <Card 
-            className="cursor-pointer hover:bg-accent hover:shadow-md transition-all active:scale-95"
+            className="group cursor-pointer hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 dark:hover:from-purple-950/20 dark:hover:to-pink-950/20 hover:border-purple-200 dark:hover:border-purple-800 hover:shadow-lg transition-all duration-300 active:scale-[0.98]"
             onClick={handleInstructorsCardClick}
           >
             <CardContent className="p-4 sm:p-5 text-center">
               <div className="flex items-center justify-center mb-2">
-                <GraduationCap className="w-5 h-5 text-muted-foreground mr-2" />
+                <GraduationCap className="w-5 h-5 text-muted-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-300 mr-2" />
               </div>
-              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1">{totalInstructors}</p>
+              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors duration-300">{totalInstructors}</p>
               <p className="text-xs sm:text-sm text-muted-foreground">Instructors</p>
-              <p className="text-xs text-muted-foreground mt-1 opacity-0 group-hover:opacity-100">Tap to view</p>
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
             </CardContent>
           </Card>
           <Card 
-            className="cursor-pointer hover:bg-accent hover:shadow-md transition-all active:scale-95"
+            className="group cursor-pointer hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 dark:hover:from-purple-950/20 dark:hover:to-pink-950/20 hover:border-purple-200 dark:hover:border-purple-800 hover:shadow-lg transition-all duration-300 active:scale-[0.98]"
             onClick={handleStudentsCardClick}
           >
             <CardContent className="p-4 sm:p-5 text-center">
               <div className="flex items-center justify-center mb-2">
-                <Users className="w-5 h-5 text-muted-foreground mr-2" />
+                <Users className="w-5 h-5 text-muted-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-300 mr-2" />
               </div>
-              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1">{totalStudents}</p>
+              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors duration-300">{totalStudents}</p>
               <p className="text-xs sm:text-sm text-muted-foreground">Students</p>
-              <p className="text-xs text-muted-foreground mt-1 opacity-0 group-hover:opacity-100">Tap to view</p>
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
             </CardContent>
           </Card>
         </div>
