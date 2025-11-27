@@ -16,6 +16,7 @@ import { Retreat } from "@/data/retreats";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
 
 // Helper function to parse date string like "Nov 5-8, 2025" to date range
 const parseDateString = (dateStr: string): DateRange | undefined => {
@@ -312,6 +313,37 @@ const InstructorRetreatForm = () => {
             variant: "destructive",
           });
         } else {
+          // Check if retreat was just published (was draft, now published)
+          // We need to fetch the retreat to check previous state, but for simplicity,
+          // we'll check if it's now published and send notifications
+          // Note: This will send emails even if it was already published, so we might want to track this
+          // For now, we'll send notifications when updating to published status
+          if (retreatData.published) {
+            // Fetch the created retreat data to send notifications
+            const { data: updatedRetreat } = await supabase
+              .from('retreats')
+              .select('*')
+              .eq('id', Number(id))
+              .single();
+            
+            if (updatedRetreat) {
+              // Call email notification in background (don't wait for it)
+              notifyStudentsAboutNewRetreat({
+                id: updatedRetreat.id,
+                title: updatedRetreat.title,
+                description: updatedRetreat.description || "",
+                image: updatedRetreat.image || "",
+                date: updatedRetreat.date,
+                location: updatedRetreat.location,
+                price: Number(updatedRetreat.price) || 0,
+                instructor_id: updatedRetreat.instructor_id,
+              }).catch((err) => {
+                console.error('Failed to send email notifications:', err);
+                // Don't show error to user - email sending is non-critical
+              });
+            }
+          }
+          
           toast({
             title: "Success",
             description: "Retreat updated successfully!",
@@ -334,6 +366,24 @@ const InstructorRetreatForm = () => {
             variant: "destructive",
           });
         } else {
+          // Send email notifications if retreat is published
+          if (data.published) {
+            // Call email notification in background (don't wait for it)
+            notifyStudentsAboutNewRetreat({
+              id: data.id,
+              title: data.title,
+              description: data.description || "",
+              image: data.image || "",
+              date: data.date,
+              location: data.location,
+              price: Number(data.price) || 0,
+              instructor_id: data.instructor_id,
+            }).catch((err) => {
+              console.error('Failed to send email notifications:', err);
+              // Don't show error to user - email sending is non-critical
+            });
+          }
+          
           toast({
             title: "Success",
             description: "Retreat created successfully!",

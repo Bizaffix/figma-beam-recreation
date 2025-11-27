@@ -13,6 +13,7 @@ import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink,
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
@@ -480,6 +481,24 @@ const InstructorDashboard = () => {
             variant: "destructive",
           });
         } else {
+          // Send email notifications if retreat is published
+          if (data.published) {
+            // Call email notification in background (don't wait for it)
+            notifyStudentsAboutNewRetreat({
+              id: data.id,
+              title: data.title,
+              description: data.description || "",
+              image: data.image || "",
+              date: data.date,
+              location: data.location,
+              price: Number(data.price) || 0,
+              instructor_id: data.instructor_id,
+            }).catch((err) => {
+              console.error('Failed to send email notifications:', err);
+              // Don't show error to user - email sending is non-critical
+            });
+          }
+          
           toast({
             title: "Success",
             description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
@@ -506,6 +525,37 @@ const InstructorDashboard = () => {
             variant: "destructive",
           });
         } else {
+          // Check if retreat was just published (update from draft to published)
+          const wasDraft = allRetreats.find(r => r.id === editingId)?.published === false;
+          const isNowPublished = retreatData.published;
+          
+          // Send email notifications if retreat was just published
+          if (wasDraft && isNowPublished) {
+            // Fetch the updated retreat data
+            const { data: updatedRetreat } = await supabase
+              .from('retreats')
+              .select('*')
+              .eq('id', editingId)
+              .single();
+            
+            if (updatedRetreat) {
+              // Call email notification in background (don't wait for it)
+              notifyStudentsAboutNewRetreat({
+                id: updatedRetreat.id,
+                title: updatedRetreat.title,
+                description: updatedRetreat.description || "",
+                image: updatedRetreat.image || "",
+                date: updatedRetreat.date,
+                location: updatedRetreat.location,
+                price: Number(updatedRetreat.price) || 0,
+                instructor_id: updatedRetreat.instructor_id,
+              }).catch((err) => {
+                console.error('Failed to send email notifications:', err);
+                // Don't show error to user - email sending is non-critical
+              });
+            }
+          }
+          
           toast({
             title: "Success",
             description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
@@ -547,12 +597,32 @@ const InstructorDashboard = () => {
           variant: "destructive",
         });
       } else {
+        const newPublishedStatus = !retreat.published;
         setAllRetreats(prev => prev.map(r => 
-          r.id === id ? { ...r, published: !r.published } : r
+          r.id === id ? { ...r, published: newPublishedStatus } : r
         ));
+        
+        // Send email notifications if retreat was just published
+        if (newPublishedStatus) {
+          // Call email notification in background (don't wait for it)
+          notifyStudentsAboutNewRetreat({
+            id: retreat.id,
+            title: retreat.title,
+            description: retreat.description || "",
+            image: retreat.image || "",
+            date: retreat.date,
+            location: retreat.location,
+            price: Number(retreat.price) || 0,
+            instructor_id: retreat.instructor_id,
+          }).catch((err) => {
+            console.error('Failed to send email notifications:', err);
+            // Don't show error to user - email sending is non-critical
+          });
+        }
+        
         toast({
           title: "Success",
-          description: retreat.published ? "Retreat unpublished" : "Retreat published!",
+          description: newPublishedStatus ? "Retreat published successfully!" : "Retreat unpublished",
         });
       }
     } catch (error) {
