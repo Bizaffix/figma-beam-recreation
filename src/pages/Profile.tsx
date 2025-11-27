@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BottomNav } from "@/components/BottomNav";
-import { Calendar, MapPin, Mail, Phone, Edit, Upload, X, Facebook, Instagram, Save } from "lucide-react";
+import { Calendar, MapPin, Mail, Phone, Edit, Upload, X, Facebook, Instagram, Save, GraduationCap, Users, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -19,6 +19,7 @@ const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [switchingRole, setSwitchingRole] = useState(false);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
   
   const [profileData, setProfileData] = useState({
@@ -65,6 +66,49 @@ const Profile = () => {
   const handleLogout = async () => {
     await signOut();
     navigate("/");
+  };
+
+  const handleSwitchRole = async (newRole: 'student' | 'instructor') => {
+    if (!user || role === newRole || switchingRole) return;
+
+    setSwitchingRole(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error switching role:', error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to switch profile",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: `Switched to ${newRole} profile`,
+        });
+        // Reload the page to update the role in AuthContext
+        setTimeout(() => {
+          if (newRole === 'instructor') {
+            window.location.href = '/instructor/dashboard';
+          } else {
+            window.location.href = '/home';
+          }
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setSwitchingRole(false);
+    }
   };
 
   const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -468,6 +512,55 @@ const Profile = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Profile Switcher */}
+        <Card>
+          <CardContent className="p-6">
+            <h3 className="text-xl font-semibold text-card-foreground mb-4">Profile Switcher</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Switch between your student and instructor profiles
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant={role === 'student' ? 'default' : 'outline'}
+                className="flex items-center justify-center gap-2 h-auto py-4"
+                onClick={() => handleSwitchRole('student')}
+                disabled={switchingRole || role === 'student'}
+              >
+                {switchingRole && role !== 'student' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Users className="w-4 h-4" />
+                )}
+                <div className="text-left">
+                  <div className="font-semibold">Student</div>
+                  <div className="text-xs opacity-75">Browse & Book</div>
+                </div>
+              </Button>
+              <Button
+                variant={role === 'instructor' ? 'default' : 'outline'}
+                className="flex items-center justify-center gap-2 h-auto py-4"
+                onClick={() => handleSwitchRole('instructor')}
+                disabled={switchingRole || role === 'instructor'}
+              >
+                {switchingRole && role !== 'instructor' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <GraduationCap className="w-4 h-4" />
+                )}
+                <div className="text-left">
+                  <div className="font-semibold">Instructor</div>
+                  <div className="text-xs opacity-75">Teach & Manage</div>
+                </div>
+              </Button>
+            </div>
+            {role === 'student' && (
+              <p className="text-xs text-muted-foreground mt-3 text-center">
+                Don't have an instructor profile? Create one from the Home page.
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Settings */}
         <Card>
