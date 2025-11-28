@@ -4,10 +4,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2 } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell } from "lucide-react";
+import { sendCustomEmail } from "@/lib/email-notifications";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Booking {
   id: string;
@@ -47,6 +52,13 @@ const AdminDashboard = () => {
   const [instructorsList, setInstructorsList] = useState<UserProfile[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [loadingInstructors, setLoadingInstructors] = useState(false);
+  const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
+  const [notificationRecipients, setNotificationRecipients] = useState<'students' | 'instructors' | null>(null);
+  const [notificationSubject, setNotificationSubject] = useState('');
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+  const [selectedInstructors, setSelectedInstructors] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (role !== 'admin' || !user) return;
@@ -211,6 +223,132 @@ const AdminDashboard = () => {
     setInstructorsDialogOpen(true);
     if (instructorsList.length === 0) {
       fetchInstructorsList();
+    }
+  };
+
+  const handleNotificationClick = (recipientType: 'students' | 'instructors') => {
+    const selected = recipientType === 'students' ? selectedStudents : selectedInstructors;
+    if (selected.size === 0) {
+      toast({
+        title: "No recipients selected",
+        description: `Please select at least one ${recipientType === 'students' ? 'student' : 'instructor'} to notify`,
+        variant: "destructive",
+      });
+      return;
+    }
+    setNotificationRecipients(recipientType);
+    setNotificationSubject('');
+    setNotificationMessage('');
+    setNotificationDialogOpen(true);
+  };
+
+  const toggleStudentSelection = (studentId: string) => {
+    setSelectedStudents(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(studentId)) {
+        newSet.delete(studentId);
+      } else {
+        newSet.add(studentId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleInstructorSelection = (instructorId: string) => {
+    setSelectedInstructors(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(instructorId)) {
+        newSet.delete(instructorId);
+      } else {
+        newSet.add(instructorId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAllStudents = () => {
+    if (selectedStudents.size === studentsList.length) {
+      setSelectedStudents(new Set());
+    } else {
+      setSelectedStudents(new Set(studentsList.map(s => s.id)));
+    }
+  };
+
+  const toggleAllInstructors = () => {
+    if (selectedInstructors.size === instructorsList.length) {
+      setSelectedInstructors(new Set());
+    } else {
+      setSelectedInstructors(new Set(instructorsList.map(i => i.id)));
+    }
+  };
+
+  const handleSendNotification = async () => {
+    if (!notificationSubject.trim() || !notificationMessage.trim()) {
+      toast({
+        title: "Error",
+        description: "Please fill in both subject and message",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!notificationRecipients) {
+      return;
+    }
+
+    const selectedIds = notificationRecipients === 'students' ? selectedStudents : selectedInstructors;
+    if (selectedIds.size === 0) {
+      toast({
+        title: "Error",
+        description: "Please select at least one recipient",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      const recipientList = notificationRecipients === 'students' ? studentsList : instructorsList;
+      const selectedRecipients = recipientList.filter(user => selectedIds.has(user.id));
+      const emails = selectedRecipients.map(user => user.email);
+      
+      const { error } = await sendCustomEmail({
+        emails,
+        subject: notificationSubject,
+        message: notificationMessage,
+        recipientType: notificationRecipients,
+      });
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: `Email sent to ${emails.length} ${notificationRecipients === 'students' ? 'student(s)' : 'instructor(s)'}`,
+        });
+        setNotificationDialogOpen(false);
+        setNotificationSubject('');
+        setNotificationMessage('');
+        // Clear selections after sending
+        if (notificationRecipients === 'students') {
+          setSelectedStudents(new Set());
+        } else {
+          setSelectedInstructors(new Set());
+        }
+      }
+    } catch (error: any) {
+      console.error('Error sending notification:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send email",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -447,13 +585,36 @@ const AdminDashboard = () => {
       </div>
 
       {/* Students Dialog */}
-      <Dialog open={studentsDialogOpen} onOpenChange={setStudentsDialogOpen}>
+      <Dialog open={studentsDialogOpen} onOpenChange={(open) => {
+        setStudentsDialogOpen(open);
+        if (!open) {
+          setSelectedStudents(new Set());
+        }
+      }}>
         <DialogContent className="max-w-2xl h-[100vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0 m-0 sm:m-auto rounded-none sm:rounded-lg w-full sm:w-auto left-0 top-0 sm:left-[50%] sm:top-[50%] translate-x-0 translate-y-0 sm:translate-x-[-50%] sm:translate-y-[-50%]">
           <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b">
-            <DialogTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              Students ({totalStudents})
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Students ({totalStudents})
+              </DialogTitle>
+              <div className="flex items-center gap-2">
+                {selectedStudents.size > 0 && (
+                  <span className="text-sm text-muted-foreground">
+                    {selectedStudents.size} selected
+                  </span>
+                )}
+                <Button
+                  onClick={() => handleNotificationClick('students')}
+                  size="sm"
+                  className="gap-2"
+                  disabled={selectedStudents.size === 0}
+                >
+                  <Bell className="w-4 h-4" />
+                  Notify
+                </Button>
+              </div>
+            </div>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
             {loadingStudents ? (
@@ -473,6 +634,12 @@ const AdminDashboard = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
+                        <th className="text-left p-3 font-semibold w-12">
+                          <Checkbox
+                            checked={selectedStudents.size === studentsList.length && studentsList.length > 0}
+                            onCheckedChange={toggleAllStudents}
+                          />
+                        </th>
                         <th className="text-left p-3 font-semibold">Name</th>
                         <th className="text-left p-3 font-semibold">Email</th>
                         <th className="text-left p-3 font-semibold">Signed Up</th>
@@ -481,6 +648,12 @@ const AdminDashboard = () => {
                     <tbody>
                       {studentsList.map((student) => (
                         <tr key={student.id} className="border-b hover:bg-muted/50 transition-colors">
+                          <td className="p-3">
+                            <Checkbox
+                              checked={selectedStudents.has(student.id)}
+                              onCheckedChange={() => toggleStudentSelection(student.id)}
+                            />
+                          </td>
                           <td className="p-3 font-medium">{student.full_name || 'N/A'}</td>
                           <td className="p-3 text-muted-foreground">{student.email}</td>
                           <td className="p-3 text-muted-foreground">
@@ -497,9 +670,16 @@ const AdminDashboard = () => {
                   {studentsList.map((student) => (
                     <Card key={student.id} className="border">
                       <CardContent className="p-4 space-y-2">
-                        <div>
-                          <p className="font-semibold text-sm">{student.full_name || 'N/A'}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5 break-all">{student.email}</p>
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={selectedStudents.has(student.id)}
+                            onCheckedChange={() => toggleStudentSelection(student.id)}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <p className="font-semibold text-sm">{student.full_name || 'N/A'}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5 break-all">{student.email}</p>
+                          </div>
                         </div>
                         <div className="pt-2 border-t">
                           <div className="flex justify-between text-xs">
@@ -518,13 +698,36 @@ const AdminDashboard = () => {
       </Dialog>
 
       {/* Instructors Dialog */}
-      <Dialog open={instructorsDialogOpen} onOpenChange={setInstructorsDialogOpen}>
+      <Dialog open={instructorsDialogOpen} onOpenChange={(open) => {
+        setInstructorsDialogOpen(open);
+        if (!open) {
+          setSelectedInstructors(new Set());
+        }
+      }}>
         <DialogContent className="max-w-2xl h-[100vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0 m-0 sm:m-auto rounded-none sm:rounded-lg w-full sm:w-auto left-0 top-0 sm:left-[50%] sm:top-[50%] translate-x-0 translate-y-0 sm:translate-x-[-50%] sm:translate-y-[-50%]">
           <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b">
-            <DialogTitle className="flex items-center gap-2">
-              <GraduationCap className="w-5 h-5" />
-              Instructors ({totalInstructors})
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2">
+                <GraduationCap className="w-5 h-5" />
+                Instructors ({totalInstructors})
+              </DialogTitle>
+              <div className="flex items-center gap-2">
+                {selectedInstructors.size > 0 && (
+                  <span className="text-sm text-muted-foreground">
+                    {selectedInstructors.size} selected
+                  </span>
+                )}
+                <Button
+                  onClick={() => handleNotificationClick('instructors')}
+                  size="sm"
+                  className="gap-2"
+                  disabled={selectedInstructors.size === 0}
+                >
+                  <Bell className="w-4 h-4" />
+                  Notify
+                </Button>
+              </div>
+            </div>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
             {loadingInstructors ? (
@@ -544,6 +747,12 @@ const AdminDashboard = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
+                        <th className="text-left p-3 font-semibold w-12">
+                          <Checkbox
+                            checked={selectedInstructors.size === instructorsList.length && instructorsList.length > 0}
+                            onCheckedChange={toggleAllInstructors}
+                          />
+                        </th>
                         <th className="text-left p-3 font-semibold">Name</th>
                         <th className="text-left p-3 font-semibold">Email</th>
                         <th className="text-left p-3 font-semibold">Signed Up</th>
@@ -552,6 +761,12 @@ const AdminDashboard = () => {
                     <tbody>
                       {instructorsList.map((instructor) => (
                         <tr key={instructor.id} className="border-b hover:bg-muted/50 transition-colors">
+                          <td className="p-3">
+                            <Checkbox
+                              checked={selectedInstructors.has(instructor.id)}
+                              onCheckedChange={() => toggleInstructorSelection(instructor.id)}
+                            />
+                          </td>
                           <td className="p-3 font-medium">{instructor.full_name || 'N/A'}</td>
                           <td className="p-3 text-muted-foreground">{instructor.email}</td>
                           <td className="p-3 text-muted-foreground">
@@ -568,9 +783,16 @@ const AdminDashboard = () => {
                   {instructorsList.map((instructor) => (
                     <Card key={instructor.id} className="border">
                       <CardContent className="p-4 space-y-2">
-                        <div>
-                          <p className="font-semibold text-sm">{instructor.full_name || 'N/A'}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5 break-all">{instructor.email}</p>
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={selectedInstructors.has(instructor.id)}
+                            onCheckedChange={() => toggleInstructorSelection(instructor.id)}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <p className="font-semibold text-sm">{instructor.full_name || 'N/A'}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5 break-all">{instructor.email}</p>
+                          </div>
                         </div>
                         <div className="pt-2 border-t">
                           <div className="flex justify-between text-xs">
@@ -584,6 +806,71 @@ const AdminDashboard = () => {
                 </div>
               </>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notification Dialog */}
+      <Dialog open={notificationDialogOpen} onOpenChange={setNotificationDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="w-5 h-5" />
+              Send Notification to {notificationRecipients === 'students' ? 'Students' : 'Instructors'}
+            </DialogTitle>
+            {notificationRecipients && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Sending to {notificationRecipients === 'students' ? selectedStudents.size : selectedInstructors.size} selected {notificationRecipients === 'students' ? 'student(s)' : 'instructor(s)'}
+              </p>
+            )}
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="notification-subject">Subject</Label>
+              <Input
+                id="notification-subject"
+                placeholder="Enter email subject"
+                value={notificationSubject}
+                onChange={(e) => setNotificationSubject(e.target.value)}
+                disabled={sendingEmail}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notification-message">Message</Label>
+              <Textarea
+                id="notification-message"
+                placeholder="Enter your message"
+                value={notificationMessage}
+                onChange={(e) => setNotificationMessage(e.target.value)}
+                disabled={sendingEmail}
+                rows={8}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setNotificationDialogOpen(false)}
+                disabled={sendingEmail}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSendNotification}
+                disabled={sendingEmail || !notificationSubject.trim() || !notificationMessage.trim()}
+              >
+                {sendingEmail ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Bell className="w-4 h-4 mr-2" />
+                    Send Email
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
