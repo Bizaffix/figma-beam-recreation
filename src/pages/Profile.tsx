@@ -255,6 +255,66 @@ const Profile = () => {
 
       {/* Profile Content */}
       <div className="px-6 -mt-8 max-w-4xl mx-auto space-y-6">
+        {/* Profile Switcher - Two Buttons */}
+        <div className="bg-card rounded-lg border border-border p-1 shadow-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant={role === 'student' ? 'default' : 'ghost'}
+              className={`relative flex flex-col items-center justify-center gap-2 h-auto py-5 px-4 transition-all ${
+                role === 'student' 
+                  ? 'bg-primary text-primary-foreground shadow-sm' 
+                  : 'hover:bg-muted/50 text-muted-foreground'
+              }`}
+              onClick={() => handleSwitchRole('student')}
+              disabled={switchingRole || role === 'student'}
+            >
+              {switchingRole && role !== 'student' ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Users className={`w-5 h-5 ${role === 'student' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+              )}
+              <div className="text-center">
+                <div className={`font-semibold text-sm ${role === 'student' ? 'text-primary-foreground' : 'text-foreground'}`}>
+                  Student
+                </div>
+                <div className={`text-xs mt-0.5 ${role === 'student' ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                  Browse & Book
+                </div>
+              </div>
+              {role === 'student' && (
+                <div className="absolute top-1 right-1 w-2 h-2 bg-primary-foreground rounded-full" />
+              )}
+            </Button>
+            <Button
+              variant={role === 'instructor' ? 'default' : 'ghost'}
+              className={`relative flex flex-col items-center justify-center gap-2 h-auto py-5 px-4 transition-all ${
+                role === 'instructor' 
+                  ? 'bg-primary text-primary-foreground shadow-sm' 
+                  : 'hover:bg-muted/50 text-muted-foreground'
+              }`}
+              onClick={() => handleSwitchRole('instructor')}
+              disabled={switchingRole || role === 'instructor'}
+            >
+              {switchingRole && role !== 'instructor' ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <GraduationCap className={`w-5 h-5 ${role === 'instructor' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+              )}
+              <div className="text-center">
+                <div className={`font-semibold text-sm ${role === 'instructor' ? 'text-primary-foreground' : 'text-foreground'}`}>
+                  Instructor
+                </div>
+                <div className={`text-xs mt-0.5 ${role === 'instructor' ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                  Teach & Manage
+                </div>
+              </div>
+              {role === 'instructor' && (
+                <div className="absolute top-1 right-1 w-2 h-2 bg-primary-foreground rounded-full" />
+              )}
+            </Button>
+          </div>
+        </div>
+
         {/* Profile Card */}
         <Card>
           <CardContent className="p-6">
@@ -512,55 +572,6 @@ const Profile = () => {
             </CardContent>
           </Card>
         )}
-
-        {/* Profile Switcher */}
-        <Card>
-          <CardContent className="p-6">
-            <h3 className="text-xl font-semibold text-card-foreground mb-4">Profile Switcher</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Switch between your student and instructor profiles
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                variant={role === 'student' ? 'default' : 'outline'}
-                className="flex items-center justify-center gap-2 h-auto py-4"
-                onClick={() => handleSwitchRole('student')}
-                disabled={switchingRole || role === 'student'}
-              >
-                {switchingRole && role !== 'student' ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Users className="w-4 h-4" />
-                )}
-                <div className="text-left">
-                  <div className="font-semibold">Student</div>
-                  <div className="text-xs opacity-75">Browse & Book</div>
-                </div>
-              </Button>
-              <Button
-                variant={role === 'instructor' ? 'default' : 'outline'}
-                className="flex items-center justify-center gap-2 h-auto py-4"
-                onClick={() => handleSwitchRole('instructor')}
-                disabled={switchingRole || role === 'instructor'}
-              >
-                {switchingRole && role !== 'instructor' ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <GraduationCap className="w-4 h-4" />
-                )}
-                <div className="text-left">
-                  <div className="font-semibold">Instructor</div>
-                  <div className="text-xs opacity-75">Teach & Manage</div>
-                </div>
-              </Button>
-            </div>
-            {role === 'student' && (
-              <p className="text-xs text-muted-foreground mt-3 text-center">
-                Don't have an instructor profile? Create one from the Home page.
-              </p>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Settings */}
         <Card>
