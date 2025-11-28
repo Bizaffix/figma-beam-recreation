@@ -605,6 +605,14 @@ const AdminDashboard = () => {
                   </span>
                 )}
                 <Button
+                  onClick={toggleAllStudents}
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                >
+                  {selectedStudents.size === studentsList.length && studentsList.length > 0 ? 'Deselect All' : 'Select All'}
+                </Button>
+                <Button
                   onClick={() => handleNotificationClick('students')}
                   size="sm"
                   className="gap-2"
@@ -629,6 +637,17 @@ const AdminDashboard = () => {
               </div>
             ) : (
               <>
+                {/* Mobile Select All Button */}
+                <div className="sm:hidden mb-3">
+                  <Button
+                    onClick={toggleAllStudents}
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 w-full"
+                  >
+                    {selectedStudents.size === studentsList.length && studentsList.length > 0 ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
                 {/* Desktop Table View */}
                 <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm">
@@ -718,6 +737,14 @@ const AdminDashboard = () => {
                   </span>
                 )}
                 <Button
+                  onClick={toggleAllInstructors}
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                >
+                  {selectedInstructors.size === instructorsList.length && instructorsList.length > 0 ? 'Deselect All' : 'Select All'}
+                </Button>
+                <Button
                   onClick={() => handleNotificationClick('instructors')}
                   size="sm"
                   className="gap-2"
@@ -742,6 +769,17 @@ const AdminDashboard = () => {
               </div>
             ) : (
               <>
+                {/* Mobile Select All Button */}
+                <div className="sm:hidden mb-3">
+                  <Button
+                    onClick={toggleAllInstructors}
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 w-full"
+                  >
+                    {selectedInstructors.size === instructorsList.length && instructorsList.length > 0 ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
                 {/* Desktop Table View */}
                 <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm">
