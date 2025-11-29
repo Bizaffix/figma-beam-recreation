@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X } from "lucide-react";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -591,36 +591,50 @@ const AdminDashboard = () => {
           setSelectedStudents(new Set());
         }
       }}>
-        <DialogContent className="max-w-2xl h-[100vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0 m-0 sm:m-auto rounded-none sm:rounded-lg w-full sm:w-auto left-0 top-0 sm:left-[50%] sm:top-[50%] translate-x-0 translate-y-0 sm:translate-x-[-50%] sm:translate-y-[-50%]">
-          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Students ({totalStudents})
-              </DialogTitle>
-              <div className="flex items-center gap-2">
+        <DialogContent className="max-w-2xl h-[100vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0 m-0 sm:m-auto rounded-none sm:rounded-lg w-full sm:w-auto left-0 top-0 sm:left-[50%] sm:top-[50%] translate-x-0 translate-y-0 sm:translate-x-[-50%] sm:translate-y-[-50%] [&>button:last-child]:hidden">
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b">
+            <DialogTitle className="sr-only">Students ({totalStudents})</DialogTitle>
+            <DialogDescription className="sr-only">List of students with selection options</DialogDescription>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Users className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                <span className="text-base sm:text-lg font-semibold whitespace-nowrap">
+                  Students ({totalStudents})
+                </span>
                 {selectedStudents.size > 0 && (
-                  <span className="text-sm text-muted-foreground">
-                    {selectedStudents.size} selected
+                  <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                    ({selectedStudents.size} selected)
                   </span>
                 )}
+              </div>
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <Button
                   onClick={toggleAllStudents}
                   size="sm"
                   variant="outline"
-                  className="gap-2"
+                  className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2 whitespace-nowrap"
                 >
                   {selectedStudents.size === studentsList.length && studentsList.length > 0 ? 'Deselect All' : 'Select All'}
                 </Button>
                 <Button
                   onClick={() => handleNotificationClick('students')}
                   size="sm"
-                  className="gap-2"
+                  className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2"
                   disabled={selectedStudents.size === 0}
                 >
-                  <Bell className="w-4 h-4" />
-                  Notify
+                  <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Notify</span>
                 </Button>
+                <DialogClose asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Close</span>
+                  </Button>
+                </DialogClose>
               </div>
             </div>
           </DialogHeader>
@@ -637,17 +651,6 @@ const AdminDashboard = () => {
               </div>
             ) : (
               <>
-                {/* Mobile Select All Button */}
-                <div className="sm:hidden mb-3">
-                  <Button
-                    onClick={toggleAllStudents}
-                    size="sm"
-                    variant="outline"
-                    className="gap-2 w-full"
-                  >
-                    {selectedStudents.size === studentsList.length && studentsList.length > 0 ? 'Deselect All' : 'Select All'}
-                  </Button>
-                </div>
                 {/* Desktop Table View */}
                 <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm">
@@ -723,36 +726,50 @@ const AdminDashboard = () => {
           setSelectedInstructors(new Set());
         }
       }}>
-        <DialogContent className="max-w-2xl h-[100vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0 m-0 sm:m-auto rounded-none sm:rounded-lg w-full sm:w-auto left-0 top-0 sm:left-[50%] sm:top-[50%] translate-x-0 translate-y-0 sm:translate-x-[-50%] sm:translate-y-[-50%]">
-          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="flex items-center gap-2">
-                <GraduationCap className="w-5 h-5" />
-                Instructors ({totalInstructors})
-              </DialogTitle>
-              <div className="flex items-center gap-2">
+        <DialogContent className="max-w-2xl h-[100vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0 m-0 sm:m-auto rounded-none sm:rounded-lg w-full sm:w-auto left-0 top-0 sm:left-[50%] sm:top-[50%] translate-x-0 translate-y-0 sm:translate-x-[-50%] sm:translate-y-[-50%] [&>button:last-child]:hidden">
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b">
+            <DialogTitle className="sr-only">Instructors ({totalInstructors})</DialogTitle>
+            <DialogDescription className="sr-only">List of instructors with selection options</DialogDescription>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                <span className="text-base sm:text-lg font-semibold whitespace-nowrap">
+                  Instructors ({totalInstructors})
+                </span>
                 {selectedInstructors.size > 0 && (
-                  <span className="text-sm text-muted-foreground">
-                    {selectedInstructors.size} selected
+                  <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                    ({selectedInstructors.size} selected)
                   </span>
                 )}
+              </div>
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <Button
                   onClick={toggleAllInstructors}
                   size="sm"
                   variant="outline"
-                  className="gap-2"
+                  className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2 whitespace-nowrap"
                 >
                   {selectedInstructors.size === instructorsList.length && instructorsList.length > 0 ? 'Deselect All' : 'Select All'}
                 </Button>
                 <Button
                   onClick={() => handleNotificationClick('instructors')}
                   size="sm"
-                  className="gap-2"
+                  className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2"
                   disabled={selectedInstructors.size === 0}
                 >
-                  <Bell className="w-4 h-4" />
-                  Notify
+                  <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Notify</span>
                 </Button>
+                <DialogClose asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Close</span>
+                  </Button>
+                </DialogClose>
               </div>
             </div>
           </DialogHeader>
@@ -769,17 +786,6 @@ const AdminDashboard = () => {
               </div>
             ) : (
               <>
-                {/* Mobile Select All Button */}
-                <div className="sm:hidden mb-3">
-                  <Button
-                    onClick={toggleAllInstructors}
-                    size="sm"
-                    variant="outline"
-                    className="gap-2 w-full"
-                  >
-                    {selectedInstructors.size === instructorsList.length && instructorsList.length > 0 ? 'Deselect All' : 'Select All'}
-                  </Button>
-                </div>
                 {/* Desktop Table View */}
                 <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm">
@@ -856,11 +862,13 @@ const AdminDashboard = () => {
               <Bell className="w-5 h-5" />
               Send Notification to {notificationRecipients === 'students' ? 'Students' : 'Instructors'}
             </DialogTitle>
-            {notificationRecipients && (
-              <p className="text-sm text-muted-foreground mt-2">
-                Sending to {notificationRecipients === 'students' ? selectedStudents.size : selectedInstructors.size} selected {notificationRecipients === 'students' ? 'student(s)' : 'instructor(s)'}
-              </p>
-            )}
+            <DialogDescription>
+              {notificationRecipients && (
+                <span>
+                  Sending to {notificationRecipients === 'students' ? selectedStudents.size : selectedInstructors.size} selected {notificationRecipients === 'students' ? 'student(s)' : 'instructor(s)'}
+                </span>
+              )}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
