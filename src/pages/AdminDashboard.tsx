@@ -599,7 +599,7 @@ const AdminDashboard = () => {
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <Users className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
                 <span className="text-base sm:text-lg font-semibold whitespace-nowrap">
-                  Students ({totalStudents})
+              Students ({totalStudents})
                 </span>
                 {selectedStudents.size > 0 && (
                   <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
@@ -699,8 +699,8 @@ const AdminDashboard = () => {
                             className="mt-1"
                           />
                           <div className="flex-1">
-                            <p className="font-semibold text-sm">{student.full_name || 'N/A'}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5 break-all">{student.email}</p>
+                          <p className="font-semibold text-sm">{student.full_name || 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 break-all">{student.email}</p>
                           </div>
                         </div>
                         <div className="pt-2 border-t">
@@ -734,7 +734,7 @@ const AdminDashboard = () => {
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
                 <span className="text-base sm:text-lg font-semibold whitespace-nowrap">
-                  Instructors ({totalInstructors})
+              Instructors ({totalInstructors})
                 </span>
                 {selectedInstructors.size > 0 && (
                   <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
@@ -834,8 +834,8 @@ const AdminDashboard = () => {
                             className="mt-1"
                           />
                           <div className="flex-1">
-                            <p className="font-semibold text-sm">{instructor.full_name || 'N/A'}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5 break-all">{instructor.email}</p>
+                          <p className="font-semibold text-sm">{instructor.full_name || 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 break-all">{instructor.email}</p>
                           </div>
                         </div>
                         <div className="pt-2 border-t">
