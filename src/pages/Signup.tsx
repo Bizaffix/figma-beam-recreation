@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Header } from "@/components/Header";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
@@ -31,6 +32,14 @@ const Signup = () => {
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const referralCode = searchParams.get('ref') || undefined;
+  const roleParam = searchParams.get('role');
+  
+  // Set initial role from URL parameter if provided
+  useEffect(() => {
+    if (roleParam === 'student' || roleParam === 'instructor') {
+      setSelectedRole(roleParam);
+    }
+  }, [roleParam]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,8 +114,46 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-6">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-background flex flex-col">
+      <Header />
+      <div className="flex-1 grid lg:grid-cols-2">
+        {/* Image Section */}
+        <div className="hidden lg:flex relative bg-gradient-primary overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-accent/90 z-10"></div>
+          <img 
+            src="/Image3.jpg" 
+            alt="Quilting workshop" 
+            className="w-full h-full object-cover mix-blend-overlay"
+          />
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-12 text-white">
+            <div className="max-w-md space-y-6">
+              <h2 className="text-4xl font-bold leading-tight">
+                Start Your Quilting Journey Today
+              </h2>
+              <p className="text-lg text-white/90 leading-relaxed">
+                Join our community of passionate quilters and instructors. Discover retreats, share your skills, and create unforgettable experiences.
+              </p>
+              <div className="space-y-3 pt-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-white"></div>
+                  <span className="text-sm text-white/90">Discover amazing retreats</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-white"></div>
+                  <span className="text-sm text-white/90">Connect with instructors</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-white"></div>
+                  <span className="text-sm text-white/90">Join a vibrant community</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Form Section */}
+        <div className="flex items-center justify-center p-6 py-12 lg:p-12">
+          <Card className="w-full max-w-md shadow-lg border-0 lg:shadow-xl">
         <CardHeader>
           <CardTitle className="text-2xl text-center">Quilting Retreats</CardTitle>
           <CardDescription className="text-center">
@@ -282,8 +329,10 @@ const Signup = () => {
           </div>
         </CardContent>
       </Card>
+        </div>
+      </div>
 
-      {/* Instructor Terms of Service Dialog */}
+      {/* Dialogs - Outside grid layout */}
       <Dialog open={showTermsDialog} onOpenChange={setShowTermsDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">

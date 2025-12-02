@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import Home from "./pages/Home";
+import Landing from "./pages/Landing";
 import Profile from "./pages/Profile";
 import RetreatDetail from "./pages/RetreatDetail";
 import Booking from "./pages/Booking";
@@ -123,6 +124,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          {/* Public Landing Page */}
+          <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
+          
           {/* Public Routes - Only Login/Signup and Email Confirmation */}
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
@@ -132,7 +136,7 @@ const App = () => (
           <Route path="/auth/reset-password" element={<ResetPassword />} />
           
           {/* Protected Student Routes */}
-          <Route path="/" element={<StudentRoute><Index /></StudentRoute>} />
+          <Route path="/discover" element={<StudentRoute><Index /></StudentRoute>} />
           <Route path="/home" element={<StudentRoute><Home /></StudentRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/retreat/:id" element={<ProtectedRoute><RetreatDetail /></ProtectedRoute>} />

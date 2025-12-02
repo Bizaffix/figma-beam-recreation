@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Header } from "@/components/Header";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Eye, EyeOff } from "lucide-react";
@@ -160,8 +161,36 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-6">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-background flex flex-col">
+      <Header />
+      <div className="flex-1 grid lg:grid-cols-2">
+        {/* Image Section */}
+        <div className="hidden lg:flex relative bg-gradient-primary overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-accent/90 z-10"></div>
+          <img 
+            src="/Image2.jpg" 
+            alt="Quilting retreat" 
+            className="w-full h-full object-cover mix-blend-overlay"
+          />
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-12 text-white">
+            <div className="max-w-md space-y-6">
+              <h2 className="text-4xl font-bold leading-tight">
+                Welcome Back to Your Quilting Community
+              </h2>
+              <p className="text-lg text-white/90 leading-relaxed">
+                Connect with passionate quilters, discover amazing retreats, and continue your creative journey.
+              </p>
+              <div className="flex items-center gap-2 pt-4">
+                <div className="w-12 h-0.5 bg-white/50"></div>
+                <span className="text-sm text-white/80">Join thousands of quilters</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Form Section */}
+        <div className="flex items-center justify-center p-6 py-12 lg:p-12">
+          <Card className="w-full max-w-md shadow-lg border-0 lg:shadow-xl">
         <CardHeader>
           <CardTitle className="text-2xl text-center">Quilting Retreats</CardTitle>
           <CardDescription className="text-center">
@@ -276,6 +305,8 @@ const Login = () => {
           )}
         </CardContent>
       </Card>
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,0 +1,344 @@
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { Menu, X, LogOut, User, LayoutDashboard, Compass, Home } from "lucide-react";
+import { useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+export const Header = () => {
+  const { user, role, signOut } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
+  };
+
+  const getDashboardLink = () => {
+    if (role === 'admin') return '/admin/dashboard';
+    if (role === 'instructor') return '/instructor/dashboard';
+    return '/home';
+  };
+
+  const handleHowItWorksClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    
+    if (location.pathname === '/') {
+      // If already on landing page, scroll to section
+      const element = document.getElementById('how-it-works');
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    } else {
+      // Navigate to landing page, then scroll
+      navigate('/');
+      setTimeout(() => {
+        const element = document.getElementById('how-it-works');
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    }
+    
+    setMobileMenuOpen(false);
+  };
+
+  const handleHomeClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    
+    if (location.pathname === '/') {
+      // If already on landing page, scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      // Navigate to landing page
+      navigate('/');
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
+    }
+    
+    setMobileMenuOpen(false);
+  };
+
+  return (
+    <>
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
+            {/* Logo */}
+            <Link to="/" className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">Q</span>
+                </div>
+                <span className="font-bold text-xl text-foreground hidden sm:inline-block">
+                  BookMyQuiltRetreat
+                </span>
+              </div>
+            </Link>
+
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center space-x-6">
+            {user ? (
+              <>
+                {role === 'student' && (
+                  <>
+                    <Link
+                      to="/discover"
+                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Discover
+                    </Link>
+                    <Link
+                      to="/home"
+                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Home
+                    </Link>
+                  </>
+                )}
+                {role === 'instructor' && (
+                  <>
+                    <Link
+                      to="/instructor/browse"
+                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Browse
+                    </Link>
+                    <Link
+                      to="/instructor/dashboard"
+                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Dashboard
+                    </Link>
+                  </>
+                )}
+                <Link
+                  to="/profile"
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Profile
+                </Link>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-9">
+                      <User className="w-4 h-4 mr-2" />
+                      Account
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onClick={() => navigate(getDashboardLink())}>
+                      <LayoutDashboard className="w-4 h-4 mr-2" />
+                      Dashboard
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/profile')}>
+                      <User className="w-4 h-4 mr-2" />
+                      Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout} className="text-destructive">
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Log Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <>
+                <a
+                  href="/"
+                  onClick={handleHomeClick}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  Home
+                </a>
+                <a
+                  href="#how-it-works"
+                  onClick={handleHowItWorksClick}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  How It Works
+                </a>
+                <div className="flex items-center space-x-3">
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to="/login">Sign In</Link>
+                  </Button>
+                  <Button asChild size="sm">
+                    <Link to="/signup">Sign Up</Link>
+                  </Button>
+                </div>
+              </>
+            )}
+          </nav>
+
+            {/* Mobile Menu Button */}
+            <div className="md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="h-10 w-10 rounded-lg hover:bg-muted"
+              >
+                {mobileMenuOpen ? (
+                  <X className="h-5 w-5 text-foreground" />
+                ) : (
+                  <Menu className="h-5 w-5 text-foreground" />
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          
+          {/* Mobile Menu Panel */}
+          <div className="fixed inset-y-0 right-0 w-full max-w-sm bg-background z-50 md:hidden shadow-xl transform transition-transform duration-300 ease-in-out">
+            <div className="flex flex-col h-full">
+              {/* Mobile Menu Header */}
+              <div className="flex items-center justify-between p-4 border-b">
+                <Link 
+                  to="/" 
+                  className="flex items-center space-x-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
+                    <span className="text-white font-bold text-lg">Q</span>
+                  </div>
+                  <span className="font-bold text-lg text-foreground">BookMyQuiltRetreat</span>
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="h-10 w-10 rounded-lg hover:bg-muted"
+                >
+                  <X className="h-5 w-5 text-foreground" />
+                </Button>
+              </div>
+
+              {/* Mobile Menu Content */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                {user ? (
+                  <>
+                    {role === 'student' && (
+                      <>
+                        <Link
+                          to="/discover"
+                          className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          Discover
+                        </Link>
+                        <Link
+                          to="/home"
+                          className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          Home
+                        </Link>
+                      </>
+                    )}
+                    {role === 'instructor' && (
+                      <>
+                        <Link
+                          to="/instructor/browse"
+                          className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          Browse
+                        </Link>
+                        <Link
+                          to="/instructor/dashboard"
+                          className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          Dashboard
+                        </Link>
+                      </>
+                    )}
+                    <Link
+                      to="/profile"
+                      className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Profile
+                    </Link>
+                    <div className="pt-4 border-t">
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start text-base h-12"
+                        onClick={() => {
+                          handleLogout();
+                          setMobileMenuOpen(false);
+                        }}
+                      >
+                        <LogOut className="w-5 h-5 mr-2" />
+                        Log Out
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      <a
+                        href="/"
+                        onClick={handleHomeClick}
+                        className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                      >
+                        Home
+                      </a>
+                      <a
+                        href="#how-it-works"
+                        onClick={handleHowItWorksClick}
+                        className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                      >
+                        How It Works
+                      </a>
+                    </div>
+                    <div className="space-y-3 pt-4 border-t">
+                      <Button 
+                        asChild 
+                        variant="outline" 
+                        className="w-full h-12 text-base font-medium border-2"
+                      >
+                        <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
+                          Sign In
+                        </Link>
+                      </Button>
+                      <Button 
+                        asChild 
+                        className="w-full h-12 text-base font-medium"
+                      >
+                        <Link to="/signup" onClick={() => setMobileMenuOpen(false)}>
+                          Sign Up
+                        </Link>
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+};
+

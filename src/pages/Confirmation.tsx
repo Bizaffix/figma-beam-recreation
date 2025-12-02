@@ -63,7 +63,7 @@ const Confirmation = () => {
             Add to Calendar
           </Button>
 
-          <Button variant="outline" className="w-full h-12" onClick={() => navigate('/')}>Back to Home</Button>
+          <Button variant="outline" className="w-full h-12" onClick={() => navigate('/home')}>Back to Home</Button>
         </div>
       </div>
     </div>

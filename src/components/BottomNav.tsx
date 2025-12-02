@@ -16,7 +16,7 @@ export const BottomNav = () => {
         { icon: User, label: "Profile", path: "/profile" },
       ]
     : [
-        { icon: Compass, label: "Discover", path: "/" },
+        { icon: Compass, label: "Discover", path: "/discover" },
         { icon: Home, label: "Home", path: "/home" },
         { icon: User, label: "Profile", path: "/profile" },
       ];
