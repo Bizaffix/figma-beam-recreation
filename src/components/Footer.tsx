@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Mail, Phone, MapPin, Facebook, Instagram, Twitter, Youtube } from "lucide-react";
+import { Mail, MessageSquare, Facebook, Instagram, Twitter, Youtube } from "lucide-react";
 
 export const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -160,28 +160,20 @@ export const Footer = () => {
               <li className="flex items-start gap-3">
                 <Mail className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                 <a
-                  href="mailto:support@bookmyquiltretreat.com"
+                  href="mailto:notifications@bookmyquiltretreat.com"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  support@bookmyquiltretreat.com
+                  notifications@bookmyquiltretreat.com
                 </a>
               </li>
               <li className="flex items-start gap-3">
-                <Phone className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                <MessageSquare className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                 <a
-                  href="tel:+1-800-555-0123"
+                  href="tel:+18018212328"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  +1 (800) 555-0123
+                  Text: (801) 821-2328
                 </a>
-              </li>
-              <li className="flex items-start gap-3">
-                <MapPin className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-muted-foreground">
-                  123 Quilt Street<br />
-                  Fabric City, FC 12345<br />
-                  United States
-                </span>
               </li>
             </ul>
           </div>
