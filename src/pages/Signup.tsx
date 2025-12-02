@@ -116,54 +116,131 @@ const Signup = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
+      
+      {/* Mobile Header Banner */}
+      <div className="lg:hidden relative bg-gradient-primary text-white overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-accent/90 z-10"></div>
+        <div className="relative z-20 px-4 py-8 sm:py-10">
+          <div className="max-w-md mx-auto text-center space-y-3">
+            <h2 className="text-2xl sm:text-3xl font-bold leading-tight">
+              {selectedRole === 'instructor' 
+                ? "Share Your Quilting Expertise" 
+                : "Start Your Quilting Journey Today"}
+            </h2>
+            <p className="text-sm sm:text-base text-white/90 leading-relaxed">
+              {selectedRole === 'instructor'
+                ? "Join our community of instructors. Create retreats, manage bookings, and share your passion with eager quilters."
+                : "Join our community of passionate quilters and instructors. Discover retreats, share your skills, and create unforgettable experiences."}
+            </p>
+            <div className="space-y-2 pt-3">
+              {selectedRole === 'instructor' ? (
+                <>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
+                    <span className="text-xs sm:text-sm text-white/90">Create and manage retreats</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
+                    <span className="text-xs sm:text-sm text-white/90">Handle bookings and payments</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
+                    <span className="text-xs sm:text-sm text-white/90">Reach passionate quilters</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
+                    <span className="text-xs sm:text-sm text-white/90">Discover amazing retreats</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
+                    <span className="text-xs sm:text-sm text-white/90">Connect with instructors</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
+                    <span className="text-xs sm:text-sm text-white/90">Join a vibrant community</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="flex-1 grid lg:grid-cols-2">
-        {/* Image Section */}
+        {/* Desktop Image Section */}
         <div className="hidden lg:flex relative bg-gradient-primary overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-accent/90 z-10"></div>
           <img 
-            src="/Image3.jpg" 
-            alt="Quilting workshop" 
-            className="w-full h-full object-cover mix-blend-overlay"
+            src={selectedRole === 'instructor' ? "/Image4.jpg" : "/Image3.jpg"}
+            alt={selectedRole === 'instructor' ? "Quilting instructor" : "Quilting workshop"} 
+            className="w-full h-full object-cover mix-blend-overlay transition-opacity duration-300"
           />
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-12 text-white">
             <div className="max-w-md space-y-6">
               <h2 className="text-4xl font-bold leading-tight">
-                Start Your Quilting Journey Today
+                {selectedRole === 'instructor' 
+                  ? "Share Your Quilting Expertise" 
+                  : "Start Your Quilting Journey Today"}
               </h2>
               <p className="text-lg text-white/90 leading-relaxed">
-                Join our community of passionate quilters and instructors. Discover retreats, share your skills, and create unforgettable experiences.
+                {selectedRole === 'instructor'
+                  ? "Join our community of instructors. Create retreats, manage bookings, and share your passion with eager quilters."
+                  : "Join our community of passionate quilters and instructors. Discover retreats, share your skills, and create unforgettable experiences."}
               </p>
               <div className="space-y-3 pt-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-white"></div>
-                  <span className="text-sm text-white/90">Discover amazing retreats</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-white"></div>
-                  <span className="text-sm text-white/90">Connect with instructors</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-white"></div>
-                  <span className="text-sm text-white/90">Join a vibrant community</span>
-                </div>
+                {selectedRole === 'instructor' ? (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-white"></div>
+                      <span className="text-sm text-white/90">Create and manage retreats</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-white"></div>
+                      <span className="text-sm text-white/90">Handle bookings and payments</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-white"></div>
+                      <span className="text-sm text-white/90">Reach passionate quilters</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-white"></div>
+                      <span className="text-sm text-white/90">Discover amazing retreats</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-white"></div>
+                      <span className="text-sm text-white/90">Connect with instructors</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-white"></div>
+                      <span className="text-sm text-white/90">Join a vibrant community</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
         </div>
 
         {/* Form Section */}
-        <div className="flex items-center justify-center p-6 py-12 lg:p-12">
-          <Card className="w-full max-w-md shadow-lg border-0 lg:shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-2xl text-center">Quilting Retreats</CardTitle>
-          <CardDescription className="text-center">
+        <div className="flex items-start md:items-center justify-center p-4 sm:p-6 py-6 sm:py-8 md:py-6 lg:py-8 md:p-8 lg:p-12 bg-muted/20 md:bg-background overflow-y-auto md:overflow-visible">
+          <div className="w-full max-w-md md:max-h-[calc(100vh-3rem)] lg:max-h-[calc(100vh-4rem)] md:overflow-y-auto md:pr-2">
+            <Card className="w-full shadow-lg border md:shadow-xl bg-card">
+        <CardHeader className="pb-2 sm:pb-3 md:pb-4">
+          <CardTitle className="text-xl sm:text-2xl text-center">Quilting Retreats</CardTitle>
+          <CardDescription className="text-center text-xs sm:text-sm md:text-base">
             Create a new account
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSignUp} className="space-y-4">
-            <div className="space-y-3">
-              <Label>I am a...</Label>
+        <CardContent className="px-4 sm:px-6 pb-3 sm:pb-4 md:pb-6">
+          <form onSubmit={handleSignUp} className="space-y-2.5 sm:space-y-3 md:space-y-4">
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label className="text-xs sm:text-sm">I am a...</Label>
               <RadioGroup
                 value={selectedRole}
                 onValueChange={(value) => {
@@ -174,26 +251,26 @@ const Signup = () => {
                     setAgreedToPrivacy(false);
                   }
                 }}
-                className="flex gap-4"
+                className="flex gap-3 sm:gap-4"
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="student" id="role-student" />
-                  <Label htmlFor="role-student" className="font-normal cursor-pointer">
+                  <Label htmlFor="role-student" className="font-normal cursor-pointer text-xs sm:text-sm md:text-base">
                     Student
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="instructor" id="role-instructor" />
-                  <Label htmlFor="role-instructor" className="font-normal cursor-pointer">
+                  <Label htmlFor="role-instructor" className="font-normal cursor-pointer text-xs sm:text-sm md:text-base">
                     Instructor
                   </Label>
                 </div>
               </RadioGroup>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstname">First Name</Label>
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:gap-4">
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="firstname" className="text-xs sm:text-sm">First Name</Label>
                 <Input
                   id="firstname"
                   type="text"
@@ -201,10 +278,11 @@ const Signup = () => {
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   required
+                  className="h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastname">Last Name</Label>
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="lastname" className="text-xs sm:text-sm">Last Name</Label>
                 <Input
                   id="lastname"
                   type="text"
@@ -212,33 +290,35 @@ const Signup = () => {
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   required
+                  className="h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
                 />
               </div>
             </div>
             
             {selectedRole === 'instructor' && (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="bio">Bio</Label>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="bio" className="text-xs sm:text-sm">Bio</Label>
                   <Textarea
                     id="bio"
                     placeholder="Tell us about yourself..."
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
-                    rows={4}
+                    rows={2}
+                    className="text-xs sm:text-sm md:text-base resize-none min-h-[60px]"
                   />
                 </div>
                 
-                <div className="space-y-3 pt-2 border-t">
-                  <div className="flex items-start gap-3">
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-start gap-2">
                     <Checkbox
                       id="terms-agreement"
                       checked={agreedToTerms}
                       onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
                       className="mt-0.5"
                     />
-                    <div className="flex-1 space-y-1">
-                      <Label htmlFor="terms-agreement" className="text-sm font-normal cursor-pointer leading-tight">
+                    <div className="flex-1">
+                      <Label htmlFor="terms-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
                         I have read and agree to the{" "}
                         <button
                           type="button"
@@ -251,15 +331,15 @@ const Signup = () => {
                     </div>
                   </div>
                   
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-2">
                     <Checkbox
                       id="privacy-agreement"
                       checked={agreedToPrivacy}
                       onCheckedChange={(checked) => setAgreedToPrivacy(checked === true)}
                       className="mt-0.5"
                     />
-                    <div className="flex-1 space-y-1">
-                      <Label htmlFor="privacy-agreement" className="text-sm font-normal cursor-pointer leading-tight">
+                    <div className="flex-1">
+                      <Label htmlFor="privacy-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
                         I have read and agree to the{" "}
                         <button
                           type="button"
@@ -275,8 +355,8 @@ const Signup = () => {
               </>
             )}
             
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="email" className="text-xs sm:text-sm">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -284,10 +364,11 @@ const Signup = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                className="h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="password" className="text-xs sm:text-sm">Password</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -297,7 +378,7 @@ const Signup = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  className="pr-10"
+                  className="pr-10 h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
                 />
                 <button
                   type="button"
@@ -316,12 +397,12 @@ const Signup = () => {
                 Password must be at least 6 characters
               </p>
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base" disabled={loading}>
               {loading ? "Creating account..." : "Sign Up"}
             </Button>
           </form>
 
-          <div className="mt-4 text-center text-sm">
+          <div className="mt-3 sm:mt-4 md:mt-6 text-center text-xs sm:text-sm">
             <span className="text-muted-foreground">Already have an account? </span>
             <Link to="/login" className="text-primary hover:underline font-medium">
               Sign in
@@ -329,6 +410,7 @@ const Signup = () => {
           </div>
         </CardContent>
       </Card>
+          </div>
         </div>
       </div>
 

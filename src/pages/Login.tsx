@@ -56,16 +56,16 @@ const ResendConfirmationForm = () => {
 
   return (
     <form onSubmit={handleResend} className="space-y-2">
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2">
         <Input
           type="email"
           placeholder="your.email@example.com"
           value={resendEmail}
           onChange={(e) => setResendEmail(e.target.value)}
-          className="flex-1"
+          className="flex-1 h-9 sm:h-10 text-sm"
         />
-        <Button type="submit" size="sm" disabled={resendLoading}>
-          <Mail className="w-4 h-4 mr-2" />
+        <Button type="submit" size="sm" disabled={resendLoading} className="h-9 sm:h-10 text-xs sm:text-sm">
+          <Mail className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
           {resendLoading ? "Sending..." : "Resend"}
         </Button>
       </div>
@@ -163,8 +163,28 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
+      
+      {/* Mobile Header Banner */}
+      <div className="lg:hidden relative bg-gradient-primary text-white overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-accent/90 z-10"></div>
+        <div className="relative z-20 px-4 py-8 sm:py-10">
+          <div className="max-w-md mx-auto text-center space-y-3">
+            <h2 className="text-2xl sm:text-3xl font-bold leading-tight">
+              Welcome Back to Your Quilting Community
+            </h2>
+            <p className="text-sm sm:text-base text-white/90 leading-relaxed">
+              Connect with passionate quilters, discover amazing retreats, and continue your creative journey.
+            </p>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <div className="w-8 h-0.5 bg-white/50"></div>
+              <span className="text-xs sm:text-sm text-white/80">Join thousands of quilters</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="flex-1 grid lg:grid-cols-2">
-        {/* Image Section */}
+        {/* Desktop Image Section */}
         <div className="hidden lg:flex relative bg-gradient-primary overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-accent/90 z-10"></div>
           <img 
@@ -189,25 +209,25 @@ const Login = () => {
         </div>
 
         {/* Form Section */}
-        <div className="flex items-center justify-center p-6 py-12 lg:p-12">
-          <Card className="w-full max-w-md shadow-lg border-0 lg:shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-2xl text-center">Quilting Retreats</CardTitle>
-          <CardDescription className="text-center">
+        <div className="flex items-center justify-center p-4 sm:p-6 py-6 sm:py-8 md:py-6 lg:py-8 md:p-8 lg:p-12 bg-muted/20 md:bg-background">
+          <Card className="w-full max-w-md shadow-lg border md:shadow-xl bg-card">
+        <CardHeader className="pb-2 sm:pb-3 md:pb-4">
+          <CardTitle className="text-xl sm:text-2xl text-center">Quilting Retreats</CardTitle>
+          <CardDescription className="text-center text-xs sm:text-sm md:text-base">
             {showForgotPassword ? "Reset your password" : "Sign in to your account"}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-6 pb-3 sm:pb-4 md:pb-6">
           {showForgotPassword ? (
             <>
               {/* Forgot Password Form */}
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
+              <div className="space-y-3 sm:space-y-4">
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                   Enter your email address and we'll send you a link to reset your password.
                 </p>
-                <form onSubmit={handleForgotPassword} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="reset-email">Email</Label>
+                <form onSubmit={handleForgotPassword} className="space-y-3 sm:space-y-4">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="reset-email" className="text-xs sm:text-sm">Email</Label>
                     <Input
                       id="reset-email"
                       type="email"
@@ -215,9 +235,10 @@ const Login = () => {
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
                       required
+                      className="h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
                     />
                   </div>
-                  <Button type="submit" className="w-full" disabled={resetLoading}>
+                  <Button type="submit" className="w-full h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base" disabled={resetLoading}>
                     {resetLoading ? "Sending..." : "Send Reset Link"}
                   </Button>
                   <button
@@ -226,7 +247,7 @@ const Login = () => {
                       setShowForgotPassword(false);
                       setResetEmail("");
                     }}
-                    className="w-full text-sm text-muted-foreground hover:text-foreground"
+                    className="w-full text-xs sm:text-sm text-muted-foreground hover:text-foreground py-2"
                   >
                     Back to Sign In
                   </button>
@@ -235,9 +256,9 @@ const Login = () => {
             </>
           ) : (
             <>
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+              <form onSubmit={handleSignIn} className="space-y-3 sm:space-y-4">
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="email" className="text-xs sm:text-sm">Email</Label>
                   <Input
                     id="email"
                     type="email"
@@ -245,15 +266,16 @@ const Login = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
+                    className="h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5 sm:space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="password" className="text-xs sm:text-sm">Password</Label>
                     <button
                       type="button"
                       onClick={() => setShowForgotPassword(true)}
-                      className="text-sm text-primary hover:underline"
+                      className="text-xs sm:text-sm text-primary hover:underline"
                     >
                       Forgot password?
                     </button>
@@ -266,7 +288,7 @@ const Login = () => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      className="pr-10"
+                      className="pr-10 h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
                     />
                     <button
                       type="button"
@@ -282,12 +304,12 @@ const Login = () => {
                     </button>
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base" disabled={loading}>
                   {loading ? "Signing in..." : "Sign In"}
                 </Button>
               </form>
 
-              <div className="mt-4 text-center text-sm">
+              <div className="mt-3 sm:mt-4 md:mt-6 text-center text-xs sm:text-sm">
                 <span className="text-muted-foreground">Don't have an account? </span>
                 <Link to="/signup" className="text-primary hover:underline font-medium">
                   Sign up
@@ -295,8 +317,8 @@ const Login = () => {
               </div>
 
               {/* Resend confirmation email section */}
-              <div className="mt-4 pt-4 border-t">
-                <p className="text-sm text-center text-muted-foreground mb-2">
+              <div className="mt-3 sm:mt-4 md:mt-6 pt-3 sm:pt-4 border-t">
+                <p className="text-xs sm:text-sm text-center text-muted-foreground mb-2">
                   Didn't receive the confirmation email?
                 </p>
                 <ResendConfirmationForm />
