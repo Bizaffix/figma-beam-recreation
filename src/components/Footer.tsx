@@ -186,7 +186,7 @@ export const Footer = () => {
           </p>
           <div className="flex flex-wrap justify-center md:justify-end gap-4 sm:gap-6 text-xs sm:text-sm">
             <Link
-              to="#"
+              to="/privacy"
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
               Privacy Policy

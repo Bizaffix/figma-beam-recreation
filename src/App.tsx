@@ -20,6 +20,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import EmailConfirm from "./pages/EmailConfirm";
 import ResetPassword from "./pages/ResetPassword";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import { useAuth } from "./contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -134,6 +135,8 @@ const App = () => (
           <Route path="/auth/confirm" element={<EmailConfirm />} />
           {/* Password reset route - accessible to all (needs to handle sign-out) */}
           <Route path="/auth/reset-password" element={<ResetPassword />} />
+          {/* Public Legal Pages */}
+          <Route path="/privacy" element={<PublicRoute><PrivacyPolicy /></PublicRoute>} />
           
           {/* Protected Student Routes */}
           <Route path="/discover" element={<StudentRoute><Index /></StudentRoute>} />
