@@ -101,6 +101,19 @@ const Landing = () => {
               Select the option that best describes you and start your quilting journey today
             </p>
           </div>
+          
+          {/* Image at top of section */}
+          <div className="mb-8 sm:mb-10 md:mb-12 lg:mb-16 max-w-4xl mx-auto">
+            <div className="relative group overflow-hidden rounded-xl md:rounded-2xl shadow-xl md:shadow-2xl">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent z-10"></div>
+              <img 
+                src="/Image2.jpg" 
+                alt="Quilt retreat experience" 
+                className="w-full h-48 sm:h-64 md:h-80 lg:h-96 object-cover transition-transform duration-700 group-hover:scale-105"
+              />
+            </div>
+          </div>
+          
           <div className="grid md:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 max-w-5xl mx-auto">
             {/* Quilter Card */}
             <Card className="border-2 hover:border-primary transition-all duration-300 hover:shadow-lg">
@@ -157,6 +170,18 @@ const Landing = () => {
             <p className="text-sm sm:text-base md:text-lg text-muted-foreground max-w-2xl mx-auto px-2">
               Simple steps to connect quilters with amazing retreat experiences
             </p>
+          </div>
+          
+          {/* Image at top of section */}
+          <div className="mb-8 sm:mb-10 md:mb-12 lg:mb-16 max-w-4xl mx-auto">
+            <div className="relative group overflow-hidden rounded-xl md:rounded-2xl shadow-xl md:shadow-2xl">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent z-10"></div>
+              <img 
+                src="/Image3.jpg" 
+                alt="Quilting workshop" 
+                className="w-full h-48 sm:h-64 md:h-80 lg:h-96 object-cover transition-transform duration-700 group-hover:scale-105"
+              />
+            </div>
           </div>
           
           <div className="grid md:grid-cols-2 gap-8 sm:gap-10 md:gap-12 max-w-6xl mx-auto">
@@ -256,6 +281,18 @@ const Landing = () => {
       {/* Trust and Features Section */}
       <section className="py-10 sm:py-12 md:py-16 lg:py-20 bg-muted/30">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Image at top of section */}
+          <div className="mb-8 sm:mb-10 md:mb-12 lg:mb-16 max-w-4xl mx-auto">
+            <div className="relative group overflow-hidden rounded-xl md:rounded-2xl shadow-xl md:shadow-2xl">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent z-10"></div>
+              <img 
+                src="/Image4.jpg" 
+                alt="Quilt community" 
+                className="w-full h-48 sm:h-64 md:h-80 lg:h-96 object-cover transition-transform duration-700 group-hover:scale-105"
+              />
+            </div>
+          </div>
+          
           <div className="grid md:grid-cols-2 gap-8 sm:gap-10 md:gap-12 lg:gap-16 max-w-6xl mx-auto">
             {/* Why Quilters Love It */}
             <div className="space-y-4 sm:space-y-6">
@@ -305,42 +342,6 @@ const Landing = () => {
                   </p>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Image Gallery Section */}
-      <section className="py-10 sm:py-12 md:py-16 lg:py-20">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">Join Our Community</h2>
-            <p className="text-sm sm:text-base md:text-lg text-muted-foreground">See what makes our retreats special</p>
-          </div>
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 max-w-6xl mx-auto">
-            <div className="relative group overflow-hidden rounded-xl shadow-lg">
-              <img 
-                src="/Image2.jpg" 
-                alt="Quilt retreat experience" 
-                className="w-full h-48 sm:h-56 md:h-64 lg:h-80 object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            </div>
-            <div className="relative group overflow-hidden rounded-xl shadow-lg">
-              <img 
-                src="/Image3.jpg" 
-                alt="Quilting workshop" 
-                className="w-full h-48 sm:h-56 md:h-64 lg:h-80 object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            </div>
-            <div className="relative group overflow-hidden rounded-xl shadow-lg">
-              <img 
-                src="/Image4.jpg" 
-                alt="Quilt community" 
-                className="w-full h-48 sm:h-56 md:h-64 lg:h-80 object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </div>
           </div>
         </div>
