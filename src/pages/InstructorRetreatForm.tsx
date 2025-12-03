@@ -104,6 +104,8 @@ const InstructorRetreatForm = () => {
   const [imagePreview, setImagePreview] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [venueFees, setVenueFees] = useState<number>(0);
+  const [foodBudget, setFoodBudget] = useState<number>(0);
 
   // Fetch retreat data from Supabase when editing
   useEffect(() => {
@@ -575,6 +577,7 @@ const InstructorRetreatForm = () => {
 
               <div>
                 <Label>Price ($)</Label>
+                <p className="text-xs text-muted-foreground mb-2">Per Student</p>
                 <Input
                   type="number"
                   step="0.01"
@@ -785,7 +788,7 @@ const InstructorRetreatForm = () => {
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Total Spots</Label>
+                <Label># of Seats</Label>
                 <Input
                   type="number"
                   value={formData.totalSpots}
@@ -796,6 +799,102 @@ const InstructorRetreatForm = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Pricing Breakdown */}
+        {(formData.price && formData.price > 0 && formData.totalSpots > 0) && (
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <h2 className="text-xl font-semibold text-card-foreground mb-4">Revenue Breakdown</h2>
+              
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-2 border-b">
+                  <span className="text-sm font-medium">Subtotal Revenue</span>
+                  <span className="text-sm font-semibold">
+                    ${((formData.price || 0) * (formData.totalSpots || 0)).toFixed(2)}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between py-2 border-b">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">+ 12.4% Platform Fee</span>
+                    <span className="text-xs text-muted-foreground">
+                      ${(((formData.price || 0) * (formData.totalSpots || 0)) * 0.124).toFixed(2)} (0.124)
+                    </span>
+                  </div>
+                  <span className="text-sm font-semibold text-destructive">
+                    -${(((formData.price || 0) * (formData.totalSpots || 0)) * 0.124).toFixed(2)}
+                  </span>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Location/Venue Fees ($)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Enter the venue cost you found (e.g., from Airbnb or venue booking)
+                  </p>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={venueFees || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setVenueFees(value === "" ? 0 : Number(value));
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                {venueFees > 0 && (
+                  <div className="flex items-center justify-between py-2 border-b">
+                    <span className="text-sm font-medium">Location/Venue Fees</span>
+                    <span className="text-sm font-semibold text-destructive">
+                      -${venueFees.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                
+                <div className="space-y-2">
+                  <Label>Food Budget ($)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    If coordinating food for guests, enter budget amount (enter $0 if not applicable)
+                  </p>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={foodBudget || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFoodBudget(value === "" ? 0 : Number(value));
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                {foodBudget > 0 && (
+                  <div className="flex items-center justify-between py-2 border-b">
+                    <span className="text-sm font-medium">Food Budget</span>
+                    <span className="text-sm font-semibold text-destructive">
+                      -${foodBudget.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                
+                <div className="flex items-center justify-between py-3 pt-4 border-t-2 border-primary">
+                  <span className="text-base font-bold">Total Revenue Payout</span>
+                  <span className="text-lg font-bold text-primary">
+                    ${(
+                      ((formData.price || 0) * (formData.totalSpots || 0)) -
+                      (((formData.price || 0) * (formData.totalSpots || 0)) * 0.124) -
+                      venueFees -
+                      foodBudget
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Publish Status */}
         <Card>

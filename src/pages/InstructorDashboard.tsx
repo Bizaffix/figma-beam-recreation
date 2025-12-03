@@ -151,6 +151,8 @@ const InstructorDashboard = () => {
   const [scheduleActivities, setScheduleActivities] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [imagePreview, setImagePreview] = useState<string>("");
+  const [venueFees, setVenueFees] = useState<number>(0);
+  const [foodBudget, setFoodBudget] = useState<number>(0);
 
   // Only show this page to instructors
   if (role !== 'instructor') {
@@ -899,6 +901,100 @@ const InstructorDashboard = () => {
               </div>
             </div>
           </div>
+
+          {/* Pricing Breakdown */}
+          {(formData.price && formData.price > 0 && formData.totalSpots > 0) && (
+            <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
+              <h3 className="text-lg font-semibold text-card-foreground">Revenue Breakdown</h3>
+              
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-2 border-b">
+                  <span className="text-sm font-medium">Subtotal Revenue</span>
+                  <span className="text-sm font-semibold">
+                    ${((formData.price || 0) * (formData.totalSpots || 0)).toFixed(2)}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between py-2 border-b">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">+ 12.4% Platform Fee</span>
+                    <span className="text-xs text-muted-foreground">
+                      ${(((formData.price || 0) * (formData.totalSpots || 0)) * 0.124).toFixed(2)} (0.124)
+                    </span>
+                  </div>
+                  <span className="text-sm font-semibold text-destructive">
+                    -${(((formData.price || 0) * (formData.totalSpots || 0)) * 0.124).toFixed(2)}
+                  </span>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Location/Venue Fees ($)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Enter the venue cost you found (e.g., from Airbnb or venue booking)
+                  </p>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={venueFees || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setVenueFees(value === "" ? 0 : Number(value));
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                {venueFees > 0 && (
+                  <div className="flex items-center justify-between py-2 border-b">
+                    <span className="text-sm font-medium">Location/Venue Fees</span>
+                    <span className="text-sm font-semibold text-destructive">
+                      -${venueFees.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                
+                <div className="space-y-2">
+                  <Label>Food Budget ($)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    If coordinating food for guests, enter budget amount (enter $0 if not applicable)
+                  </p>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={foodBudget || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFoodBudget(value === "" ? 0 : Number(value));
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                {foodBudget > 0 && (
+                  <div className="flex items-center justify-between py-2 border-b">
+                    <span className="text-sm font-medium">Food Budget</span>
+                    <span className="text-sm font-semibold text-destructive">
+                      -${foodBudget.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                
+                <div className="flex items-center justify-between py-3 pt-4 border-t-2 border-primary">
+                  <span className="text-base font-bold">Total Revenue Payout</span>
+                  <span className="text-lg font-bold text-primary">
+                    ${(
+                      ((formData.price || 0) * (formData.totalSpots || 0)) -
+                      (((formData.price || 0) * (formData.totalSpots || 0)) * 0.124) -
+                      venueFees -
+                      foodBudget
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Schedule */}
           <div className="space-y-4">
