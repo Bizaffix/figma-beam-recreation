@@ -17,6 +17,7 @@ import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
+import { ItineraryBuilder, ItineraryBlock } from "@/components/ItineraryBuilder";
 
 interface Retreat {
   id: number;
@@ -34,6 +35,9 @@ interface Retreat {
   schedule: { day: string; activities: string }[];
   published: boolean;
   instructor_id: string;
+  venue_fees?: number | null;
+  food_budget?: number | null;
+  itinerary_blocks?: any[] | null;
 }
 
 interface FormData {
@@ -50,6 +54,25 @@ interface FormData {
   schedule: { day: string; activities: string }[];
   published: boolean;
 }
+
+// Helper functions to convert between old schedule format and new itinerary format
+const convertScheduleToItinerary = (schedule: { day: string; activities: string }[]): ItineraryBlock[] => {
+  if (!schedule || schedule.length === 0) return [];
+  return schedule.map((item, index) => ({
+    id: `block-${Date.now()}-${index}`,
+    type: "class" as const,
+    title: item.day || `Day ${index + 1}`,
+    description: item.activities || "",
+    day: item.day,
+  }));
+};
+
+const convertItineraryToSchedule = (blocks: ItineraryBlock[]): { day: string; activities: string }[] => {
+  return blocks.map((block) => ({
+    day: block.day || block.title || "",
+    activities: block.description || "",
+  }));
+};
 
 const parseDateString = (dateStr: string): DateRange | undefined => {
   if (!dateStr) return undefined;
@@ -153,6 +176,8 @@ const InstructorDashboard = () => {
   const [imagePreview, setImagePreview] = useState<string>("");
   const [venueFees, setVenueFees] = useState<number>(0);
   const [foodBudget, setFoodBudget] = useState<number>(0);
+  const [itineraryBlocks, setItineraryBlocks] = useState<ItineraryBlock[]>([]);
+  const [useItineraryBuilder, setUseItineraryBuilder] = useState(false);
 
   // Only show this page to instructors
   if (role !== 'instructor') {
@@ -363,6 +388,35 @@ const InstructorDashboard = () => {
       setDateRange(parseDateString(retreat.date));
       setImagePreview("");
       setEditingId(retreat.id);
+      // Load venue fees and food budget
+      if ((retreat as any).venue_fees !== null && (retreat as any).venue_fees !== undefined) {
+        setVenueFees(Number((retreat as any).venue_fees));
+      } else {
+        setVenueFees(0);
+      }
+      if ((retreat as any).food_budget !== null && (retreat as any).food_budget !== undefined) {
+        setFoodBudget(Number((retreat as any).food_budget));
+      } else {
+        setFoodBudget(0);
+      }
+      // Convert schedule to itinerary blocks if schedule exists
+      if (retreat.schedule && Array.isArray(retreat.schedule) && retreat.schedule.length > 0) {
+        // Check if schedule is in new format (has itinerary_blocks) or old format
+        if ((retreat as any).itinerary_blocks && Array.isArray((retreat as any).itinerary_blocks)) {
+          setItineraryBlocks((retreat as any).itinerary_blocks);
+          setUseItineraryBuilder(true);
+        } else {
+          // Convert old format to new format
+          const converted = convertScheduleToItinerary(retreat.schedule);
+          if (converted.length > 0) {
+            setItineraryBlocks(converted);
+            setUseItineraryBuilder(true);
+          }
+        }
+      } else {
+        setItineraryBlocks([]);
+        setUseItineraryBuilder(false);
+      }
     } else {
       setFormData({
         title: "",
@@ -408,6 +462,10 @@ const InstructorDashboard = () => {
     setIncludeItem("");
     setScheduleDay("");
     setScheduleActivities("");
+    setItineraryBlocks([]);
+    setUseItineraryBuilder(false);
+    setVenueFees(0);
+    setFoodBudget(0);
   };
 
   const addIncludeItem = () => {
@@ -451,6 +509,11 @@ const InstructorDashboard = () => {
     setSaving(true);
 
     try {
+      // Convert itinerary blocks to schedule format for backward compatibility
+      const scheduleData = useItineraryBuilder && itineraryBlocks.length > 0
+        ? convertItineraryToSchedule(itineraryBlocks)
+        : formData.schedule || [];
+
       const retreatData = {
         title: formData.title,
         description: formData.description || "",
@@ -463,7 +526,10 @@ const InstructorDashboard = () => {
         spots_available: formData.totalSpots || 0,
         image: formData.image || "",
         includes: formData.includes || [],
-        schedule: formData.schedule || [],
+        schedule: scheduleData,
+        itinerary_blocks: useItineraryBuilder && itineraryBlocks.length > 0 ? itineraryBlocks : null,
+        venue_fees: venueFees || 0,
+        food_budget: foodBudget || 0,
         published: published !== undefined ? published : (formData.published || false),
         instructor_id: user.id,
       };
@@ -917,7 +983,7 @@ const InstructorDashboard = () => {
                 
                 <div className="flex items-center justify-between py-2 border-b">
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium">+ 12.4% Platform Fee</span>
+                    <span className="text-sm font-medium">-12.4% Platform Fee</span>
                     <span className="text-xs text-muted-foreground">
                       ${(((formData.price || 0) * (formData.totalSpots || 0)) * 0.124).toFixed(2)} (0.124)
                     </span>
@@ -996,43 +1062,65 @@ const InstructorDashboard = () => {
             </div>
           )}
 
-          {/* Schedule */}
+          {/* Itinerary Builder */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Schedule</h3>
-            <div className="space-y-2">
-              <Input
-                value={scheduleDay}
-                onChange={(e) => setScheduleDay(e.target.value)}
-                placeholder="Day (e.g., Day 1)"
-              />
-              <Textarea
-                value={scheduleActivities}
-                onChange={(e) => setScheduleActivities(e.target.value)}
-                placeholder="Activities for this day..."
-                rows={2}
-              />
-              <Button type="button" onClick={addScheduleItem}>Add Schedule Item</Button>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+              <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Schedule</h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setUseItineraryBuilder(!useItineraryBuilder)}
+                className="w-full sm:w-auto text-xs sm:text-sm"
+              >
+                {useItineraryBuilder ? "Use Simple Schedule" : "Use Itinerary Builder"}
+              </Button>
             </div>
-            <div className="space-y-2">
-              {formData.schedule?.map((item, index) => (
-                <div key={index} className="p-3 bg-muted rounded">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold text-sm">{item.day}</p>
-                      <p className="text-sm text-muted-foreground">{item.activities}</p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeScheduleItem(index)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
+            
+            {useItineraryBuilder ? (
+              <ItineraryBuilder
+                blocks={itineraryBlocks}
+                onChange={setItineraryBlocks}
+                user={user}
+              />
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Input
+                    value={scheduleDay}
+                    onChange={(e) => setScheduleDay(e.target.value)}
+                    placeholder="Day (e.g., Day 1)"
+                  />
+                  <Textarea
+                    value={scheduleActivities}
+                    onChange={(e) => setScheduleActivities(e.target.value)}
+                    placeholder="Activities for this day..."
+                    rows={2}
+                  />
+                  <Button type="button" onClick={addScheduleItem}>Add Schedule Item</Button>
                 </div>
-              ))}
-            </div>
+                <div className="space-y-2">
+                  {formData.schedule?.map((item, index) => (
+                    <div key={index} className="p-3 bg-muted rounded">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold text-sm">{item.day}</p>
+                          <p className="text-sm text-muted-foreground">{item.activities}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeScheduleItem(index)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Publish Status */}

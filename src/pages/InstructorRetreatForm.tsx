@@ -17,6 +17,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
+import { ItineraryBuilder, ItineraryBlock } from "@/components/ItineraryBuilder";
 
 // Helper function to parse date string like "Nov 5-8, 2025" to date range
 const parseDateString = (dateStr: string): DateRange | undefined => {
@@ -68,6 +69,25 @@ const formatDateRange = (range: DateRange | undefined): string => {
   return `${fromMonth} ${fromDay} - ${toMonth} ${toDay}, ${year}`;
 };
 
+// Helper functions to convert between old schedule format and new itinerary format
+const convertScheduleToItinerary = (schedule: { day: string; activities: string }[]): ItineraryBlock[] => {
+  if (!schedule || schedule.length === 0) return [];
+  return schedule.map((item, index) => ({
+    id: `block-${Date.now()}-${index}`,
+    type: "class" as const,
+    title: item.day || `Day ${index + 1}`,
+    description: item.activities || "",
+    day: item.day,
+  }));
+};
+
+const convertItineraryToSchedule = (blocks: ItineraryBlock[]): { day: string; activities: string }[] => {
+  return blocks.map((block) => ({
+    day: block.day || block.title || "",
+    activities: block.description || "",
+  }));
+};
+
 const InstructorRetreatForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -106,6 +126,8 @@ const InstructorRetreatForm = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [venueFees, setVenueFees] = useState<number>(0);
   const [foodBudget, setFoodBudget] = useState<number>(0);
+  const [itineraryBlocks, setItineraryBlocks] = useState<ItineraryBlock[]>([]);
+  const [useItineraryBuilder, setUseItineraryBuilder] = useState(false);
 
   // Fetch retreat data from Supabase when editing
   useEffect(() => {
@@ -153,6 +175,28 @@ const InstructorRetreatForm = () => {
           if (data.date) {
             const parsed = parseDateString(data.date);
             setDateRange(parsed);
+          }
+          // Load venue fees and food budget
+          if (data.venue_fees !== null && data.venue_fees !== undefined) {
+            setVenueFees(Number(data.venue_fees));
+          }
+          if (data.food_budget !== null && data.food_budget !== undefined) {
+            setFoodBudget(Number(data.food_budget));
+          }
+          // Convert schedule to itinerary blocks if schedule exists
+          if (data.schedule && Array.isArray(data.schedule) && data.schedule.length > 0) {
+            // Check if schedule is in new format (has itinerary_blocks) or old format
+            if (data.itinerary_blocks && Array.isArray(data.itinerary_blocks)) {
+              setItineraryBlocks(data.itinerary_blocks);
+              setUseItineraryBuilder(true);
+            } else {
+              // Convert old format to new format
+              const converted = convertScheduleToItinerary(data.schedule);
+              if (converted.length > 0) {
+                setItineraryBlocks(converted);
+                setUseItineraryBuilder(true);
+              }
+            }
           }
         }
       } catch (error) {
@@ -277,6 +321,11 @@ const InstructorRetreatForm = () => {
     setLoading(true);
 
     try {
+      // Convert itinerary blocks to schedule format for backward compatibility
+      const scheduleData = useItineraryBuilder && itineraryBlocks.length > 0
+        ? convertItineraryToSchedule(itineraryBlocks)
+        : formData.schedule || [];
+
       // Transform form data to match database schema
       const retreatData = {
         title: formData.title,
@@ -290,7 +339,10 @@ const InstructorRetreatForm = () => {
         spots_available: formData.totalSpots || 0, // Set available spots equal to total spots
         image: formData.image || "",
         includes: formData.includes || [],
-        schedule: formData.schedule || [],
+        schedule: scheduleData,
+        itinerary_blocks: useItineraryBuilder && itineraryBlocks.length > 0 ? itineraryBlocks : null,
+        venue_fees: venueFees || 0,
+        food_budget: foodBudget || 0,
         published: formData.published || false,
         instructor_id: user.id,
       };
@@ -637,45 +689,66 @@ const InstructorRetreatForm = () => {
               </div>
             </div>
 
-            {/* Schedule */}
+            {/* Itinerary Builder */}
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-card-foreground">Schedule</h2>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                <h2 className="text-lg sm:text-xl font-semibold text-card-foreground">Schedule</h2>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUseItineraryBuilder(!useItineraryBuilder)}
+                  className="w-full sm:w-auto text-xs sm:text-sm"
+                >
+                  {useItineraryBuilder ? "Use Simple Schedule" : "Use Itinerary Builder"}
+                </Button>
+              </div>
               
-              <div className="space-y-2">
-                <Input
-                  value={scheduleDay}
-                  onChange={(e) => setScheduleDay(e.target.value)}
-                  placeholder="Day (e.g., Day 1)"
+              {useItineraryBuilder ? (
+                <ItineraryBuilder
+                  blocks={itineraryBlocks}
+                  onChange={setItineraryBlocks}
+                  user={user}
                 />
-                <Textarea
-                  value={scheduleActivities}
-                  onChange={(e) => setScheduleActivities(e.target.value)}
-                  placeholder="Activities for this day..."
-                  rows={2}
-                />
-                <Button type="button" onClick={addScheduleItem}>Add Schedule Item</Button>
-              </div>
-
-              <div className="space-y-2">
-                {formData.schedule?.map((item, index) => (
-                  <div key={index} className="p-3 bg-muted rounded">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-semibold text-sm">{item.day}</p>
-                        <p className="text-sm text-muted-foreground">{item.activities}</p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeScheduleItem(index)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Input
+                      value={scheduleDay}
+                      onChange={(e) => setScheduleDay(e.target.value)}
+                      placeholder="Day (e.g., Day 1)"
+                    />
+                    <Textarea
+                      value={scheduleActivities}
+                      onChange={(e) => setScheduleActivities(e.target.value)}
+                      placeholder="Activities for this day..."
+                      rows={2}
+                    />
+                    <Button type="button" onClick={addScheduleItem}>Add Schedule Item</Button>
                   </div>
-                ))}
-              </div>
+
+                  <div className="space-y-2">
+                    {formData.schedule?.map((item, index) => (
+                      <div key={index} className="p-3 bg-muted rounded">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-semibold text-sm">{item.day}</p>
+                            <p className="text-sm text-muted-foreground">{item.activities}</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeScheduleItem(index)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -816,7 +889,7 @@ const InstructorRetreatForm = () => {
                 
                 <div className="flex items-center justify-between py-2 border-b">
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium">+ 12.4% Platform Fee</span>
+                    <span className="text-sm font-medium">-12.4% Platform Fee</span>
                     <span className="text-xs text-muted-foreground">
                       ${(((formData.price || 0) * (formData.totalSpots || 0)) * 0.124).toFixed(2)} (0.124)
                     </span>
