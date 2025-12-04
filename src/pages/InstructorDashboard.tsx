@@ -971,23 +971,22 @@ const InstructorDashboard = () => {
           {/* Pricing Breakdown */}
           {(formData.price && formData.price > 0 && formData.totalSpots > 0) && (
             <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
-              <h3 className="text-lg font-semibold text-card-foreground">Revenue Breakdown</h3>
+              <h3 className="text-lg font-semibold text-card-foreground">Financial Breakdown</h3>
               
               <div className="space-y-3">
                 <div className="flex items-center justify-between py-2 border-b">
-                  <span className="text-sm font-medium">Subtotal Revenue</span>
+                  <span className="text-sm font-medium">Revenue</span>
                   <span className="text-sm font-semibold">
                     ${((formData.price || 0) * (formData.totalSpots || 0)).toFixed(2)}
                   </span>
                 </div>
                 
+                <div className="pt-2">
+                  <h3 className="text-sm font-semibold text-card-foreground mb-3">Costs</h3>
+                </div>
+                
                 <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">-12.4% Platform Fee</span>
-                    <span className="text-xs text-muted-foreground">
-                      ${(((formData.price || 0) * (formData.totalSpots || 0)) * 0.124).toFixed(2)} (0.124)
-                    </span>
-                  </div>
+                  <span className="text-sm font-medium">-12.4% Platform Fee</span>
                   <span className="text-sm font-semibold text-destructive">
                     -${(((formData.price || 0) * (formData.totalSpots || 0)) * 0.124).toFixed(2)}
                   </span>
@@ -1063,65 +1062,67 @@ const InstructorDashboard = () => {
           )}
 
           {/* Itinerary Builder */}
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
-              <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Schedule</h3>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setUseItineraryBuilder(!useItineraryBuilder)}
-                className="w-full sm:w-auto text-xs sm:text-sm"
-              >
-                {useItineraryBuilder ? "Use Simple Schedule" : "Use Itinerary Builder"}
-              </Button>
-            </div>
-            
-            {useItineraryBuilder ? (
-              <ItineraryBuilder
-                blocks={itineraryBlocks}
-                onChange={setItineraryBlocks}
-                user={user}
-              />
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Input
-                    value={scheduleDay}
-                    onChange={(e) => setScheduleDay(e.target.value)}
-                    placeholder="Day (e.g., Day 1)"
-                  />
-                  <Textarea
-                    value={scheduleActivities}
-                    onChange={(e) => setScheduleActivities(e.target.value)}
-                    placeholder="Activities for this day..."
-                    rows={2}
-                  />
-                  <Button type="button" onClick={addScheduleItem}>Add Schedule Item</Button>
-                </div>
-                <div className="space-y-2">
-                  {formData.schedule?.map((item, index) => (
-                    <div key={index} className="p-3 bg-muted rounded">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-semibold text-sm">{item.day}</p>
-                          <p className="text-sm text-muted-foreground">{item.activities}</p>
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Itinerary Builder</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUseItineraryBuilder(!useItineraryBuilder)}
+                  className="w-full sm:w-auto text-xs sm:text-sm"
+                >
+                  {useItineraryBuilder ? "Use Simple Schedule" : "Use Itinerary Builder"}
+                </Button>
+              </div>
+              
+              {useItineraryBuilder ? (
+                <ItineraryBuilder
+                  blocks={itineraryBlocks}
+                  onChange={setItineraryBlocks}
+                  user={user}
+                />
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Input
+                      value={scheduleDay}
+                      onChange={(e) => setScheduleDay(e.target.value)}
+                      placeholder="Day (e.g., Day 1)"
+                    />
+                    <Textarea
+                      value={scheduleActivities}
+                      onChange={(e) => setScheduleActivities(e.target.value)}
+                      placeholder="Activities for this day..."
+                      rows={2}
+                    />
+                    <Button type="button" onClick={addScheduleItem}>Add Schedule Item</Button>
+                  </div>
+                  <div className="space-y-2">
+                    {formData.schedule?.map((item, index) => (
+                      <div key={index} className="p-3 bg-muted rounded">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-semibold text-sm">{item.day}</p>
+                            <p className="text-sm text-muted-foreground">{item.activities}</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeScheduleItem(index)}
+                          >
+                            Remove
+                          </Button>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeScheduleItem(index)}
-                        >
-                          Remove
-                        </Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Publish Status */}
           <div className="p-4 bg-muted rounded-lg">
