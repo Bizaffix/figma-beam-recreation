@@ -182,40 +182,53 @@ function SortableBlock({ block, onUpdate, onDelete, user }: { block: ItineraryBl
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="border rounded-lg p-3 sm:p-4 bg-card space-y-3">
+    <div ref={setNodeRef} style={style} className="border rounded-lg p-3 sm:p-4 bg-card space-y-3 relative">
+      {/* Delete button - top right, mobile only */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={onDelete}
+        className="absolute top-1 right-1 sm:hidden z-10 h-8 w-8 p-0"
+      >
+        <X className="w-4 h-4" />
+      </Button>
+      
       <div className="flex items-start gap-2 sm:gap-3">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing mt-1 touch-none">
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing mt-1 touch-none flex-shrink-0">
           <GripVertical className="w-5 h-5 sm:w-6 sm:h-6 text-muted-foreground" />
         </div>
-        <div className="flex-1 space-y-2 sm:space-y-3 min-w-0">
+        <div className="flex-1 space-y-2 sm:space-y-3 min-w-0 pr-10 sm:pr-0">
+          {/* Top row: Badge, Time, Day - mobile responsive */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Badge className={`${blockTypeInfo.color} text-xs sm:text-sm whitespace-nowrap`}>
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <Badge className={`${blockTypeInfo.color} text-xs sm:text-sm whitespace-nowrap flex-shrink-0`}>
                 <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1" />
                 <span className="hidden sm:inline">{blockTypeInfo.label}</span>
                 <span className="sm:hidden">{blockTypeInfo.label.split(' ')[0]}</span>
               </Badge>
-              <div className="flex gap-1 sm:gap-2 flex-1 sm:flex-initial">
+              <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto">
                 <Input
                   placeholder="Time"
                   value={block.time || ""}
                   onChange={(e) => onUpdate({ ...block, time: e.target.value })}
-                  className="w-24 sm:w-32 h-8 text-xs sm:text-sm flex-shrink-0"
+                  className="flex-1 sm:flex-initial sm:w-32 h-8 text-xs sm:text-sm"
                 />
                 <Input
                   placeholder="Day"
                   value={block.day || ""}
                   onChange={(e) => onUpdate({ ...block, day: e.target.value })}
-                  className="w-20 sm:w-32 h-8 text-xs sm:text-sm flex-shrink-0"
+                  className="flex-1 sm:flex-initial sm:w-32 h-8 text-xs sm:text-sm"
                 />
               </div>
             </div>
+            {/* Delete button - desktop only */}
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={onDelete}
-              className="sm:ml-auto self-end sm:self-center"
+              className="hidden sm:flex ml-auto flex-shrink-0"
             >
               <X className="w-4 h-4" />
             </Button>
