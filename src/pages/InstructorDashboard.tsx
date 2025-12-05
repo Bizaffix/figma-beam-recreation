@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight, Share2 } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight, Share2, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -177,6 +177,15 @@ const InstructorDashboard = () => {
   const [venueFees, setVenueFees] = useState<number>(0);
   const [foodBudget, setFoodBudget] = useState<number>(0);
   const [itineraryBlocks, setItineraryBlocks] = useState<ItineraryBlock[]>([]);
+  const [locationImages, setLocationImages] = useState<string[]>([]);
+  const [uploadingLocationImage, setUploadingLocationImage] = useState(false);
+  
+  // Auto-save state
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [autoSaveDraftId, setAutoSaveDraftId] = useState<number | null>(null);
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasUnsavedChangesRef = useRef(false);
 
   // Only show this page to instructors
   if (role !== 'instructor') {
@@ -298,6 +307,184 @@ const InstructorDashboard = () => {
     }
   }, [dateRange]);
 
+  // Auto-save function - saves as draft
+  const autoSaveDraft = useCallback(async () => {
+    if (!user || editingId === null) return;
+    
+    // Don't auto-save if form is empty (no title)
+    if (!formData.title.trim()) return;
+
+    setAutoSaving(true);
+    hasUnsavedChangesRef.current = false;
+
+    try {
+      // Convert itinerary blocks to schedule format for backward compatibility
+      const scheduleData = itineraryBlocks.length > 0
+        ? convertItineraryToSchedule(itineraryBlocks)
+        : [];
+
+      const retreatData = {
+        title: formData.title,
+        description: formData.description || "",
+        location: formData.location,
+        date: formData.date,
+        duration: formData.duration,
+        level: formData.level,
+        price: formData.price || 0,
+        total_spots: formData.totalSpots || 0,
+        spots_available: formData.totalSpots || 0,
+        image: formData.image || "",
+        includes: formData.includes || [],
+        schedule: scheduleData,
+        itinerary_blocks: itineraryBlocks.length > 0 ? itineraryBlocks : null,
+        venue_fees: venueFees || 0,
+        food_budget: foodBudget || 0,
+        location_images: locationImages.length > 0 ? locationImages : null,
+        published: false, // Always save as draft in auto-save
+        instructor_id: user.id,
+      };
+
+      if (editingId === 'new') {
+        // Create new draft if it doesn't exist yet
+        if (autoSaveDraftId === null) {
+          const { data, error } = await supabase
+            .from('retreats')
+            .insert([retreatData])
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Error auto-saving draft:', error);
+            return;
+          }
+          
+          setAutoSaveDraftId(data.id);
+          setEditingId(data.id); // Update editingId to the new draft ID
+          setAllRetreats(prev => [data, ...prev]);
+        } else {
+          // Update existing draft
+          const { error } = await supabase
+            .from('retreats')
+            .update({
+              ...retreatData,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', autoSaveDraftId)
+            .eq('instructor_id', user.id);
+
+          if (error) {
+            console.error('Error auto-saving draft:', error);
+            return;
+          }
+
+          setAllRetreats(prev => prev.map(r => 
+            r.id === autoSaveDraftId ? { ...r, ...retreatData } : r
+          ));
+        }
+      } else if (typeof editingId === 'number') {
+        // Update existing retreat as draft
+        const { spots_available, ...updateData } = retreatData;
+        const { error } = await supabase
+          .from('retreats')
+          .update({
+            ...updateData,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editingId)
+          .eq('instructor_id', user.id);
+
+        if (error) {
+          console.error('Error auto-saving draft:', error);
+          return;
+        }
+
+        setAllRetreats(prev => prev.map(r => 
+          r.id === editingId ? { ...r, ...updateData, spots_available: r.spots_available } : r
+        ));
+      }
+
+      setLastSaved(new Date());
+    } catch (error) {
+      console.error('Unexpected error in auto-save:', error);
+    } finally {
+      setAutoSaving(false);
+    }
+  }, [
+    user,
+    editingId,
+    formData.title,
+    formData.description,
+    formData.location,
+    formData.date,
+    formData.duration,
+    formData.level,
+    formData.price,
+    formData.totalSpots,
+    formData.image,
+    formData.includes,
+    itineraryBlocks,
+    venueFees,
+    foodBudget,
+    locationImages,
+    autoSaveDraftId
+  ]);
+
+  // Auto-save effect - debounced save when form data changes
+  useEffect(() => {
+    // Only auto-save when editing
+    if (editingId === null) return;
+    
+    // Mark that there are unsaved changes
+    hasUnsavedChangesRef.current = true;
+
+    // Clear existing timer
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    // Set new timer - auto-save after 2 seconds of inactivity
+    autoSaveTimerRef.current = setTimeout(() => {
+      if (hasUnsavedChangesRef.current) {
+        autoSaveDraft();
+      }
+    }, 2000);
+
+    // Cleanup timer on unmount or when editingId changes
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [
+    formData.title,
+    formData.description,
+    formData.location,
+    formData.date,
+    formData.duration,
+    formData.level,
+    formData.price,
+    formData.totalSpots,
+    formData.image,
+    formData.includes,
+    venueFees,
+    foodBudget,
+    itineraryBlocks,
+    locationImages,
+    editingId,
+    autoSaveDraft
+  ]);
+
+  // Cleanup auto-save timer when canceling or closing edit
+  useEffect(() => {
+    if (editingId === null) {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+      setAutoSaveDraftId(null);
+      hasUnsavedChangesRef.current = false;
+    }
+  }, [editingId]);
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -387,6 +574,8 @@ const InstructorDashboard = () => {
       setDateRange(parseDateString(retreat.date));
       setImagePreview("");
       setEditingId(retreat.id);
+      setAutoSaveDraftId(null); // Reset auto-save draft ID when editing existing
+      setLastSaved(null);
       // Load venue fees and food budget
       if ((retreat as any).venue_fees !== null && (retreat as any).venue_fees !== undefined) {
         setVenueFees(Number((retreat as any).venue_fees));
@@ -397,6 +586,12 @@ const InstructorDashboard = () => {
         setFoodBudget(Number((retreat as any).food_budget));
       } else {
         setFoodBudget(0);
+      }
+      // Load location images
+      if ((retreat as any).location_images && Array.isArray((retreat as any).location_images)) {
+        setLocationImages((retreat as any).location_images);
+      } else {
+        setLocationImages([]);
       }
       // Convert schedule to itinerary blocks if schedule exists
       if (retreat.schedule && Array.isArray(retreat.schedule) && retreat.schedule.length > 0) {
@@ -434,10 +629,21 @@ const InstructorDashboard = () => {
       setScheduleDay("");
       setScheduleActivities("");
       setEditingId('new');
+      setAutoSaveDraftId(null);
+      setLastSaved(null);
+      setVenueFees(0);
+      setFoodBudget(0);
+      setItineraryBlocks([]);
+      setLocationImages([]);
     }
   };
 
   const cancelEditing = () => {
+    // Clear auto-save timer
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    
     setEditingId(null);
     setFormData({
       title: "",
@@ -461,6 +667,10 @@ const InstructorDashboard = () => {
     setItineraryBlocks([]);
     setVenueFees(0);
     setFoodBudget(0);
+    setLocationImages([]);
+    setAutoSaveDraftId(null);
+    setLastSaved(null);
+    hasUnsavedChangesRef.current = false;
   };
 
   const addIncludeItem = () => {
@@ -498,6 +708,86 @@ const InstructorDashboard = () => {
     }));
   };
 
+  const handleLocationImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Image size must be less than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingLocationImage(true);
+
+    try {
+      // Create a unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/locations/${Date.now()}.${fileExt}`;
+      const filePath = fileName;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('retreat-location-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error uploading location image:', uploadError);
+        toast({
+          title: "Error",
+          description: uploadError.message || "Failed to upload image",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('retreat-location-images')
+        .getPublicUrl(filePath);
+
+      // Add to location images array
+      setLocationImages(prev => [...prev, publicUrl]);
+
+      toast({
+        title: "Success",
+        description: "Location image uploaded successfully",
+      });
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while uploading image",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingLocationImage(false);
+      // Reset file input
+      e.target.value = '';
+    }
+  };
+
+  const removeLocationImage = (index: number) => {
+    setLocationImages(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSave = async (published?: boolean) => {
     if (!user) return;
 
@@ -525,49 +815,104 @@ const InstructorDashboard = () => {
         itinerary_blocks: itineraryBlocks.length > 0 ? itineraryBlocks : null,
         venue_fees: venueFees || 0,
         food_budget: foodBudget || 0,
+        location_images: locationImages.length > 0 ? locationImages : null,
         published: published !== undefined ? published : (formData.published || false),
         instructor_id: user.id,
       };
 
       if (editingId === 'new') {
-        const { data, error } = await supabase
-          .from('retreats')
-          .insert([retreatData])
-          .select()
-          .single();
+        // If auto-save created a draft, update it instead of creating new
+        const draftIdToUse = autoSaveDraftId || editingId;
+        
+        if (autoSaveDraftId) {
+          // Update existing auto-saved draft
+          const { spots_available, ...updateData } = retreatData;
+          const { error } = await supabase
+            .from('retreats')
+            .update({
+              ...updateData,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', autoSaveDraftId)
+            .eq('instructor_id', user.id);
 
-        if (error) {
-          console.error('Error creating retreat:', error);
-          toast({
-            title: "Error",
-            description: error.message || "Failed to create retreat",
-            variant: "destructive",
-          });
-        } else {
-          // Send email notifications if retreat is published
-          if (data.published) {
-            // Call email notification in background (don't wait for it)
-            notifyStudentsAboutNewRetreat({
-              id: data.id,
-              title: data.title,
-              description: data.description || "",
-              image: data.image || "",
-              date: data.date,
-              location: data.location,
-              price: Number(data.price) || 0,
-              instructor_id: data.instructor_id,
-            }).catch((err) => {
-              console.error('Failed to send email notifications:', err);
-              // Don't show error to user - email sending is non-critical
+          if (error) {
+            console.error('Error updating retreat:', error);
+            toast({
+              title: "Error",
+              description: error.message || "Failed to update retreat",
+              variant: "destructive",
             });
+          } else {
+            // Send email notifications if retreat is published
+            if (retreatData.published) {
+              const updatedRetreat = allRetreats.find(r => r.id === autoSaveDraftId);
+              if (updatedRetreat) {
+                notifyStudentsAboutNewRetreat({
+                  id: updatedRetreat.id,
+                  title: updatedRetreat.title,
+                  description: updatedRetreat.description || "",
+                  image: updatedRetreat.image || "",
+                  date: updatedRetreat.date,
+                  location: updatedRetreat.location,
+                  price: Number(updatedRetreat.price) || 0,
+                  instructor_id: updatedRetreat.instructor_id,
+                }).catch((err) => {
+                  console.error('Failed to send email notifications:', err);
+                });
+              }
+            }
+            
+            toast({
+              title: "Success",
+              description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
+            });
+            setAllRetreats(prev => prev.map(r => 
+              r.id === autoSaveDraftId ? { ...r, ...updateData, spots_available: r.spots_available } : r
+            ));
+            cancelEditing();
           }
-          
-          toast({
-            title: "Success",
-            description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
-          });
-          setAllRetreats(prev => [data, ...prev]);
-          cancelEditing();
+        } else {
+          // Create new retreat
+          const { data, error } = await supabase
+            .from('retreats')
+            .insert([retreatData])
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Error creating retreat:', error);
+            toast({
+              title: "Error",
+              description: error.message || "Failed to create retreat",
+              variant: "destructive",
+            });
+          } else {
+            // Send email notifications if retreat is published
+            if (data.published) {
+              // Call email notification in background (don't wait for it)
+              notifyStudentsAboutNewRetreat({
+                id: data.id,
+                title: data.title,
+                description: data.description || "",
+                image: data.image || "",
+                date: data.date,
+                location: data.location,
+                price: Number(data.price) || 0,
+                instructor_id: data.instructor_id,
+              }).catch((err) => {
+                console.error('Failed to send email notifications:', err);
+                // Don't show error to user - email sending is non-critical
+              });
+            }
+            
+            toast({
+              title: "Success",
+              description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
+            });
+            setAllRetreats(prev => [data, ...prev]);
+            cancelEditing();
+          }
         }
       } else if (typeof editingId === 'number') {
         const { spots_available, ...updateData } = retreatData;
@@ -744,9 +1089,31 @@ const InstructorDashboard = () => {
       <Card className="overflow-hidden">
         <CardContent className="p-6 space-y-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-card-foreground">
-              {isNew ? "Create New Retreat" : "Edit Retreat"}
-            </h2>
+            <div className="flex-1">
+              <h2 className="text-xl font-semibold text-card-foreground">
+                {isNew ? "Create New Retreat" : "Edit Retreat"}
+              </h2>
+              {/* Auto-save indicator */}
+              {editingId !== null && (
+                <div className="flex items-center gap-2 mt-1">
+                  {autoSaving ? (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                      Saving draft...
+                    </span>
+                  ) : lastSaved ? (
+                    <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Draft saved {format(lastSaved, "h:mm a")}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      Changes will be saved automatically
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             <Button variant="ghost" size="sm" onClick={cancelEditing}>
               <X className="w-4 h-4" />
             </Button>
@@ -853,6 +1220,62 @@ const InstructorDashboard = () => {
                   >
                     <ExternalLink className="w-5 h-5" />
                   </a>
+                )}
+              </div>
+              
+              {/* Location Images Upload */}
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-foreground">Location Photos</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLocationImageUpload}
+                    disabled={uploadingLocationImage}
+                    className="hidden"
+                    id="location-image-upload-dashboard"
+                  />
+                  <label htmlFor="location-image-upload-dashboard">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={uploadingLocationImage}
+                      className="w-full sm:w-auto"
+                      asChild
+                    >
+                      <span>
+                        <Upload className="w-4 h-4 mr-2" />
+                        {uploadingLocationImage ? "Uploading..." : "Upload Photo"}
+                      </span>
+                    </Button>
+                  </label>
+                </div>
+                
+                {/* Horizontal Scrolling Image Gallery */}
+                {locationImages.length > 0 && (
+                  <div className="overflow-x-auto pb-2 -mx-2 px-2">
+                    <div className="flex gap-3 min-w-max">
+                      {locationImages.map((imageUrl, index) => (
+                        <div key={index} className="relative flex-shrink-0 group">
+                          <img
+                            src={imageUrl}
+                            alt={`Location ${index + 1}`}
+                            className="w-32 h-32 sm:w-40 sm:h-40 object-cover rounded-lg border"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => removeLocationImage(index)}
+                            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

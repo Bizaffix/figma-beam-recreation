@@ -48,6 +48,20 @@ BEGIN
   END IF;
 END $$;
 
+-- Add location_images field for location photo gallery
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'retreats' AND column_name = 'location_images'
+  ) THEN
+    ALTER TABLE retreats ADD COLUMN location_images TEXT[];
+    RAISE NOTICE 'Added location_images column';
+  ELSE
+    RAISE NOTICE 'location_images column already exists';
+  END IF;
+END $$;
+
 -- ============================================
 -- VERIFY THE NEW FIELDS
 -- ============================================
@@ -60,7 +74,7 @@ SELECT
   column_default
 FROM information_schema.columns 
 WHERE table_name = 'retreats' 
-  AND column_name IN ('venue_fees', 'food_budget', 'itinerary_blocks')
+  AND column_name IN ('venue_fees', 'food_budget', 'itinerary_blocks', 'location_images')
 ORDER BY column_name;
 
 -- ============================================
@@ -76,6 +90,7 @@ ORDER BY column_name;
 --    - Pattern file URLs and names
 --    - Project image URLs and names
 --    - Supply lists
+-- 4. location_images (TEXT[], nullable) - Array of location photo URLs for horizontal scrolling gallery
 --
 -- The schedule field (existing JSONB) will continue to work for backward compatibility
 -- with the simple schedule format. The itinerary_blocks field stores the enhanced

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon } from "lucide-react";
+import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -127,6 +127,8 @@ const InstructorRetreatForm = () => {
   const [venueFees, setVenueFees] = useState<number>(0);
   const [foodBudget, setFoodBudget] = useState<number>(0);
   const [itineraryBlocks, setItineraryBlocks] = useState<ItineraryBlock[]>([]);
+  const [locationImages, setLocationImages] = useState<string[]>([]);
+  const [uploadingLocationImage, setUploadingLocationImage] = useState(false);
 
   // Fetch retreat data from Supabase when editing
   useEffect(() => {
@@ -181,6 +183,10 @@ const InstructorRetreatForm = () => {
           }
           if (data.food_budget !== null && data.food_budget !== undefined) {
             setFoodBudget(Number(data.food_budget));
+          }
+          // Load location images
+          if (data.location_images && Array.isArray(data.location_images)) {
+            setLocationImages(data.location_images);
           }
           // Convert schedule to itinerary blocks if schedule exists
           if (data.schedule && Array.isArray(data.schedule) && data.schedule.length > 0) {
@@ -303,6 +309,86 @@ const InstructorRetreatForm = () => {
     }
   };
 
+  const handleLocationImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Image size must be less than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingLocationImage(true);
+
+    try {
+      // Create a unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/locations/${Date.now()}.${fileExt}`;
+      const filePath = fileName;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('retreat-location-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error uploading location image:', uploadError);
+        toast({
+          title: "Error",
+          description: uploadError.message || "Failed to upload image",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('retreat-location-images')
+        .getPublicUrl(filePath);
+
+      // Add to location images array
+      setLocationImages(prev => [...prev, publicUrl]);
+
+      toast({
+        title: "Success",
+        description: "Location image uploaded successfully",
+      });
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while uploading image",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingLocationImage(false);
+      // Reset file input
+      e.target.value = '';
+    }
+  };
+
+  const removeLocationImage = (index: number) => {
+    setLocationImages(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -340,6 +426,7 @@ const InstructorRetreatForm = () => {
         itinerary_blocks: itineraryBlocks.length > 0 ? itineraryBlocks : null,
         venue_fees: venueFees || 0,
         food_budget: foodBudget || 0,
+        location_images: locationImages.length > 0 ? locationImages : null,
         published: formData.published || false,
         instructor_id: user.id,
       };
@@ -746,6 +833,62 @@ const InstructorRetreatForm = () => {
                   </a>
                 </div>
               )}
+              
+              {/* Location Images Upload */}
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-foreground">Location Photos</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLocationImageUpload}
+                    disabled={uploadingLocationImage}
+                    className="hidden"
+                    id="location-image-upload"
+                  />
+                  <label htmlFor="location-image-upload">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={uploadingLocationImage}
+                      className="w-full sm:w-auto"
+                      asChild
+                    >
+                      <span>
+                        <Upload className="w-4 h-4 mr-2" />
+                        {uploadingLocationImage ? "Uploading..." : "Upload Photo"}
+                      </span>
+                    </Button>
+                  </label>
+                </div>
+                
+                {/* Horizontal Scrolling Image Gallery */}
+                {locationImages.length > 0 && (
+                  <div className="overflow-x-auto pb-2 -mx-2 px-2">
+                    <div className="flex gap-3 min-w-max">
+                      {locationImages.map((imageUrl, index) => (
+                        <div key={index} className="relative flex-shrink-0 group">
+                          <img
+                            src={imageUrl}
+                            alt={`Location ${index + 1}`}
+                            className="w-32 h-32 sm:w-40 sm:h-40 object-cover rounded-lg border"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => removeLocationImage(index)}
+                            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

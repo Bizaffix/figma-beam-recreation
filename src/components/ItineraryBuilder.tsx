@@ -96,7 +96,7 @@ function SortableBlock({ block, onUpdate, onDelete, user }: { block: ItineraryBl
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/patterns/${Date.now()}.${fileExt}`;
-      const filePath = `retreat-patterns/${fileName}`;
+      const filePath = fileName;
 
       const { error: uploadError } = await supabase.storage
         .from('retreat-patterns')
@@ -147,7 +147,7 @@ function SortableBlock({ block, onUpdate, onDelete, user }: { block: ItineraryBl
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/project-images/${Date.now()}.${fileExt}`;
-      const filePath = `retreat-project-images/${fileName}`;
+      const filePath = fileName;
 
       const { error: uploadError } = await supabase.storage
         .from('retreat-project-images')
@@ -411,7 +411,7 @@ export function ItineraryBuilder({ blocks, onChange, user }: ItineraryBuilderPro
         <div className="flex-1 min-w-0">
           <h3 className="text-base sm:text-lg font-semibold">Itinerary Builder</h3>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Drag and drop blocks to organize your retreat schedule
+          Click on a Plan Feature to Add it to Your Itinerary - then Edit from there
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
@@ -436,7 +436,7 @@ export function ItineraryBuilder({ blocks, onChange, user }: ItineraryBuilderPro
           className="text-xs sm:text-sm flex-1 sm:flex-initial min-w-[calc(50%-0.375rem)] sm:min-w-0"
         >
           <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
-          <span className="hidden sm:inline">Add </span>Class
+          Class
         </Button>
         <Button 
           type="button" 
@@ -446,7 +446,7 @@ export function ItineraryBuilder({ blocks, onChange, user }: ItineraryBuilderPro
           className="text-xs sm:text-sm flex-1 sm:flex-initial min-w-[calc(50%-0.375rem)] sm:min-w-0"
         >
           <Scissors className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
-          <span className="hidden sm:inline">Add </span>Open Sew
+          Open Sew
         </Button>
         <Button 
           type="button" 
@@ -456,7 +456,7 @@ export function ItineraryBuilder({ blocks, onChange, user }: ItineraryBuilderPro
           className="text-xs sm:text-sm flex-1 sm:flex-initial min-w-[calc(50%-0.375rem)] sm:min-w-0"
         >
           <UtensilsCrossed className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
-          <span className="hidden sm:inline">Add </span>Meal
+          Meal
         </Button>
         <Button 
           type="button" 
@@ -466,7 +466,7 @@ export function ItineraryBuilder({ blocks, onChange, user }: ItineraryBuilderPro
           className="text-xs sm:text-sm flex-1 sm:flex-initial min-w-[calc(50%-0.375rem)] sm:min-w-0"
         >
           <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
-          <span className="hidden sm:inline">Add </span>Field Trip
+          Field Trip
         </Button>
         <Button 
           type="button" 
@@ -476,7 +476,7 @@ export function ItineraryBuilder({ blocks, onChange, user }: ItineraryBuilderPro
           className="text-xs sm:text-sm flex-1 sm:flex-initial min-w-[calc(50%-0.375rem)] sm:min-w-0"
         >
           <Coffee className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
-          <span className="hidden sm:inline">Add </span>Rest
+          Rest
         </Button>
       </div>
 
