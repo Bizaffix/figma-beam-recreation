@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { BottomNav } from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,6 +138,7 @@ const isRetreatCompleted = (dateStr: string): boolean => {
 };
 
 const InstructorDashboard = () => {
+  const navigate = useNavigate();
   const { role, user } = useAuth();
   const { toast } = useToast();
   const [allRetreats, setAllRetreats] = useState<Retreat[]>([]);
@@ -1669,26 +1671,10 @@ const InstructorDashboard = () => {
           </div>
         ) : (
           <>
-            {/* Create New Button - only show if not editing */}
-            {editingId === null && (
-              <div className="border-4 border-primary/30 bg-primary/5 rounded-lg p-1 shadow-lg">
-                <Button 
-                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white shadow-md"
-                  onClick={() => startEditing()}
-                >
-                  <Plus className="w-6 h-6 mr-2" />
-                  Create New Retreat
-                </Button>
-              </div>
-            )}
+            {/* Note: Form creation moved to /instructor/retreats/new - use the + button in bottom nav */}
 
-            {/* Editable Card */}
-            {editingId !== null && renderEditableCard()}
-
-            {/* Existing Retreats */}
+            {/* All Retreats (Published and Drafts) */}
             {allRetreats.map((retreat) => {
-              // Skip if this retreat is being edited
-              if (editingId === retreat.id) return null;
 
               return (
                 <Card key={retreat.id} className="overflow-hidden">
@@ -1731,7 +1717,7 @@ const InstructorDashboard = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => startEditing(retreat)}
+                        onClick={() => navigate(`/instructor/retreats/${retreat.id}/edit`)}
                         className="flex-1"
                       >
                         <Edit className="w-4 h-4 mr-2" />

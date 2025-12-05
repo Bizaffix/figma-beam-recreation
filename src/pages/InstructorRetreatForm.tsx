@@ -1,23 +1,62 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { BottomNav } from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X } from "lucide-react";
+import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2 } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
-import { Retreat } from "@/data/retreats";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
 import { ItineraryBuilder, ItineraryBlock } from "@/components/ItineraryBuilder";
+
+interface Retreat {
+  id: number;
+  title: string;
+  description: string;
+  location: string;
+  date: string;
+  duration: string;
+  level: "Beginner" | "Intermediate" | "Advanced";
+  price: number;
+  total_spots: number;
+  spots_available: number;
+  image: string;
+  includes: string[];
+  schedule: { day: string; activities: string }[];
+  published: boolean;
+  instructor_id: string;
+  venue_fees?: number | null;
+  food_budget?: number | null;
+  itinerary_blocks?: ItineraryBlock[] | null;
+  location_images?: string[] | null;
+}
+
+interface FormData {
+  title: string;
+  level: "Beginner" | "Intermediate" | "Advanced";
+  location: string;
+  date: string;
+  duration: string;
+  totalSpots: number;
+  price: number;
+  description: string;
+  image: string;
+  includes: string[];
+  schedule: { day: string; activities: string }[];
+  published: boolean;
+}
 
 // Helper function to parse date string like "Nov 5-8, 2025" to date range
 const parseDateString = (dateStr: string): DateRange | undefined => {
@@ -60,11 +99,9 @@ const formatDateRange = (range: DateRange | undefined): string => {
   const toDay = format(range.to, "d");
   const year = format(range.from, "yyyy");
   
-  // If same month, format as "Nov 5-8, 2025"
   if (format(range.from, "MMM yyyy") === format(range.to, "MMM yyyy")) {
     return `${fromMonth} ${fromDay}-${toDay}, ${year}`;
   }
-  // If different months, format as "Nov 5 - Dec 8, 2025"
   const toMonth = format(range.to, "MMM");
   return `${fromMonth} ${fromDay} - ${toMonth} ${toDay}, ${year}`;
 };
@@ -93,15 +130,22 @@ const InstructorRetreatForm = () => {
   const { id } = useParams();
   const { role, user } = useAuth();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const isEdit = !!id;
+  
+  const [draftRetreats, setDraftRetreats] = useState<Retreat[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<number | 'new' | null>(id ? Number(id) : 'new');
+  const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Auto-save state
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [autoSaveDraftId, setAutoSaveDraftId] = useState<number | null>(null);
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasUnsavedChangesRef = useRef(false);
 
-  // Only show this page to instructors
-  if (role !== 'instructor') {
-    return null;
-  }
-
-  const [formData, setFormData] = useState<Partial<Retreat>>({
+  const [formData, setFormData] = useState<FormData>({
     title: "",
     level: "Beginner",
     location: "https://maps.app.goo.gl/GNhCfeCM7CHMpHW5A",
@@ -117,30 +161,57 @@ const InstructorRetreatForm = () => {
   });
 
   const [includeItem, setIncludeItem] = useState("");
-  const [scheduleDay, setScheduleDay] = useState("");
-  const [scheduleActivities, setScheduleActivities] = useState("");
-  const [fetching, setFetching] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string>("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [imagePreview, setImagePreview] = useState<string>("");
   const [venueFees, setVenueFees] = useState<number>(0);
   const [foodBudget, setFoodBudget] = useState<number>(0);
   const [itineraryBlocks, setItineraryBlocks] = useState<ItineraryBlock[]>([]);
   const [locationImages, setLocationImages] = useState<string[]>([]);
   const [uploadingLocationImage, setUploadingLocationImage] = useState(false);
 
-  // Fetch retreat data from Supabase when editing
-  useEffect(() => {
-    const fetchRetreat = async () => {
-      if (!isEdit || !id || !user) return;
+  // Only show this page to instructors
+  if (role !== 'instructor') {
+    return null;
+  }
 
-      setFetching(true);
+  // Fetch draft retreats
+  useEffect(() => {
+    const fetchDrafts = async () => {
+      if (!user) return;
+
       try {
         const { data, error } = await supabase
           .from('retreats')
           .select('*')
-          .eq('id', Number(id))
+          .eq('instructor_id', user.id)
+          .eq('published', false)
+          .order('updated_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching drafts:', error);
+        } else {
+          setDraftRetreats(data || []);
+        }
+      } catch (error) {
+        console.error('Unexpected error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDrafts();
+  }, [user]);
+
+  // Fetch retreat data when editing
+  useEffect(() => {
+    const fetchRetreat = async () => {
+      if (!editingId || editingId === 'new' || !user) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('retreats')
+          .select('*')
+          .eq('id', Number(editingId))
           .eq('instructor_id', user.id)
           .single();
 
@@ -151,9 +222,8 @@ const InstructorRetreatForm = () => {
             description: "Failed to load retreat data",
             variant: "destructive",
           });
-          navigate("/instructor/dashboard");
+          setEditingId(null);
         } else if (data) {
-          // Transform database format to form format
           setFormData({
             title: data.title,
             level: data.level,
@@ -168,33 +238,21 @@ const InstructorRetreatForm = () => {
             schedule: data.schedule || [],
             published: data.published || false,
           });
-          // Set image preview if image exists
-          if (data.image) {
-            setImagePreview(data.image);
-          }
-          // Parse and set date range if date exists
-          if (data.date) {
-            const parsed = parseDateString(data.date);
-            setDateRange(parsed);
-          }
-          // Load venue fees and food budget
+          if (data.image) setImagePreview(data.image);
+          if (data.date) setDateRange(parseDateString(data.date));
           if (data.venue_fees !== null && data.venue_fees !== undefined) {
             setVenueFees(Number(data.venue_fees));
           }
           if (data.food_budget !== null && data.food_budget !== undefined) {
             setFoodBudget(Number(data.food_budget));
           }
-          // Load location images
           if (data.location_images && Array.isArray(data.location_images)) {
             setLocationImages(data.location_images);
           }
-          // Convert schedule to itinerary blocks if schedule exists
           if (data.schedule && Array.isArray(data.schedule) && data.schedule.length > 0) {
-            // Check if schedule is in new format (has itinerary_blocks) or old format
             if (data.itinerary_blocks && Array.isArray(data.itinerary_blocks)) {
               setItineraryBlocks(data.itinerary_blocks);
             } else {
-              // Convert old format to new format
               const converted = convertScheduleToItinerary(data.schedule);
               if (converted.length > 0) {
                 setItineraryBlocks(converted);
@@ -204,18 +262,11 @@ const InstructorRetreatForm = () => {
         }
       } catch (error) {
         console.error('Unexpected error:', error);
-        toast({
-          title: "Error",
-          description: "An unexpected error occurred",
-          variant: "destructive",
-        });
-      } finally {
-        setFetching(false);
       }
     };
 
     fetchRetreat();
-  }, [isEdit, id, user, navigate, toast]);
+  }, [editingId, user, toast]);
 
   // Update formData.date and calculate duration when dateRange changes
   useEffect(() => {
@@ -224,19 +275,306 @@ const InstructorRetreatForm = () => {
       setFormData(prev => ({ ...prev, date: formatted }));
     }
     
-    // Calculate duration in days
     if (dateRange?.from && dateRange?.to) {
       const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       setFormData(prev => ({ ...prev, duration: `${diffDays} days` }));
     }
   }, [dateRange]);
+
+  // Auto-save function - saves as draft
+  const autoSaveDraft = useCallback(async () => {
+    if (!user || editingId === null) return;
+    
+    if (!formData.title.trim()) return;
+
+    setAutoSaving(true);
+    hasUnsavedChangesRef.current = false;
+
+    try {
+      const scheduleData = itineraryBlocks.length > 0
+        ? convertItineraryToSchedule(itineraryBlocks)
+        : [];
+
+      const retreatData = {
+        title: formData.title,
+        description: formData.description || "",
+        location: formData.location,
+        date: formData.date,
+        duration: formData.duration,
+        level: formData.level,
+        price: formData.price || 0,
+        total_spots: formData.totalSpots || 0,
+        spots_available: formData.totalSpots || 0,
+        image: formData.image || "",
+        includes: formData.includes || [],
+        schedule: scheduleData,
+        itinerary_blocks: itineraryBlocks.length > 0 ? itineraryBlocks : null,
+        venue_fees: venueFees || 0,
+        food_budget: foodBudget || 0,
+        location_images: locationImages.length > 0 ? locationImages : null,
+        published: false,
+        instructor_id: user.id,
+      };
+
+      if (editingId === 'new') {
+        if (autoSaveDraftId === null) {
+          const { data, error } = await supabase
+            .from('retreats')
+            .insert([retreatData])
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Error auto-saving draft:', error);
+            return;
+          }
+          
+          setAutoSaveDraftId(data.id);
+          setEditingId(data.id);
+          setDraftRetreats(prev => [data, ...prev]);
+        } else {
+          const { error } = await supabase
+            .from('retreats')
+            .update({
+              ...retreatData,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', autoSaveDraftId)
+            .eq('instructor_id', user.id);
+
+          if (error) {
+            console.error('Error auto-saving draft:', error);
+            return;
+          }
+
+          setDraftRetreats(prev => prev.map(r => 
+            r.id === autoSaveDraftId ? { ...r, ...retreatData } : r
+          ));
+        }
+      } else if (typeof editingId === 'number') {
+        const { spots_available, ...updateData } = retreatData;
+        const { error } = await supabase
+          .from('retreats')
+          .update({
+            ...updateData,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editingId)
+          .eq('instructor_id', user.id);
+
+        if (error) {
+          console.error('Error auto-saving draft:', error);
+          return;
+        }
+
+        setDraftRetreats(prev => prev.map(r => 
+          r.id === editingId ? { ...r, ...updateData, spots_available: r.spots_available } : r
+        ));
+      }
+
+      setLastSaved(new Date());
+    } catch (error) {
+      console.error('Unexpected error in auto-save:', error);
+    } finally {
+      setAutoSaving(false);
+    }
+  }, [
+    user,
+    editingId,
+    formData.title,
+    formData.description,
+    formData.location,
+    formData.date,
+    formData.duration,
+    formData.level,
+    formData.price,
+    formData.totalSpots,
+    formData.image,
+    formData.includes,
+    itineraryBlocks,
+    venueFees,
+    foodBudget,
+    locationImages,
+    autoSaveDraftId
+  ]);
+
+  // Auto-save effect - debounced save when form data changes
+  useEffect(() => {
+    if (editingId === null) return;
+    
+    hasUnsavedChangesRef.current = true;
+
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      if (hasUnsavedChangesRef.current) {
+        autoSaveDraft();
+      }
+    }, 2000);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [
+    formData.title,
+    formData.description,
+    formData.location,
+    formData.date,
+    formData.duration,
+    formData.level,
+    formData.price,
+    formData.totalSpots,
+    formData.image,
+    formData.includes,
+    venueFees,
+    foodBudget,
+    itineraryBlocks,
+    locationImages,
+    editingId,
+    autoSaveDraft
+  ]);
+
+  // Cleanup auto-save timer when canceling or closing edit
+  useEffect(() => {
+    if (editingId === null) {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+      setAutoSaveDraftId(null);
+      hasUnsavedChangesRef.current = false;
+    }
+  }, [editingId]);
+
+  const startEditing = (retreat?: Retreat) => {
+    if (retreat) {
+      setFormData({
+        title: retreat.title,
+        level: retreat.level,
+        location: retreat.location,
+        date: retreat.date,
+        duration: retreat.duration,
+        totalSpots: retreat.total_spots,
+        price: retreat.price,
+        description: retreat.description,
+        image: retreat.image,
+        includes: retreat.includes || [],
+        schedule: retreat.schedule || [],
+        published: retreat.published || false,
+      });
+      setDateRange(parseDateString(retreat.date));
+      setImagePreview("");
+      setEditingId(retreat.id);
+      setAutoSaveDraftId(null);
+      setLastSaved(null);
+      if (retreat.venue_fees !== null && retreat.venue_fees !== undefined) {
+        setVenueFees(Number(retreat.venue_fees));
+      } else {
+        setVenueFees(0);
+      }
+      if (retreat.food_budget !== null && retreat.food_budget !== undefined) {
+        setFoodBudget(Number(retreat.food_budget));
+      } else {
+        setFoodBudget(0);
+      }
+      if (retreat.location_images && Array.isArray(retreat.location_images)) {
+        setLocationImages(retreat.location_images);
+      } else {
+        setLocationImages([]);
+      }
+      if (retreat.schedule && Array.isArray(retreat.schedule) && retreat.schedule.length > 0) {
+        if (retreat.itinerary_blocks && Array.isArray(retreat.itinerary_blocks)) {
+          setItineraryBlocks(retreat.itinerary_blocks);
+        } else {
+          const converted = convertScheduleToItinerary(retreat.schedule);
+          if (converted.length > 0) {
+            setItineraryBlocks(converted);
+          }
+        }
+      } else {
+        setItineraryBlocks([]);
+      }
+    } else {
+      setFormData({
+        title: "",
+        level: "Beginner",
+        location: "https://maps.app.goo.gl/GNhCfeCM7CHMpHW5A",
+        date: "",
+        duration: "",
+        totalSpots: 0,
+        price: 0,
+        description: "",
+        image: "",
+        includes: [],
+        schedule: [],
+        published: false,
+      });
+      setDateRange(undefined);
+      setImagePreview("");
+      setIncludeItem("");
+      setEditingId('new');
+      setAutoSaveDraftId(null);
+      setLastSaved(null);
+      setVenueFees(0);
+      setFoodBudget(0);
+      setItineraryBlocks([]);
+      setLocationImages([]);
+    }
+  };
+
+  const cancelEditing = () => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    
+    setEditingId(null);
+    setFormData({
+      title: "",
+      level: "Beginner",
+      location: "https://maps.app.goo.gl/GNhCfeCM7CHMpHW5A",
+      date: "",
+      duration: "",
+      totalSpots: 0,
+      price: 0,
+      description: "",
+      image: "",
+      includes: [],
+      schedule: [],
+      published: false,
+    });
+    setDateRange(undefined);
+    setImagePreview("");
+    setIncludeItem("");
+    setItineraryBlocks([]);
+    setVenueFees(0);
+    setFoodBudget(0);
+    setLocationImages([]);
+    setAutoSaveDraftId(null);
+    setLastSaved(null);
+    hasUnsavedChangesRef.current = false;
+    
+    // Refresh drafts list
+    if (user) {
+      supabase
+        .from('retreats')
+        .select('*')
+        .eq('instructor_id', user.id)
+        .eq('published', false)
+        .order('updated_at', { ascending: false })
+        .then(({ data }) => {
+          if (data) setDraftRetreats(data);
+        });
+    }
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast({
         title: "Error",
@@ -246,7 +584,6 @@ const InstructorRetreatForm = () => {
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast({
         title: "Error",
@@ -259,12 +596,10 @@ const InstructorRetreatForm = () => {
     setUploadingImage(true);
 
     try {
-      // Create a unique filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
       const filePath = `retreats/${fileName}`;
 
-      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('retreat-images')
         .upload(filePath, file, {
@@ -282,12 +617,10 @@ const InstructorRetreatForm = () => {
         return;
       }
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('retreat-images')
         .getPublicUrl(filePath);
 
-      // Update form data with the image URL
       setFormData(prev => ({ ...prev, image: publicUrl }));
       setImagePreview(publicUrl);
 
@@ -304,7 +637,6 @@ const InstructorRetreatForm = () => {
       });
     } finally {
       setUploadingImage(false);
-      // Reset file input
       e.target.value = '';
     }
   };
@@ -313,7 +645,6 @@ const InstructorRetreatForm = () => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast({
         title: "Error",
@@ -323,7 +654,6 @@ const InstructorRetreatForm = () => {
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast({
         title: "Error",
@@ -336,12 +666,10 @@ const InstructorRetreatForm = () => {
     setUploadingLocationImage(true);
 
     try {
-      // Create a unique filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/locations/${Date.now()}.${fileExt}`;
       const filePath = fileName;
 
-      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('retreat-location-images')
         .upload(filePath, file, {
@@ -359,12 +687,10 @@ const InstructorRetreatForm = () => {
         return;
       }
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('retreat-location-images')
         .getPublicUrl(filePath);
 
-      // Add to location images array
       setLocationImages(prev => [...prev, publicUrl]);
 
       toast({
@@ -380,7 +706,6 @@ const InstructorRetreatForm = () => {
       });
     } finally {
       setUploadingLocationImage(false);
-      // Reset file input
       e.target.value = '';
     }
   };
@@ -389,27 +714,16 @@ const InstructorRetreatForm = () => {
     setLocationImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!user) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to create a retreat",
-        variant: "destructive",
-      });
-      return;
-    }
+  const handleSave = async (published?: boolean) => {
+    if (!user) return;
 
-    setLoading(true);
+    setSaving(true);
 
     try {
-      // Convert itinerary blocks to schedule format for backward compatibility
       const scheduleData = itineraryBlocks.length > 0
         ? convertItineraryToSchedule(itineraryBlocks)
         : [];
 
-      // Transform form data to match database schema
       const retreatData = {
         title: formData.title,
         description: formData.description || "",
@@ -419,7 +733,7 @@ const InstructorRetreatForm = () => {
         level: formData.level,
         price: formData.price || 0,
         total_spots: formData.totalSpots || 0,
-        spots_available: formData.totalSpots || 0, // Set available spots equal to total spots
+        spots_available: formData.totalSpots || 0,
         image: formData.image || "",
         includes: formData.includes || [],
         schedule: scheduleData,
@@ -427,12 +741,98 @@ const InstructorRetreatForm = () => {
         venue_fees: venueFees || 0,
         food_budget: foodBudget || 0,
         location_images: locationImages.length > 0 ? locationImages : null,
-        published: formData.published || false,
+        published: published !== undefined ? published : (formData.published || false),
         instructor_id: user.id,
       };
 
-      if (isEdit && id) {
-        // Update existing retreat - exclude spots_available to preserve current bookings
+      if (editingId === 'new') {
+        if (autoSaveDraftId) {
+          const { spots_available, ...updateData } = retreatData;
+          const { error } = await supabase
+            .from('retreats')
+            .update({
+              ...updateData,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', autoSaveDraftId)
+            .eq('instructor_id', user.id);
+
+          if (error) {
+            console.error('Error updating retreat:', error);
+            toast({
+              title: "Error",
+              description: error.message || "Failed to update retreat",
+              variant: "destructive",
+            });
+          } else {
+            if (retreatData.published) {
+              const updatedRetreat = draftRetreats.find(r => r.id === autoSaveDraftId);
+              if (updatedRetreat) {
+                notifyStudentsAboutNewRetreat({
+                  id: updatedRetreat.id,
+                  title: updatedRetreat.title,
+                  description: updatedRetreat.description || "",
+                  image: updatedRetreat.image || "",
+                  date: updatedRetreat.date,
+                  location: updatedRetreat.location,
+                  price: Number(updatedRetreat.price) || 0,
+                  instructor_id: updatedRetreat.instructor_id,
+                }).catch((err) => {
+                  console.error('Failed to send email notifications:', err);
+                });
+              }
+            }
+            
+            toast({
+              title: "Success",
+              description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
+            });
+            setDraftRetreats(prev => prev.map(r => 
+              r.id === autoSaveDraftId ? { ...r, ...updateData, spots_available: r.spots_available } : r
+            ));
+            cancelEditing();
+          }
+        } else {
+          const { data, error } = await supabase
+            .from('retreats')
+            .insert([retreatData])
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Error creating retreat:', error);
+            toast({
+              title: "Error",
+              description: error.message || "Failed to create retreat",
+              variant: "destructive",
+            });
+          } else {
+            if (data.published) {
+              notifyStudentsAboutNewRetreat({
+                id: data.id,
+                title: data.title,
+                description: data.description || "",
+                image: data.image || "",
+                date: data.date,
+                location: data.location,
+                price: Number(data.price) || 0,
+                instructor_id: data.instructor_id,
+              }).catch((err) => {
+                console.error('Failed to send email notifications:', err);
+              });
+            }
+            
+            toast({
+              title: "Success",
+              description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
+            });
+            if (!retreatData.published) {
+              setDraftRetreats(prev => [data, ...prev]);
+            }
+            cancelEditing();
+          }
+        }
+      } else if (typeof editingId === 'number') {
         const { spots_available, ...updateData } = retreatData;
         const { error } = await supabase
           .from('retreats')
@@ -440,8 +840,8 @@ const InstructorRetreatForm = () => {
             ...updateData,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', Number(id))
-          .eq('instructor_id', user.id); // Ensure user owns this retreat
+          .eq('id', editingId)
+          .eq('instructor_id', user.id);
 
         if (error) {
           console.error('Error updating retreat:', error);
@@ -451,21 +851,17 @@ const InstructorRetreatForm = () => {
             variant: "destructive",
           });
         } else {
-          // Check if retreat was just published (was draft, now published)
-          // We need to fetch the retreat to check previous state, but for simplicity,
-          // we'll check if it's now published and send notifications
-          // Note: This will send emails even if it was already published, so we might want to track this
-          // For now, we'll send notifications when updating to published status
-          if (retreatData.published) {
-            // Fetch the created retreat data to send notifications
+          const wasDraft = draftRetreats.find(r => r.id === editingId)?.published === false;
+          const isNowPublished = retreatData.published;
+          
+          if (wasDraft && isNowPublished) {
             const { data: updatedRetreat } = await supabase
               .from('retreats')
               .select('*')
-              .eq('id', Number(id))
+              .eq('id', editingId)
               .single();
             
             if (updatedRetreat) {
-              // Call email notification in background (don't wait for it)
               notifyStudentsAboutNewRetreat({
                 id: updatedRetreat.id,
                 title: updatedRetreat.title,
@@ -477,56 +873,22 @@ const InstructorRetreatForm = () => {
                 instructor_id: updatedRetreat.instructor_id,
               }).catch((err) => {
                 console.error('Failed to send email notifications:', err);
-                // Don't show error to user - email sending is non-critical
               });
             }
           }
           
           toast({
             title: "Success",
-            description: "Retreat updated successfully!",
+            description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
           });
-          navigate("/instructor/dashboard");
-        }
-      } else {
-        // Create new retreat
-        const { data, error } = await supabase
-          .from('retreats')
-          .insert([retreatData])
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Error creating retreat:', error);
-          toast({
-            title: "Error",
-            description: error.message || "Failed to create retreat",
-            variant: "destructive",
-          });
-        } else {
-          // Send email notifications if retreat is published
-          if (data.published) {
-            // Call email notification in background (don't wait for it)
-            notifyStudentsAboutNewRetreat({
-              id: data.id,
-              title: data.title,
-              description: data.description || "",
-              image: data.image || "",
-              date: data.date,
-              location: data.location,
-              price: Number(data.price) || 0,
-              instructor_id: data.instructor_id,
-            }).catch((err) => {
-              console.error('Failed to send email notifications:', err);
-              // Don't show error to user - email sending is non-critical
-            });
+          if (!retreatData.published) {
+            setDraftRetreats(prev => prev.map(r => 
+              r.id === editingId ? { ...r, ...updateData, spots_available: r.spots_available } : r
+            ));
+          } else {
+            setDraftRetreats(prev => prev.filter(r => r.id !== editingId));
           }
-          
-          toast({
-            title: "Success",
-            description: "Retreat created successfully!",
-          });
-          navigate("/instructor/dashboard");
+          cancelEditing();
         }
       }
     } catch (error) {
@@ -537,7 +899,105 @@ const InstructorRetreatForm = () => {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setSaving(false);
+    }
+  };
+
+  const handleTogglePublish = async (id: number) => {
+    const retreat = draftRetreats.find(r => r.id === id);
+    if (!retreat || !user) return;
+
+    try {
+      const { error } = await supabase
+        .from('retreats')
+        .update({ published: !retreat.published })
+        .eq('id', id)
+        .eq('instructor_id', user.id);
+
+      if (error) {
+        console.error('Error updating retreat:', error);
+        toast({
+          title: "Error",
+          description: "Failed to update retreat status",
+          variant: "destructive",
+        });
+      } else {
+        const newPublishedStatus = !retreat.published;
+        setDraftRetreats(prev => prev.map(r => 
+          r.id === id ? { ...r, published: newPublishedStatus } : r
+        ));
+        
+        // Send email notifications if retreat was just published
+        if (newPublishedStatus) {
+          notifyStudentsAboutNewRetreat({
+            id: retreat.id,
+            title: retreat.title,
+            description: retreat.description || "",
+            image: retreat.image || "",
+            date: retreat.date,
+            location: retreat.location,
+            price: Number(retreat.price) || 0,
+            instructor_id: retreat.instructor_id,
+          }).catch((err) => {
+            console.error('Failed to send email notifications:', err);
+          });
+        }
+        
+        toast({
+          title: "Success",
+          description: newPublishedStatus ? "Retreat published successfully!" : "Retreat unpublished",
+        });
+        
+        // If published, remove from drafts list
+        if (newPublishedStatus) {
+          setDraftRetreats(prev => prev.filter(r => r.id !== id));
+        }
+      }
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDelete = async (retreatId: number) => {
+    if (!window.confirm('Are you sure you want to delete this retreat?')) {
+      return;
+    }
+
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('retreats')
+        .delete()
+        .eq('id', retreatId)
+        .eq('instructor_id', user.id);
+
+      if (error) {
+        console.error('Error deleting retreat:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete retreat",
+          variant: "destructive",
+        });
+      } else {
+        setDraftRetreats(prev => prev.filter(r => r.id !== retreatId));
+        toast({
+          title: "Success",
+          description: "Retreat deleted successfully",
+        });
+      }
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
     }
   };
 
@@ -558,65 +1018,59 @@ const InstructorRetreatForm = () => {
     }));
   };
 
-  const addScheduleItem = () => {
-    if (scheduleDay.trim() && scheduleActivities.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        schedule: [...(prev.schedule || []), { day: scheduleDay.trim(), activities: scheduleActivities.trim() }]
-      }));
-      setScheduleDay("");
-      setScheduleActivities("");
-    }
-  };
-
-  const removeScheduleItem = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      schedule: prev.schedule?.filter((_, i) => i !== index) || []
-    }));
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-hero pb-20">
-      <div className="bg-gradient-primary text-white px-6 py-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate("/instructor/dashboard")}
-            className="text-white hover:bg-white/20"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold mb-2">
-              {isEdit ? "Edit Retreat" : "Create New Retreat"}
-            </h1>
-            <p className="text-white/90 text-lg">Fill in the details below</p>
+  const renderForm = () => {
+    const isNew = editingId === 'new';
+    
+    return (
+      <Card className="overflow-hidden">
+        <CardContent className="p-6 space-y-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex-1">
+              <h2 className="text-xl font-semibold text-card-foreground">
+                {isNew ? "Create New Retreat" : "Edit Retreat"}
+              </h2>
+              {editingId !== null && (
+                <div className="flex items-center gap-2 mt-1">
+                  {autoSaving ? (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                      Saving draft...
+                    </span>
+                  ) : lastSaved ? (
+                    <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Draft saved {format(lastSaved, "h:mm a")}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      Changes will be saved automatically
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <Button variant="ghost" size="sm" onClick={cancelEditing}>
+              <X className="w-4 h-4" />
+            </Button>
           </div>
-        </div>
-      </div>
 
-      {fetching ? (
-        <div className="px-6 -mt-4 max-w-4xl mx-auto pt-6">
-          <Card>
-            <CardContent className="p-6 text-center">
-              <p className="text-muted-foreground">Loading retreat data...</p>
-            </CardContent>
-          </Card>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="px-6 -mt-4 max-w-4xl mx-auto space-y-6 pt-6">
           {/* Basic Information */}
-          <Card>
-          <CardContent className="p-6 space-y-4">
-            <h2 className="text-xl font-semibold text-card-foreground mb-4">Basic Information</h2>
-            
+          <div className="space-y-4">
             <div>
               <Label>Title</Label>
               <Input
                 value={formData.title}
                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                required
+              />
+            </div>
+
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                rows={4}
                 required
               />
             </div>
@@ -647,10 +1101,10 @@ const InstructorRetreatForm = () => {
                 {uploadingImage && (
                   <p className="text-sm text-muted-foreground">Uploading image...</p>
                 )}
-                {imagePreview && (
+                {(imagePreview || formData.image) && (
                   <div className="mt-2">
                     <img
-                      src={imagePreview}
+                      src={imagePreview || formData.image}
                       alt="Preview"
                       className="w-full h-48 object-cover rounded-lg border"
                     />
@@ -668,129 +1122,13 @@ const InstructorRetreatForm = () => {
                     </Button>
                   </div>
                 )}
-                {formData.image && !imagePreview && (
-                  <div className="mt-2">
-                    <img
-                      src={formData.image}
-                      alt="Current"
-                      className="w-full h-48 object-cover rounded-lg border"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() => {
-                        setFormData(prev => ({ ...prev, image: "" }));
-                      }}
-                    >
-                      Remove Image
-                    </Button>
-                  </div>
-                )}
               </div>
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Level</Label>
-                <Select
-                  value={formData.level}
-                  onValueChange={(value: "Beginner" | "Intermediate" | "Advanced") =>
-                    setFormData(prev => ({ ...prev, level: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Beginner">Beginner</SelectItem>
-                    <SelectItem value="Intermediate">Intermediate</SelectItem>
-                    <SelectItem value="Advanced">Advanced</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Price ($)</Label>
-                <p className="text-xs text-muted-foreground mb-2">Per Student</p>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.price || ""}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      price: value === "" ? undefined : Number(value) 
-                    }));
-                  }}
-                  placeholder="Enter price"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                rows={4}
-                required
-              />
-            </div>
-
-            {/* What's Included */}
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-card-foreground">What's Included</h2>
-              
-              <div className="flex gap-2">
-                <Input
-                  value={includeItem}
-                  onChange={(e) => setIncludeItem(e.target.value)}
-                  placeholder="Add an item..."
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addIncludeItem())}
-                />
-                <Button type="button" onClick={addIncludeItem}>Add</Button>
-              </div>
-
-              <div className="space-y-2">
-                {formData.includes?.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
-                    <span className="text-sm">{item}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeIncludeItem(index)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Itinerary Builder */}
-            <Card>
-              <CardContent className="p-6 space-y-4">
-                <ItineraryBuilder
-                  blocks={itineraryBlocks}
-                  onChange={setItineraryBlocks}
-                  user={user}
-                />
-              </CardContent>
-            </Card>
-          </CardContent>
-        </Card>
-
-        {/* Location & Dates */}
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <h2 className="text-xl font-semibold text-card-foreground mb-4">Location & Dates</h2>
-            
+          {/* Location & Dates */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-card-foreground">Location & Dates</h3>
             <div className="space-y-2">
               <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-primary" />
@@ -819,20 +1157,6 @@ const InstructorRetreatForm = () => {
                   </a>
                 )}
               </div>
-              {formData.location && (formData.location.startsWith('http://') || formData.location.startsWith('https://')) && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-2 rounded-md">
-                  <MapPin className="w-4 h-4" />
-                  <span className="truncate flex-1">{formData.location}</span>
-                  <a
-                    href={formData.location}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline text-xs font-medium"
-                  >
-                    View on Maps
-                  </a>
-                </div>
-              )}
               
               {/* Location Images Upload */}
               <div className="space-y-2">
@@ -863,73 +1187,74 @@ const InstructorRetreatForm = () => {
                   </label>
                 </div>
                 
-                {/* Horizontal Scrolling Image Gallery */}
                 {locationImages.length > 0 && (
-                  <div className="overflow-x-auto pb-2 -mx-2 px-2">
-                    <div className="flex gap-3 min-w-max">
-                      {locationImages.map((imageUrl, index) => (
-                        <div key={index} className="relative flex-shrink-0 group">
+                  <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                    <div className="flex w-max space-x-2 p-2">
+                      {locationImages.map((imgUrl, index) => (
+                        <div key={index} className="relative h-20 w-20 sm:h-24 sm:w-24 flex-shrink-0 rounded-md overflow-hidden group">
                           <img
-                            src={imageUrl}
+                            src={imgUrl}
                             alt={`Location ${index + 1}`}
-                            className="w-32 h-32 sm:w-40 sm:h-40 object-cover rounded-lg border"
+                            className="h-full w-full object-cover"
                           />
                           <Button
                             type="button"
                             variant="destructive"
-                            size="sm"
+                            size="icon"
+                            className="absolute top-0 right-0 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={() => removeLocationImage(index)}
-                            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
                           >
-                            <X className="w-3 h-3" />
+                            <X className="h-3 w-3" />
                           </Button>
                         </div>
                       ))}
                     </div>
-                  </div>
+                    <ScrollBar orientation="horizontal" />
+                  </ScrollArea>
                 )}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !dateRange && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRange?.from ? (
-                        dateRange.to ? (
-                          <>
-                            {format(dateRange.from, "LLL dd, y")} -{" "}
-                            {format(dateRange.to, "LLL dd, y")}
-                          </>
-                        ) : (
-                          format(dateRange.from, "LLL dd, y")
-                        )
+            <div>
+              <Label>Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal text-xs sm:text-sm",
+                      !dateRange && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "LLL dd, y")} -{" "}
+                          {format(dateRange.to, "LLL dd, y")}
+                        </>
                       ) : (
-                        <span>Pick a date range</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      initialFocus
-                      mode="range"
-                      defaultMonth={dateRange?.from}
-                      selected={dateRange}
-                      onSelect={setDateRange}
-                      numberOfMonths={2}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
+                        format(dateRange.from, "LLL dd, y")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Duration</Label>
                 <Input
@@ -939,16 +1264,6 @@ const InstructorRetreatForm = () => {
                   required
                 />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Spots */}
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <h2 className="text-xl font-semibold text-card-foreground mb-4">Availability</h2>
-            
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label># of Seats</Label>
                 <Input
@@ -959,14 +1274,57 @@ const InstructorRetreatForm = () => {
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Pricing Breakdown */}
-        {(formData.price && formData.price > 0 && formData.totalSpots > 0) && (
-          <Card>
-            <CardContent className="p-6 space-y-4">
-              <h2 className="text-xl font-semibold text-card-foreground mb-4">Financial Breakdown</h2>
+          {/* Price and Skill Level */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Price ($)</Label>
+                <p className="text-xs text-muted-foreground mb-2">Per Student</p>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.price || ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      price: value === "" ? undefined : Number(value) 
+                    }));
+                  }}
+                  placeholder="Enter price"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label>Skill Level</Label>
+                <p className="text-xs text-muted-foreground mb-2">Who is this for?</p>
+                <Select
+                  value={formData.level}
+                  onValueChange={(value: "Beginner" | "Intermediate" | "Advanced") =>
+                    setFormData(prev => ({ ...prev, level: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Beginner">Beginner</SelectItem>
+                    <SelectItem value="Intermediate">Intermediate</SelectItem>
+                    <SelectItem value="Advanced">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {/* Financial Breakdown */}
+          {(formData.price && formData.price > 0 && formData.totalSpots > 0) && (
+            <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
+              <h3 className="text-lg font-semibold text-card-foreground">Financial Breakdown</h3>
               
               <div className="space-y-3">
                 <div className="flex items-center justify-between py-2 border-b">
@@ -1053,50 +1411,243 @@ const InstructorRetreatForm = () => {
                   </span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* What's Included */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold text-card-foreground">What's Included</h2>
+            
+            <div className="flex gap-2">
+              <Input
+                value={includeItem}
+                onChange={(e) => setIncludeItem(e.target.value)}
+                placeholder="Add an item..."
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addIncludeItem())}
+              />
+              <Button type="button" onClick={addIncludeItem}>Add</Button>
+            </div>
+
+            <div className="space-y-2">
+              {formData.includes?.map((item, index) => (
+                <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
+                  <span className="text-sm">{item}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeIncludeItem(index)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Itinerary Builder */}
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <ItineraryBuilder
+                blocks={itineraryBlocks}
+                onChange={setItineraryBlocks}
+                user={user}
+              />
             </CardContent>
           </Card>
-        )}
 
-        {/* Publish Status */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-card-foreground">Publish Status</h3>
-                <p className="text-sm text-muted-foreground">
-                  {formData.published ? "This retreat is visible to students" : "This retreat is a draft"}
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant={formData.published ? "default" : "outline"}
-                onClick={() => setFormData(prev => ({ ...prev, published: !prev.published }))}
-              >
+          {/* Publish Status */}
+          <div className="p-4 bg-muted rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-card-foreground">Status</h3>
+              <Badge variant={formData.published ? "default" : "secondary"}>
                 {formData.published ? "Published" : "Draft"}
-              </Button>
+              </Badge>
             </div>
-          </CardContent>
-        </Card>
+            <p className="text-sm text-muted-foreground">
+              {formData.published 
+                ? "This retreat is LIVE and visible to students" 
+                : "Not ready to publish? Save your draft"}
+            </p>
+          </div>
 
-        {/* Submit Buttons */}
-        <div className="flex gap-4 pb-8">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1"
-            onClick={() => navigate("/instructor/dashboard")}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" className="flex-1" disabled={loading}>
-            {loading ? (isEdit ? "Updating..." : "Creating...") : (isEdit ? "Update Retreat" : "Create Retreat")}
-          </Button>
+          {/* Save/Cancel/Publish Buttons */}
+          <div className="flex gap-4 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={cancelEditing}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => handleSave(false)}
+              disabled={saving}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+              onClick={() => handleSave(true)}
+              disabled={saving}
+            >
+              {saving ? "Publishing..." : "Publish"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-hero pb-20">
+      {/* Header */}
+      <div className="bg-gradient-primary text-white px-6 py-8">
+        <div className="flex items-center gap-4">
+          {editingId !== null && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={cancelEditing}
+              className="text-white hover:bg-white/20"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          )}
+          <div>
+            <h1 className="text-3xl font-bold mb-2">
+              {editingId !== null ? (editingId === 'new' ? "Create New Retreat" : "Edit Retreat") : "My Drafts"}
+            </h1>
+            <p className="text-white/90 text-lg">
+              {editingId !== null ? "Fill in the details below" : "Manage your draft retreats"}
+            </p>
+          </div>
         </div>
-      </form>
-      )}
+      </div>
+
+      <div className="px-6 -mt-4 max-w-4xl mx-auto space-y-6 pt-6">
+        {editingId !== null ? (
+          renderForm()
+        ) : (
+          <>
+            {loading ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground text-lg">Loading drafts...</p>
+              </div>
+            ) : (
+              <>
+                {draftRetreats.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-8 text-center">
+                      <p className="text-muted-foreground text-lg mb-4">No drafts yet</p>
+                      <Button onClick={() => startEditing()}>
+                        Create Your First Retreat
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-4">
+                    {draftRetreats.map((retreat) => (
+                      <Card key={retreat.id} className="overflow-hidden">
+                        <div className="relative">
+                          <img
+                            src={retreat.image || "/placeholder.svg"}
+                            alt={retreat.title}
+                            className="w-full h-48 object-cover"
+                          />
+                          <div className="absolute top-3 right-3 flex gap-2 items-center">
+                            {retreat.published && (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="bg-white/90 hover:bg-white text-foreground shadow-md backdrop-blur-sm"
+                                onClick={() => {
+                                  const retreatLink = `${window.location.origin}/retreat/${retreat.id}${user?.id ? `?ref=${user.id}` : ''}`;
+                                  navigator.clipboard.writeText(retreatLink);
+                                  toast({
+                                    title: "Link Copied!",
+                                    description: "Retreat link copied to clipboard. Share it on social media!",
+                                  });
+                                }}
+                                title="Share this retreat"
+                              >
+                                <Share2 className="w-4 h-4 mr-1.5" />
+                                Share
+                              </Button>
+                            )}
+                            <Badge className={retreat.published ? "bg-green-500 text-white font-semibold" : "bg-gray-400 text-white font-semibold"}>
+                              {retreat.published ? "LIVE" : "DRAFT"}
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        <CardContent className="p-5 relative">
+                          <h3 className="text-xl font-semibold text-card-foreground mb-4">{retreat.title}</h3>
+                          
+                          <div className="flex gap-2 mb-4">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => startEditing(retreat)}
+                              className="flex-1"
+                            >
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant={retreat.published ? "outline" : "default"}
+                              size="sm"
+                              onClick={() => handleTogglePublish(retreat.id)}
+                              className="flex-1"
+                            >
+                              {retreat.published ? (
+                                <>
+                                  <EyeOff className="w-4 h-4 mr-2" />
+                                  Unpublish
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Publish
+                                </>
+                              )}
+                            </Button>
+                          </div>
+
+                          <div className="text-sm text-muted-foreground">
+                            <p>{retreat.location} • {retreat.date}</p>
+                            <p className="mt-1">{retreat.spots_available} of {retreat.total_spots} spots available</p>
+                          </div>
+
+                          {/* Delete button in bottom right corner */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(retreat.id)}
+                            className="absolute bottom-4 right-4 text-destructive hover:text-destructive hover:bg-destructive/10 p-2 h-auto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      <BottomNav />
     </div>
   );
 };
 
 export default InstructorRetreatForm;
-
