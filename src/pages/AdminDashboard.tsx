@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2 } from "lucide-react";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -59,6 +59,8 @@ const AdminDashboard = () => {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [selectedInstructors, setSelectedInstructors] = useState<Set<string>>(new Set());
+  const [emailImages, setEmailImages] = useState<string[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     if (role !== 'admin' || !user) return;
@@ -239,6 +241,7 @@ const AdminDashboard = () => {
     setNotificationRecipients(recipientType);
     setNotificationSubject('');
     setNotificationMessage('');
+    setEmailImages([]);
     setNotificationDialogOpen(true);
   };
 
@@ -282,6 +285,84 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Image size must be less than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingImage(true);
+
+    try {
+      // Create a unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/email-images/${Date.now()}.${fileExt}`;
+      const filePath = fileName;
+
+      // Upload to Supabase Storage (using retreat-images bucket)
+      const { error: uploadError } = await supabase.storage
+        .from('retreat-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error uploading image:', uploadError);
+        toast({
+          title: "Error",
+          description: uploadError.message || "Failed to upload image",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('retreat-images')
+        .getPublicUrl(filePath);
+
+      setEmailImages(prev => [...prev, publicUrl]);
+
+      toast({
+        title: "Success",
+        description: "Image uploaded successfully",
+      });
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while uploading image",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setEmailImages(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSendNotification = async () => {
     if (!notificationSubject.trim() || !notificationMessage.trim()) {
       toast({
@@ -317,6 +398,7 @@ const AdminDashboard = () => {
         subject: notificationSubject,
         message: notificationMessage,
         recipientType: notificationRecipients,
+        images: emailImages.length > 0 ? emailImages : undefined,
       });
 
       if (error) {
@@ -333,6 +415,7 @@ const AdminDashboard = () => {
         setNotificationDialogOpen(false);
         setNotificationSubject('');
         setNotificationMessage('');
+        setEmailImages([]);
         // Clear selections after sending
         if (notificationRecipients === 'students') {
           setSelectedStudents(new Set());
@@ -855,7 +938,12 @@ const AdminDashboard = () => {
       </Dialog>
 
       {/* Notification Dialog */}
-      <Dialog open={notificationDialogOpen} onOpenChange={setNotificationDialogOpen}>
+      <Dialog open={notificationDialogOpen} onOpenChange={(open) => {
+        setNotificationDialogOpen(open);
+        if (!open) {
+          setEmailImages([]);
+        }
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -881,6 +969,64 @@ const AdminDashboard = () => {
                 disabled={sendingEmail}
               />
             </div>
+
+            {/* Email Images Upload */}
+            <div className="space-y-2">
+              <Label>Email Images (Optional)</Label>
+              <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                  <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={sendingEmail || uploadingImage}
+                  className="hidden"
+                  id="email-images-upload"
+                />
+                <label
+                  htmlFor="email-images-upload"
+                  className="cursor-pointer flex flex-col items-center gap-2"
+                >
+                  {uploadingImage ? (
+                    <>
+                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-6 h-6 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Click to add images to email</span>
+                      <span className="text-xs text-muted-foreground">Max 5MB per image</span>
+                    </>
+                  )}
+                </label>
+              </div>
+              
+              {/* Image Previews */}
+              {emailImages.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                  {emailImages.map((imageUrl, index) => (
+                    <div key={index} className="relative border rounded-lg overflow-hidden group">
+                      <img 
+                        src={imageUrl} 
+                        alt={`Email image ${index + 1}`} 
+                        className="w-full h-32 object-cover"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => removeImage(index)}
+                        disabled={sendingEmail}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="notification-message">Message</Label>
               <Textarea

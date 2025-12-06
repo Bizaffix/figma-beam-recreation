@@ -71,6 +71,8 @@ interface CustomEmailData {
   subject: string;
   message: string;
   recipientType: 'students' | 'instructors';
+  images?: string[]; // Optional array of image URLs to include in the email
+  headerImage?: string; // Optional header/logo image URL
 }
 
 /**
@@ -92,6 +94,8 @@ export const sendCustomEmail = async (emailData: CustomEmailData): Promise<{ err
         subject: emailData.subject,
         message: emailData.message,
         recipientType: emailData.recipientType,
+        images: emailData.images,
+        headerImage: emailData.headerImage,
       },
     });
 

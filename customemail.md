@@ -10,6 +10,8 @@ interface CustomEmailData {
   subject: string;
   message: string;
   recipientType: 'students' | 'instructors';
+  images?: string[]; // Optional array of image URLs to include in the email
+  headerImage?: string; // Optional header/logo image URL
 }
 
 // Helper function to delay execution (for rate limiting)
@@ -48,6 +50,71 @@ serve(async (req) => {
     // Base URL for the application
     const baseUrl = Deno.env.get("VITE_APP_URL") || "https://www.bookmyquiltretreat.com"
 
+    // Build header image HTML if provided
+    const headerImageHtml = emailData.headerImage 
+      ? `<img src="${emailData.headerImage}" alt="BookMyQuiltRetreat" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />`
+      : `<h1 style="color: white; margin: 0;">BookMyQuiltRetreat</h1>`
+
+    // Build images HTML if provided
+    let imagesHtml = ""
+    if (emailData.images && emailData.images.length > 0) {
+      const imageCount = emailData.images.length
+      
+      // For single image, display full width
+      if (imageCount === 1) {
+        imagesHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;">
+      <tr>
+        <td align="center" style="padding: 10px;">
+          <img src="${emailData.images[0]}" alt="Retreat Image" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block;" />
+        </td>
+      </tr>
+    </table>
+        `
+      } 
+      // For 2 images, display side by side
+      else if (imageCount === 2) {
+        imagesHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;">
+      <tr>
+        <td align="center" class="image-cell" style="padding: 5px; width: 50%;">
+          <img src="${emailData.images[0]}" alt="Retreat Image 1" style="max-width: 280px; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block;" />
+        </td>
+        <td align="center" class="image-cell" style="padding: 5px; width: 50%;">
+          <img src="${emailData.images[1]}" alt="Retreat Image 2" style="max-width: 280px; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block;" />
+        </td>
+      </tr>
+    </table>
+        `
+      }
+      // For 3+ images, use a grid layout (2 columns, wrapping)
+      else {
+        // Group images into rows of 2
+        const rows: string[][] = []
+        for (let i = 0; i < emailData.images.length; i += 2) {
+          rows.push(emailData.images.slice(i, i + 2))
+        }
+        
+        imagesHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;">
+        ${rows.map((row, rowIdx) => `
+      <tr>
+        ${row.map((imageUrl, colIdx) => {
+          const globalIdx = rowIdx * 2 + colIdx + 1
+          return `
+        <td align="center" class="image-cell" style="padding: 5px; width: ${row.length === 1 ? '100%' : '50%'};">
+          <img src="${imageUrl}" alt="Retreat Image ${globalIdx}" style="max-width: ${row.length === 1 ? '100%' : '280px'}; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block;" />
+        </td>
+        `
+        }).join('')}
+        ${row.length === 1 ? '<td style="width: 50%;"></td>' : ''}
+      </tr>
+        `).join('')}
+    </table>
+        `
+      }
+    }
+
     // Create HTML email content
     const emailHtml = `
 <!DOCTYPE html>
@@ -56,13 +123,26 @@ serve(async (req) => {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${emailData.subject}</title>
+  <style>
+    @media only screen and (max-width: 600px) {
+      .image-cell {
+        width: 100% !important;
+        display: block !important;
+      }
+      .image-cell img {
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+    }
+  </style>
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-    <h1 style="color: white; margin: 0;">BookMyQuiltRetreat</h1>
+    ${headerImageHtml}
   </div>
   <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0; border-top: none;">
     <h2 style="color: #667eea; margin-top: 0;">${emailData.subject}</h2>
+    ${imagesHtml ? `<div style="margin-bottom: 20px;">${imagesHtml}</div>` : ""}
     <div style="white-space: pre-wrap; color: #333; line-height: 1.8;">
 ${emailData.message}
     </div>
@@ -80,10 +160,14 @@ ${emailData.message}
     `.trim()
 
     // Create plain text version
+    const imagesText = emailData.images && emailData.images.length > 0
+      ? `\n\n[This email contains ${emailData.images.length} image(s). Please view in HTML format to see images.]\n`
+      : ""
+    
     const emailText = `
 ${emailData.subject}
 
-${emailData.message}
+${emailData.message}${imagesText}
 
 ---
 Visit us at ${baseUrl}
