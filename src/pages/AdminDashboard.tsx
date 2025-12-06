@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2 } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical } from "lucide-react";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -34,6 +34,24 @@ interface UserProfile {
   full_name: string | null;
   email: string;
   created_at: string;
+}
+
+interface EmailTemplate {
+  id: string;
+  name: string;
+  type: 'template' | 'draft';
+  subject: string;
+  message: string;
+  images: string[];
+  recipient_type: 'students' | 'instructors' | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface EmailSection {
+  id: string;
+  message: string;
+  images: string[];
 }
 
 const AdminDashboard = () => {
@@ -61,6 +79,17 @@ const AdminDashboard = () => {
   const [selectedInstructors, setSelectedInstructors] = useState<Set<string>>(new Set());
   const [emailImages, setEmailImages] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [emailSections, setEmailSections] = useState<EmailSection[]>([
+    { id: '1', message: '', images: [] }
+  ]);
+  const [uploadingSectionImages, setUploadingSectionImages] = useState<{ [key: string]: boolean }>({});
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [drafts, setDrafts] = useState<EmailTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [saveTemplateDialogOpen, setSaveTemplateDialogOpen] = useState(false);
+  const [loadTemplateDialogOpen, setLoadTemplateDialogOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   useEffect(() => {
     if (role !== 'admin' || !user) return;
@@ -243,6 +272,7 @@ const AdminDashboard = () => {
     setNotificationMessage('');
     setEmailImages([]);
     setNotificationDialogOpen(true);
+    fetchTemplatesAndDrafts();
   };
 
   const toggleStudentSelection = (studentId: string) => {
@@ -363,11 +393,315 @@ const AdminDashboard = () => {
     setEmailImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSendNotification = async () => {
-    if (!notificationSubject.trim() || !notificationMessage.trim()) {
+  const addEmailSection = () => {
+    const newId = Date.now().toString();
+    setEmailSections(prev => [...prev, { id: newId, message: '', images: [] }]);
+  };
+
+  const removeEmailSection = (sectionId: string) => {
+    if (emailSections.length > 1) {
+      setEmailSections(prev => prev.filter(s => s.id !== sectionId));
+      // Clean up uploading state for removed section
+      setUploadingSectionImages(prev => {
+        const newState = { ...prev };
+        delete newState[sectionId];
+        return newState;
+      });
+    } else {
+      toast({
+        title: "Cannot remove",
+        description: "You must have at least one section",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const updateSectionMessage = (sectionId: string, message: string) => {
+    setEmailSections(prev =>
+      prev.map(s => s.id === sectionId ? { ...s, message } : s)
+    );
+  };
+
+  const handleSectionImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, sectionId: string) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
       toast({
         title: "Error",
-        description: "Please fill in both subject and message",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Image size must be less than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingSectionImages(prev => ({ ...prev, [sectionId]: true }));
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/email-images/${Date.now()}.${fileExt}`;
+      const filePath = fileName;
+
+      const { error: uploadError } = await supabase.storage
+        .from('retreat-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error uploading image:', uploadError);
+        toast({
+          title: "Error",
+          description: uploadError.message || "Failed to upload image",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('retreat-images')
+        .getPublicUrl(filePath);
+
+      setEmailSections(prev =>
+        prev.map(s => s.id === sectionId
+          ? { ...s, images: [...s.images, publicUrl] }
+          : s
+        )
+      );
+
+      toast({
+        title: "Success",
+        description: "Image uploaded successfully",
+      });
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while uploading image",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingSectionImages(prev => ({ ...prev, [sectionId]: false }));
+      e.target.value = '';
+    }
+  };
+
+  const removeSectionImage = (sectionId: string, imageIndex: number) => {
+    setEmailSections(prev =>
+      prev.map(s => s.id === sectionId
+        ? { ...s, images: s.images.filter((_, i) => i !== imageIndex) }
+        : s
+      )
+    );
+  };
+
+  const fetchTemplatesAndDrafts = async () => {
+    if (!user) return;
+    setLoadingTemplates(true);
+    try {
+      const { data, error } = await supabase
+        .from('email_templates')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching templates:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load templates and drafts",
+          variant: "destructive",
+        });
+      } else {
+        const templatesList = (data || []).filter(t => t.type === 'template');
+        const draftsList = (data || []).filter(t => t.type === 'draft');
+        setTemplates(templatesList as EmailTemplate[]);
+        setDrafts(draftsList as EmailTemplate[]);
+      }
+    } catch (error) {
+      console.error('Unexpected error fetching templates:', error);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const handleSaveAsTemplate = async (type: 'template' | 'draft') => {
+    if (!user || !notificationSubject.trim()) {
+      toast({
+        title: "Error",
+        description: "Please fill in subject before saving",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if at least one section has content
+    const hasContent = emailSections.some(s => s.message.trim() || s.images.length > 0);
+    if (!hasContent) {
+      toast({
+        title: "Error",
+        description: "Please add at least one section with content before saving",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!templateName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a name for the " + type,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSavingTemplate(true);
+    try {
+      // Combine sections into a message for backward compatibility
+      const combinedMessage = emailSections
+        .map((section) => section.message.trim())
+        .filter(text => text)
+        .join('\n\n---\n\n');
+
+      // Combine all images from all sections
+      const allImages = emailSections.flatMap(s => s.images);
+
+      const { error } = await supabase
+        .from('email_templates')
+        .insert({
+          user_id: user.id,
+          name: templateName.trim(),
+          type: type,
+          subject: notificationSubject,
+          message: combinedMessage || ' ',
+          images: allImages,
+          recipient_type: notificationRecipients || null,
+          sections: emailSections, // Store sections as JSONB
+        });
+
+      if (error) {
+        console.error('Error saving template:', error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to save " + type,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: type.charAt(0).toUpperCase() + type.slice(1) + " saved successfully",
+        });
+        setSaveTemplateDialogOpen(false);
+        setTemplateName('');
+        fetchTemplatesAndDrafts();
+      }
+    } catch (error: any) {
+      console.error('Unexpected error saving template:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const handleLoadTemplate = (template: EmailTemplate) => {
+    setNotificationSubject(template.subject);
+    
+    // Check if template has sections (new format) or use legacy format
+    if ((template as any).sections && Array.isArray((template as any).sections) && (template as any).sections.length > 0) {
+      // Load sections
+      setEmailSections((template as any).sections.map((s: any, idx: number) => ({
+        id: (Date.now() + idx).toString(),
+        message: s.message || '',
+        images: s.images || []
+      })));
+    } else {
+      // Legacy format: convert message and images to a single section
+      setEmailSections([{
+        id: Date.now().toString(),
+        message: template.message || '',
+        images: template.images || []
+      }]);
+    }
+    
+    setNotificationMessage(template.message); // Keep for backward compatibility
+    setEmailImages(template.images || []); // Keep for backward compatibility
+    
+    if (template.recipient_type) {
+      setNotificationRecipients(template.recipient_type);
+    }
+    setLoadTemplateDialogOpen(false);
+    toast({
+      title: "Template loaded",
+      description: `"${template.name}" has been loaded`,
+    });
+  };
+
+  const handleDeleteTemplate = async (templateId: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete "${name}"?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('email_templates')
+        .delete()
+        .eq('id', templateId)
+        .eq('user_id', user?.id);
+
+      if (error) {
+        console.error('Error deleting template:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete template",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "Template deleted successfully",
+        });
+        fetchTemplatesAndDrafts();
+      }
+    } catch (error: any) {
+      console.error('Unexpected error deleting template:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSendNotification = async () => {
+    if (!notificationSubject.trim()) {
+      toast({
+        title: "Error",
+        description: "Please fill in the subject",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if at least one section has content
+    const hasContent = emailSections.some(s => s.message.trim() || s.images.length > 0);
+    if (!hasContent) {
+      toast({
+        title: "Error",
+        description: "Please add at least one section with content",
         variant: "destructive",
       });
       return;
@@ -393,12 +727,33 @@ const AdminDashboard = () => {
       const selectedRecipients = recipientList.filter(user => selectedIds.has(user.id));
       const emails = selectedRecipients.map(user => user.email);
       
+      // Combine all sections into a single message with images
+      const allImages = emailSections.flatMap(s => s.images);
+      
+      // Combine messages from all sections
+      const combinedMessage = emailSections
+        .map((section, idx) => {
+          let sectionText = section.message.trim();
+          if (section.images.length > 0 && sectionText) {
+            sectionText += `\n\n[${section.images.length} image(s) attached to this section]`;
+          } else if (section.images.length > 0) {
+            sectionText = `[${section.images.length} image(s) in this section]`;
+          }
+          return sectionText;
+        })
+        .filter(text => text)
+        .join('\n\n---\n\n');
+
       const { error } = await sendCustomEmail({
         emails,
         subject: notificationSubject,
-        message: notificationMessage,
+        message: combinedMessage,
         recipientType: notificationRecipients,
-        images: emailImages.length > 0 ? emailImages : undefined,
+        images: allImages.length > 0 ? allImages : undefined,
+        sections: emailSections.map(s => ({
+          message: s.message,
+          images: s.images
+        })),
       });
 
       if (error) {
@@ -416,6 +771,7 @@ const AdminDashboard = () => {
         setNotificationSubject('');
         setNotificationMessage('');
         setEmailImages([]);
+        setEmailSections([{ id: '1', message: '', images: [] }]);
         // Clear selections after sending
         if (notificationRecipients === 'students') {
           setSelectedStudents(new Set());
@@ -942,23 +1298,51 @@ const AdminDashboard = () => {
         setNotificationDialogOpen(open);
         if (!open) {
           setEmailImages([]);
+          setEmailSections([{ id: '1', message: '', images: [] }]);
         }
       }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl h-[90vh] sm:h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Bell className="w-5 h-5" />
               Send Notification to {notificationRecipients === 'students' ? 'Students' : 'Instructors'}
             </DialogTitle>
             <DialogDescription>
-              {notificationRecipients && (
-                <span>
-                  Sending to {notificationRecipients === 'students' ? selectedStudents.size : selectedInstructors.size} selected {notificationRecipients === 'students' ? 'student(s)' : 'instructor(s)'}
-                </span>
-              )}
+              <div className="flex items-center justify-between">
+                {notificationRecipients && (
+                  <span>
+                    Sending to {notificationRecipients === 'students' ? selectedStudents.size : selectedInstructors.size} selected {notificationRecipients === 'students' ? 'student(s)' : 'instructor(s)'}
+                  </span>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLoadTemplateDialogOpen(true)}
+                    disabled={sendingEmail}
+                  >
+                    <FolderOpen className="w-4 h-4 mr-2" />
+                    Load
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setTemplateName('');
+                      setSaveTemplateDialogOpen(true);
+                    }}
+                    disabled={sendingEmail || !notificationSubject.trim() || !emailSections.some(s => s.message.trim() || s.images.length > 0)}
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Save
+                  </Button>
+                </div>
+              </div>
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="notification-subject">Subject</Label>
               <Input
@@ -970,99 +1354,331 @@ const AdminDashboard = () => {
               />
             </div>
 
-            {/* Email Images Upload */}
-            <div className="space-y-2">
-              <Label>Email Images (Optional)</Label>
-              <div className="border-2 border-dashed rounded-lg p-4 text-center">
-                  <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  disabled={sendingEmail || uploadingImage}
-                  className="hidden"
-                  id="email-images-upload"
-                />
-                <label
-                  htmlFor="email-images-upload"
-                  className="cursor-pointer flex flex-col items-center gap-2"
+            {/* Email Sections */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Email Sections</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addEmailSection}
+                  disabled={sendingEmail}
                 >
-                  {uploadingImage ? (
-                    <>
-                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Uploading...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-6 h-6 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Click to add images to email</span>
-                      <span className="text-xs text-muted-foreground">Max 5MB per image</span>
-                    </>
-                  )}
-                </label>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Section
+                </Button>
               </div>
-              
-              {/* Image Previews */}
-              {emailImages.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-                  {emailImages.map((imageUrl, index) => (
-                    <div key={index} className="relative border rounded-lg overflow-hidden group">
-                      <img 
-                        src={imageUrl} 
-                        alt={`Email image ${index + 1}`} 
-                        className="w-full h-32 object-cover"
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => removeImage(index)}
-                        disabled={sendingEmail}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
+              {emailSections.map((section, sectionIndex) => (
+                <Card key={section.id} className="border-2">
+                  <CardContent className="p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <GripVertical className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm font-medium text-muted-foreground">
+                          Section {sectionIndex + 1}
+                        </span>
+                      </div>
+                      {emailSections.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeEmailSection(section.id)}
+                          disabled={sendingEmail}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor={`section-message-${section.id}`}>Message</Label>
+                      <Textarea
+                        id={`section-message-${section.id}`}
+                        placeholder="Enter message for this section..."
+                        value={section.message}
+                        onChange={(e) => updateSectionMessage(section.id, e.target.value)}
+                        disabled={sendingEmail}
+                        rows={4}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Images (Optional)</Label>
+                      <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleSectionImageUpload(e, section.id)}
+                          disabled={sendingEmail || uploadingSectionImages[section.id]}
+                          className="hidden"
+                          id={`section-images-upload-${section.id}`}
+                        />
+                        <label
+                          htmlFor={`section-images-upload-${section.id}`}
+                          className="cursor-pointer flex flex-col items-center gap-2"
+                        >
+                          {uploadingSectionImages[section.id] ? (
+                            <>
+                              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                              <span className="text-sm text-muted-foreground">Uploading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-6 h-6 text-muted-foreground" />
+                              <span className="text-sm text-muted-foreground">Click to add images</span>
+                              <span className="text-xs text-muted-foreground">Max 5MB per image</span>
+                            </>
+                          )}
+                        </label>
+                      </div>
+
+                      {/* Section Image Previews */}
+                      {section.images.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                          {section.images.map((imageUrl, imageIndex) => (
+                            <div key={imageIndex} className="relative border rounded-lg overflow-hidden group">
+                              <img 
+                                src={imageUrl} 
+                                alt={`Section ${sectionIndex + 1} image ${imageIndex + 1}`} 
+                                className="w-full h-32 object-cover"
+                              />
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => removeSectionImage(section.id, imageIndex)}
+                                disabled={sendingEmail}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 p-6 border-t shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => setNotificationDialogOpen(false)}
+              disabled={sendingEmail}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendNotification}
+              disabled={sendingEmail || !notificationSubject.trim() || !emailSections.some(s => s.message.trim() || s.images.length > 0)}
+            >
+              {sendingEmail ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Bell className="w-4 h-4 mr-2" />
+                  Send Email
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save Template/Draft Dialog */}
+      <Dialog open={saveTemplateDialogOpen} onOpenChange={setSaveTemplateDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save as Template or Draft</DialogTitle>
+            <DialogDescription>
+              Save your current email composition for later use
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="notification-message">Message</Label>
-              <Textarea
-                id="notification-message"
-                placeholder="Enter your message"
-                value={notificationMessage}
-                onChange={(e) => setNotificationMessage(e.target.value)}
-                disabled={sendingEmail}
-                rows={8}
+              <Label htmlFor="template-name">Name</Label>
+              <Input
+                id="template-name"
+                placeholder="Enter template name"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                disabled={savingTemplate}
               />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex gap-2 justify-end">
               <Button
                 variant="outline"
-                onClick={() => setNotificationDialogOpen(false)}
-                disabled={sendingEmail}
+                onClick={() => {
+                  setSaveTemplateDialogOpen(false);
+                  setTemplateName('');
+                }}
+                disabled={savingTemplate}
               >
                 Cancel
               </Button>
               <Button
-                onClick={handleSendNotification}
-                disabled={sendingEmail || !notificationSubject.trim() || !notificationMessage.trim()}
+                variant="outline"
+                onClick={() => handleSaveAsTemplate('draft')}
+                disabled={savingTemplate || !templateName.trim()}
               >
-                {sendingEmail ? (
+                {savingTemplate ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Sending...
+                    Saving...
                   </>
                 ) : (
+                  'Save as Draft'
+                )}
+              </Button>
+              <Button
+                onClick={() => handleSaveAsTemplate('template')}
+                disabled={savingTemplate || !templateName.trim()}
+              >
+                {savingTemplate ? (
                   <>
-                    <Bell className="w-4 h-4 mr-2" />
-                    Send Email
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
                   </>
+                ) : (
+                  'Save as Template'
                 )}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Load Template/Draft Dialog */}
+      <Dialog open={loadTemplateDialogOpen} onOpenChange={setLoadTemplateDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Load Template or Draft</DialogTitle>
+            <DialogDescription>
+              Select a saved template or draft to load
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto py-4">
+            {loadingTemplates ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Templates Section */}
+                {templates.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Templates ({templates.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {templates.map((template) => (
+                        <Card key={template.id} className="border">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium truncate">{template.name}</h4>
+                                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                  {template.subject}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {new Date(template.updated_at).toLocaleDateString()}
+                                  {template.images && template.images.length > 0 && (
+                                    <span className="ml-2">• {template.images.length} image(s)</span>
+                                  )}
+                                </p>
+                              </div>
+                              <div className="flex gap-2 shrink-0">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleLoadTemplate(template)}
+                                >
+                                  Load
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDeleteTemplate(template.id, template.name)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Drafts Section */}
+                {drafts.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <Save className="w-4 h-4" />
+                      Drafts ({drafts.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {drafts.map((draft) => (
+                        <Card key={draft.id} className="border">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium truncate">{draft.name}</h4>
+                                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                  {draft.subject}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {new Date(draft.updated_at).toLocaleDateString()}
+                                  {draft.images && draft.images.length > 0 && (
+                                    <span className="ml-2">• {draft.images.length} image(s)</span>
+                                  )}
+                                </p>
+                              </div>
+                              <div className="flex gap-2 shrink-0">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleLoadTemplate(draft)}
+                                >
+                                  Load
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDeleteTemplate(draft.id, draft.name)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {templates.length === 0 && drafts.length === 0 && (
+                  <div className="text-center p-8">
+                    <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                    <p className="text-muted-foreground">No templates or drafts saved yet</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end pt-4 border-t">
+            <Button variant="outline" onClick={() => setLoadTemplateDialogOpen(false)}>
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

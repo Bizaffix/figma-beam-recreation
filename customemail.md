@@ -5,6 +5,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
+interface EmailSection {
+  message: string;
+  images: string[];
+}
+
 interface CustomEmailData {
   emails: string[];
   subject: string;
@@ -12,6 +17,7 @@ interface CustomEmailData {
   recipientType: 'students' | 'instructors';
   images?: string[]; // Optional array of image URLs to include in the email
   headerImage?: string; // Optional header/logo image URL
+  sections?: EmailSection[]; // Optional sections with message and images
 }
 
 // Helper function to delay execution (for rate limiting)
@@ -55,9 +61,95 @@ serve(async (req) => {
       ? `<img src="${emailData.headerImage}" alt="BookMyQuiltRetreat" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />`
       : `<h1 style="color: white; margin: 0;">BookMyQuiltRetreat</h1>`
 
-    // Build images HTML if provided
+    // Build HTML from sections if provided, otherwise use legacy images/message
+    let sectionsHtml = ""
+    if (emailData.sections && emailData.sections.length > 0) {
+      // Use sections to build the email content
+      sectionsHtml = emailData.sections.map((section, sectionIdx) => {
+        const sectionMessage = section.message.trim()
+        const sectionImages = section.images || []
+        
+        // Build images HTML for this section
+        let sectionImagesHtml = ""
+        if (sectionImages.length > 0) {
+          const imageCount = sectionImages.length
+          
+          if (imageCount === 1) {
+            sectionImagesHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 15px 0;">
+      <tr>
+        <td align="center" style="padding: 10px;">
+          <img src="${sectionImages[0]}" alt="Section Image" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block;" />
+        </td>
+      </tr>
+    </table>
+            `
+          } else if (imageCount === 2) {
+            sectionImagesHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 15px 0;">
+      <tr>
+        <td align="center" class="image-cell" style="padding: 5px; width: 50%;">
+          <img src="${sectionImages[0]}" alt="Section Image 1" style="max-width: 280px; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block;" />
+        </td>
+        <td align="center" class="image-cell" style="padding: 5px; width: 50%;">
+          <img src="${sectionImages[1]}" alt="Section Image 2" style="max-width: 280px; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block;" />
+        </td>
+      </tr>
+    </table>
+            `
+          } else {
+            const rows: string[][] = []
+            for (let i = 0; i < sectionImages.length; i += 2) {
+              rows.push(sectionImages.slice(i, i + 2))
+            }
+            
+            sectionImagesHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 15px 0;">
+        ${rows.map((row, rowIdx) => `
+      <tr>
+        ${row.map((imageUrl, colIdx) => {
+          const globalIdx = rowIdx * 2 + colIdx + 1
+          return `
+        <td align="center" class="image-cell" style="padding: 5px; width: ${row.length === 1 ? '100%' : '50%'};">
+          <img src="${imageUrl}" alt="Section Image ${globalIdx}" style="max-width: ${row.length === 1 ? '100%' : '280px'}; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block;" />
+        </td>
+        `
+        }).join('')}
+        ${row.length === 1 ? '<td style="width: 50%;"></td>' : ''}
+      </tr>
+        `).join('')}
+    </table>
+            `
+          }
+        }
+        
+        // Combine message and images for this section
+        let sectionHtml = ""
+        if (sectionMessage) {
+          sectionHtml += `
+    <div style="white-space: pre-wrap; color: #333; line-height: 1.8; margin-bottom: ${sectionImages.length > 0 ? '15px' : '20px'};">
+${sectionMessage}
+    </div>
+          `
+        }
+        if (sectionImagesHtml) {
+          sectionHtml += sectionImagesHtml
+        }
+        
+        // Add separator between sections (except for the last one)
+        if (sectionIdx < emailData.sections.length - 1 && (sectionMessage || sectionImages.length > 0)) {
+          sectionHtml += `
+    <div style="margin: 20px 0; border-top: 1px solid #e0e0e0;"></div>
+          `
+        }
+        
+        return sectionHtml
+      }).join("")
+    }
+    
+    // Build images HTML if provided (legacy support)
     let imagesHtml = ""
-    if (emailData.images && emailData.images.length > 0) {
+    if (!emailData.sections && emailData.images && emailData.images.length > 0) {
       const imageCount = emailData.images.length
       
       // For single image, display full width
@@ -142,10 +234,10 @@ serve(async (req) => {
   </div>
   <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0; border-top: none;">
     <h2 style="color: #667eea; margin-top: 0;">${emailData.subject}</h2>
-    ${imagesHtml ? `<div style="margin-bottom: 20px;">${imagesHtml}</div>` : ""}
-    <div style="white-space: pre-wrap; color: #333; line-height: 1.8;">
+    ${sectionsHtml ? sectionsHtml : (imagesHtml ? `<div style="margin-bottom: 20px;">${imagesHtml}</div>` : "")}
+    ${!sectionsHtml ? `<div style="white-space: pre-wrap; color: #333; line-height: 1.8;">
 ${emailData.message}
-    </div>
+    </div>` : ""}
     <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
       <p style="color: #666; font-size: 14px; margin: 0;">
         Visit us at <a href="${baseUrl}" style="color: #667eea; text-decoration: none;">${baseUrl}</a>

@@ -66,6 +66,11 @@ export const notifyStudentsAboutNewRetreat = async (retreatData: RetreatEmailDat
   }
 };
 
+interface EmailSection {
+  message: string;
+  images: string[];
+}
+
 interface CustomEmailData {
   emails: string[];
   subject: string;
@@ -73,6 +78,7 @@ interface CustomEmailData {
   recipientType: 'students' | 'instructors';
   images?: string[]; // Optional array of image URLs to include in the email
   headerImage?: string; // Optional header/logo image URL
+  sections?: EmailSection[]; // Optional sections with message and images
 }
 
 /**
@@ -96,6 +102,7 @@ export const sendCustomEmail = async (emailData: CustomEmailData): Promise<{ err
         recipientType: emailData.recipientType,
         images: emailData.images,
         headerImage: emailData.headerImage,
+        sections: emailData.sections,
       },
     });
 
