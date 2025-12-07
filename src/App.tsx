@@ -125,7 +125,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Public Landing Page */}
+          {/* Public Landing Page - First page users see */}
           <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
           
           {/* Public Routes - Only Login/Signup and Email Confirmation */}
@@ -138,11 +138,18 @@ const App = () => (
           {/* Public Legal Pages */}
           <Route path="/privacy" element={<PublicRoute><PrivacyPolicy /></PublicRoute>} />
           
+          {/* Public Retreat Browsing - Event Feed */}
+          <Route path="/browse" element={<Index />} />
+          <Route path="/discover" element={<Index />} />
+          
           {/* Protected Student Routes */}
-          <Route path="/discover" element={<StudentRoute><Index /></StudentRoute>} />
           <Route path="/home" element={<StudentRoute><Home /></StudentRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/retreat/:id" element={<ProtectedRoute><RetreatDetail /></ProtectedRoute>} />
+          
+          {/* Public Retreat Detail - can view without login */}
+          <Route path="/retreat/:id" element={<RetreatDetail />} />
+          
+          {/* Protected Booking Routes */}
           <Route path="/retreat/:id/book" element={<StudentRoute><Booking /></StudentRoute>} />
           <Route path="/retreat/:id/payment" element={<StudentRoute><Payment /></StudentRoute>} />
           <Route path="/retreat/:id/confirmed" element={<StudentRoute><Confirmation /></StudentRoute>} />

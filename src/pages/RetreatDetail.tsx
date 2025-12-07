@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +6,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, MapPin, Calendar, Users, Clock, Heart } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { Header } from "@/components/Header";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface RetreatData {
   id: number;
@@ -34,8 +44,13 @@ const RetreatDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { role, user } = useAuth();
+  const { toast } = useToast();
   const [retreat, setRetreat] = useState<RetreatData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSaved, setIsSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showSignupDialog, setShowSignupDialog] = useState(false);
+  const [actionType, setActionType] = useState<'save' | 'register'>('register');
 
   // Fetch retreat from Supabase
   useEffect(() => {
@@ -58,8 +73,8 @@ const RetreatDetail = () => {
           `)
           .eq('id', Number(id));
 
-        // Students can only see published retreats
-        if (role === 'student') {
+        // Public users and students can only see published retreats
+        if (role === 'student' || !user) {
           query = query.eq('published', true);
         } else if (role === 'instructor' && user) {
           // Instructors can see their own retreats (published or not)
@@ -109,6 +124,111 @@ const RetreatDetail = () => {
     fetchRetreat();
   }, [id, role, user]);
 
+  // Check if retreat is saved
+  useEffect(() => {
+    const checkIfSaved = async () => {
+      if (!user || !id) {
+        setIsSaved(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('saved_retreats')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('retreat_id', Number(id))
+          .single();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+          console.error('Error checking saved status:', error);
+        } else {
+          setIsSaved(!!data);
+        }
+      } catch (error) {
+        console.error('Unexpected error checking saved status:', error);
+      }
+    };
+
+    checkIfSaved();
+  }, [user, id]);
+
+  const handleSaveClick = async () => {
+    if (!user) {
+      setActionType('save');
+      setShowSignupDialog(true);
+      return;
+    }
+
+    if (!id) return;
+
+    setSaving(true);
+    try {
+      if (isSaved) {
+        // Unsave the retreat
+        const { error } = await supabase
+          .from('saved_retreats')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('retreat_id', Number(id));
+
+        if (error) {
+          throw error;
+        }
+
+        setIsSaved(false);
+        toast({
+          title: "Retreat unsaved",
+          description: "This retreat has been removed from your saved list.",
+        });
+      } else {
+        // Save the retreat
+        const { error } = await supabase
+          .from('saved_retreats')
+          .insert({
+            user_id: user.id,
+            retreat_id: Number(id),
+          });
+
+        if (error) {
+          throw error;
+        }
+
+        setIsSaved(true);
+        toast({
+          title: "Retreat saved!",
+          description: "You can find this retreat in your saved list.",
+        });
+      }
+    } catch (error: any) {
+      console.error('Error saving/unsaving retreat:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save retreat. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRegisterClick = () => {
+    if (!user) {
+      setActionType('register');
+      setShowSignupDialog(true);
+    } else if (role === 'student') {
+      navigate(`/retreat/${id}/book`, { 
+        state: { 
+          retreat: {
+            ...retreat,
+            spotsAvailable: retreat?.spots_available,
+            totalSpots: retreat?.total_spots,
+          }
+        } 
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -124,20 +244,20 @@ const RetreatDetail = () => {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-2">Retreat Not Found</h1>
-          <Button onClick={() => navigate("/discover")}>Back to Retreats</Button>
+          <Button onClick={() => navigate("/browse")}>Back to Retreats</Button>
         </div>
       </div>
     );
   }
 
-  // Students can only view published retreats
-  if (role === 'student' && !retreat.published) {
+  // Public users and students can only view published retreats
+  if ((role === 'student' || !user) && !retreat.published) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-2">Retreat Not Available</h1>
           <p className="text-muted-foreground mb-4">This retreat is not published yet.</p>
-          <Button onClick={() => navigate("/discover")}>Back to Retreats</Button>
+          <Button onClick={() => navigate("/browse")}>Back to Retreats</Button>
         </div>
       </div>
     );
@@ -145,6 +265,9 @@ const RetreatDetail = () => {
 
   return (
     <div className="min-h-screen bg-gradient-hero pb-20">
+      {/* Header - only show if not logged in */}
+      {!user && <Header />}
+      
       {/* Header Image */}
       <div className="relative">
         <img
@@ -163,9 +286,14 @@ const RetreatDetail = () => {
         <Button
           variant="secondary"
           size="icon"
-          className="absolute top-4 right-4 rounded-full"
+          className={`absolute top-4 right-4 rounded-full ${isSaved ? 'bg-primary text-primary-foreground' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleSaveClick();
+          }}
+          disabled={saving}
         >
-          <Heart className="w-5 h-5" />
+          <Heart className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
         </Button>
       </div>
 
@@ -296,24 +424,25 @@ const RetreatDetail = () => {
           </CardContent>
         </Card>
 
-        {/* Book Button - Only show to students */}
-        {role === 'student' && (
+        {/* Book Button - Show to all, but prompt for signup if not logged in */}
+        {retreat.published && (
           <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-card border-t border-border pb-safe">
             <div className="max-w-4xl mx-auto">
-              <Button
-                className="w-full h-12 text-base sm:text-lg"
-                onClick={() => navigate(`/retreat/${id}/book`, { 
-                  state: { 
-                    retreat: {
-                      ...retreat,
-                      spotsAvailable: retreat.spots_available,
-                      totalSpots: retreat.total_spots,
-                    }
-                  } 
-                })}
-              >
-                Book This Retreat - ${retreat.price}
-              </Button>
+              {user && role === 'student' ? (
+                <Button
+                  className="w-full h-12 text-base sm:text-lg"
+                  onClick={handleRegisterClick}
+                >
+                  Book This Retreat - ${retreat.price}
+                </Button>
+              ) : !user ? (
+                <Button
+                  className="w-full h-12 text-base sm:text-lg"
+                  onClick={handleRegisterClick}
+                >
+                  Register for This Retreat - ${retreat.price}
+                </Button>
+              ) : null}
             </div>
           </div>
         )}
@@ -332,6 +461,39 @@ const RetreatDetail = () => {
           </div>
         )}
       </div>
+
+      {/* Signup Dialog */}
+      <Dialog open={showSignupDialog} onOpenChange={setShowSignupDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {actionType === 'save' ? 'Save This Retreat' : 'Register for This Retreat'}
+            </DialogTitle>
+            <DialogDescription>
+              {actionType === 'save' 
+                ? 'Create a free account to save retreats you\'re interested in and get notifications about upcoming events.'
+                : 'Create a free account to register for this retreat and secure your spot.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowSignupDialog(false)}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              asChild
+              className="w-full sm:w-auto"
+            >
+              <Link to={`/signup?role=student${actionType === 'save' ? '&redirect=' + encodeURIComponent(`/retreat/${id}`) : ''}`}>
+                Create Free Account
+              </Link>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

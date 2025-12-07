@@ -31,22 +31,14 @@ export const Header = () => {
   const handleHowItWorksClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     
-    if (location.pathname === '/') {
-      // If already on landing page, scroll to section
+    // Navigate to landing page, then scroll
+    navigate('/');
+    setTimeout(() => {
       const element = document.getElementById('how-it-works');
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-    } else {
-      // Navigate to landing page, then scroll
-      navigate('/');
-      setTimeout(() => {
-        const element = document.getElementById('how-it-works');
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }, 100);
-    }
+    }, 100);
     
     setMobileMenuOpen(false);
   };
@@ -54,17 +46,8 @@ export const Header = () => {
   const handleHomeClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     
-    if (location.pathname === '/') {
-      // If already on landing page, scroll to top
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else {
-      // Navigate to landing page
-      navigate('/');
-      setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 100);
-    }
-    
+    // Navigate to landing page
+    navigate('/');
     setMobileMenuOpen(false);
   };
 
@@ -92,16 +75,16 @@ export const Header = () => {
                 {role === 'student' && (
                   <>
                     <Link
-                      to="/discover"
+                      to="/browse"
                       className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      Discover
+                      Browse Retreats
                     </Link>
                     <Link
                       to="/home"
                       className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      Home
+                      My Dashboard
                     </Link>
                   </>
                 )}
@@ -154,15 +137,14 @@ export const Header = () => {
               </>
             ) : (
               <>
-                <a
-                  href="/"
-                  onClick={handleHomeClick}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                <Link
+                  to="/browse"
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Home
-                </a>
+                  Browse Retreats
+                </Link>
                 <a
-                  href="#how-it-works"
+                  href="/#how-it-works"
                   onClick={handleHowItWorksClick}
                   className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                 >
@@ -240,18 +222,18 @@ export const Header = () => {
                     {role === 'student' && (
                       <>
                         <Link
-                          to="/discover"
+                          to="/browse"
                           className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
                           onClick={() => setMobileMenuOpen(false)}
                         >
-                          Discover
+                          Browse Retreats
                         </Link>
                         <Link
                           to="/home"
                           className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
                           onClick={() => setMobileMenuOpen(false)}
                         >
-                          Home
+                          My Dashboard
                         </Link>
                       </>
                     )}
@@ -297,15 +279,15 @@ export const Header = () => {
                 ) : (
                   <>
                     <div className="space-y-1">
-                      <a
-                        href="/"
-                        onClick={handleHomeClick}
+                      <Link
+                        to="/"
+                        onClick={() => setMobileMenuOpen(false)}
                         className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
                       >
-                        Home
-                      </a>
+                        Browse Retreats
+                      </Link>
                       <a
-                        href="#how-it-works"
+                        href="/#how-it-works"
                         onClick={handleHowItWorksClick}
                         className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
                       >

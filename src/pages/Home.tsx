@@ -2,11 +2,35 @@ import { useState, useEffect } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Star, Award, GraduationCap } from "lucide-react";
+import { Calendar, Star, Award, GraduationCap, Heart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { RetreatCard } from "@/components/RetreatCard";
+
+interface SavedRetreat {
+  id: number;
+  title: string;
+  description: string;
+  location: string;
+  date: string;
+  duration: string;
+  level: "Beginner" | "Intermediate" | "Advanced";
+  price: number;
+  total_spots: number;
+  spots_available: number;
+  image: string;
+  includes: string[];
+  schedule: { day: string; activities: string }[];
+  published: boolean;
+  instructor_id: string;
+  instructor: {
+    name: string;
+    avatar: string;
+    bio: string;
+  };
+}
 
 const Home = () => {
   const navigate = useNavigate();
@@ -14,6 +38,8 @@ const Home = () => {
   const { toast } = useToast();
   const [firstName, setFirstName] = useState<string>("");
   const [creatingProfile, setCreatingProfile] = useState(false);
+  const [savedRetreats, setSavedRetreats] = useState<SavedRetreat[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(true);
 
   // Fetch user's first name from profile
   useEffect(() => {
@@ -42,6 +68,86 @@ const Home = () => {
 
     fetchFirstName();
   }, [user]);
+
+  // Fetch saved retreats
+  useEffect(() => {
+    const fetchSavedRetreats = async () => {
+      if (!user || role !== 'student') {
+        setLoadingSaved(false);
+        return;
+      }
+
+      try {
+        // First, get all saved retreat IDs for this user
+        const { data: savedData, error: savedError } = await supabase
+          .from('saved_retreats')
+          .select('retreat_id')
+          .eq('user_id', user.id);
+
+        if (savedError) {
+          console.error('Error fetching saved retreats:', savedError);
+          setLoadingSaved(false);
+          return;
+        }
+
+        if (!savedData || savedData.length === 0) {
+          setSavedRetreats([]);
+          setLoadingSaved(false);
+          return;
+        }
+
+        // Then fetch the actual retreat data
+        const retreatIds = savedData.map(item => item.retreat_id);
+        const { data: retreatsData, error: retreatsError } = await supabase
+          .from('retreats')
+          .select(`
+            *,
+            instructor:profiles!instructor_id(
+              full_name,
+              avatar_url,
+              bio
+            )
+          `)
+          .in('id', retreatIds)
+          .eq('published', true)
+          .order('created_at', { ascending: false });
+
+        if (retreatsError) {
+          console.error('Error fetching retreat details:', retreatsError);
+        } else if (retreatsData) {
+          const transformedRetreats = retreatsData.map((retreat: any) => ({
+            id: retreat.id,
+            title: retreat.title,
+            description: retreat.description,
+            location: retreat.location,
+            date: retreat.date,
+            duration: retreat.duration,
+            level: retreat.level,
+            price: retreat.price,
+            total_spots: retreat.total_spots,
+            spots_available: retreat.spots_available,
+            image: retreat.image,
+            includes: retreat.includes || [],
+            schedule: retreat.schedule || [],
+            published: retreat.published,
+            instructor_id: retreat.instructor_id,
+            instructor: {
+              name: retreat.instructor?.full_name || 'Instructor',
+              avatar: retreat.instructor?.avatar_url || '',
+              bio: retreat.instructor?.bio || '',
+            },
+          }));
+          setSavedRetreats(transformedRetreats);
+        }
+      } catch (error) {
+        console.error('Unexpected error fetching saved retreats:', error);
+      } finally {
+        setLoadingSaved(false);
+      }
+    };
+
+    fetchSavedRetreats();
+  }, [user, role]);
 
   const handleCreateInstructorProfile = async () => {
     if (!user) return;
@@ -99,43 +205,74 @@ const Home = () => {
         <div className="grid grid-cols-2 gap-4">
           <Card>
             <CardContent className="p-4 text-center">
-              <Calendar className="w-8 h-8 text-primary mx-auto mb-2" />
-              <p className="text-2xl font-bold text-card-foreground">2</p>
-              <p className="text-sm text-muted-foreground">Upcoming</p>
+              <Heart className="w-8 h-8 text-primary mx-auto mb-2 fill-primary" />
+              <p className="text-2xl font-bold text-card-foreground">{savedRetreats.length}</p>
+              <p className="text-sm text-muted-foreground">Saved</p>
             </CardContent>
           </Card>
           
           <Card>
             <CardContent className="p-4 text-center">
-              <Award className="w-8 h-8 text-primary mx-auto mb-2" />
-              <p className="text-2xl font-bold text-card-foreground">5</p>
-              <p className="text-sm text-muted-foreground">Completed</p>
+              <Calendar className="w-8 h-8 text-primary mx-auto mb-2" />
+              <p className="text-2xl font-bold text-card-foreground">0</p>
+              <p className="text-sm text-muted-foreground">Upcoming</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Featured Retreat */}
+        {/* Saved Retreats */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-2 mb-4">
-              <Star className="w-5 h-5 text-primary fill-primary" />
-              <h3 className="text-xl font-semibold text-card-foreground">Featured Retreat</h3>
+              <Heart className="w-5 h-5 text-primary fill-primary" />
+              <h3 className="text-xl font-semibold text-card-foreground">Saved Retreats</h3>
             </div>
             
-            <img
-              src="https://images.unsplash.com/photo-1706614452468-d9d7c5b967b6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080"
-              alt="Featured retreat"
-              className="w-full h-48 object-cover rounded-lg mb-4"
-            />
-            
-            <h4 className="text-lg font-semibold text-card-foreground mb-2">
-              Modern Quilting Techniques
-            </h4>
-            <p className="text-sm text-muted-foreground mb-4">
-              Join Emma Thompson for an immersive 4-day workshop in Burlington, Vermont.
-            </p>
-            
-            <Button className="w-full">View Details</Button>
+            {loadingSaved ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Loading saved retreats...</p>
+              </div>
+            ) : savedRetreats.length > 0 ? (
+              <div className="space-y-4">
+                {savedRetreats.map((retreat) => (
+                  <RetreatCard
+                    key={retreat.id}
+                    id={retreat.id}
+                    image={retreat.image || "/placeholder.svg"}
+                    level={retreat.level}
+                    title={retreat.title}
+                    instructor={{
+                      name: retreat.instructor.name,
+                      avatar: retreat.instructor.avatar,
+                    }}
+                    location={retreat.location}
+                    date={retreat.date}
+                    duration={retreat.duration}
+                    spotsAvailable={retreat.spots_available}
+                    totalSpots={retreat.total_spots}
+                    price={retreat.price}
+                  />
+                ))}
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => navigate('/browse')}
+                >
+                  Browse More Retreats
+                </Button>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                <p className="text-muted-foreground mb-2">No saved retreats yet</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Save retreats you're interested in by clicking the heart icon
+                </p>
+                <Button onClick={() => navigate('/browse')}>
+                  Browse Retreats
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 

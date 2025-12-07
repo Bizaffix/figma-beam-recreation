@@ -6,6 +6,7 @@ import { Search, SlidersHorizontal, Calendar as CalendarIcon, MapPin, X, ArrowUp
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { Header } from "@/components/Header";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -41,7 +42,7 @@ const Index = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [retreats, setRetreats] = useState<RetreatData[]>([]);
   const [loading, setLoading] = useState(true);
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   
   // Filter states
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
@@ -193,6 +194,9 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-hero pb-20">
+      {/* Header - only show if not logged in */}
+      {!user && <Header />}
+      
       {/* Hero Section */}
       <div className="bg-gradient-primary text-white px-6 py-8 relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
@@ -572,8 +576,8 @@ const Index = () => {
         </SheetContent>
       </Sheet>
 
-      {/* Bottom Navigation */}
-      <BottomNav />
+      {/* Bottom Navigation - only show if logged in */}
+      {user && <BottomNav />}
     </div>
   );
 };

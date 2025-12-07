@@ -24,6 +24,34 @@ const Landing = () => {
       <Header />
       
       <main className="flex-1">
+      {/* Primary CTA Buttons at Top */}
+      <section className="bg-gradient-primary text-white py-6 sm:py-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
+            <Button 
+              asChild 
+              size="lg" 
+              className="bg-white text-primary hover:bg-white/90 hover:text-primary transition-all shadow-xl hover:shadow-2xl w-full sm:w-auto min-w-[200px]"
+            >
+              <Link to="/browse">
+                I'm a Quilter – Find a Retreat
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Link>
+            </Button>
+            <Button 
+              asChild 
+              size="lg" 
+              className="border-2 border-white bg-white/10 backdrop-blur-sm text-white hover:bg-white hover:text-primary transition-all shadow-xl hover:shadow-2xl w-full sm:w-auto min-w-[200px]"
+            >
+              <Link to="/signup?role=instructor">
+                I'm an Instructor/Host – List My Retreat
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
       {/* Hero Section */}
       <section id="hero" className="relative text-white overflow-hidden min-h-[85vh] sm:min-h-[85vh] md:min-h-[70vh] lg:min-h-[65vh] flex items-center">
         {/* Background Image with Overlay */}
@@ -63,29 +91,6 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Primary CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center pt-3 sm:pt-4 md:pt-5">
-              <Button 
-                asChild 
-                size="lg" 
-                className="bg-white text-primary hover:bg-white/90 hover:text-primary transition-all shadow-xl hover:shadow-2xl w-full sm:w-auto min-w-[200px]"
-              >
-                <Link to="/signup?role=student">
-                  I'm a Quilter – Find a Retreat
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Link>
-              </Button>
-              <Button 
-                asChild 
-                size="lg" 
-                className="border-2 border-white bg-white/10 backdrop-blur-sm text-white hover:bg-white hover:text-primary transition-all shadow-xl hover:shadow-2xl w-full sm:w-auto min-w-[200px]"
-              >
-                <Link to="/signup?role=instructor">
-                  I'm an Instructor/Host – List My Retreat
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Link>
-              </Button>
-            </div>
           </div>
         </div>
       </section>
