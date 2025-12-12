@@ -14,6 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 import { INSTRUCTOR_AGREEMENT } from "@/content/instructor-agreement";
 import { PRIVACY_POLICY } from "@/content/privacy-policy";
+import { STUDENT_TERMS_AND_CONDITIONS } from "@/content/student-terms-and-conditions";
+import { STUDENT_PRIVACY_POLICY } from "@/content/student-privacy-policy";
 
 const Signup = () => {
   const [email, setEmail] = useState("");
@@ -28,6 +30,8 @@ const Signup = () => {
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const [showTermsDialog, setShowTermsDialog] = useState(false);
   const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
+  const [showStudentTermsDialog, setShowStudentTermsDialog] = useState(false);
+  const [showStudentPrivacyDialog, setShowStudentPrivacyDialog] = useState(false);
   const { signUp } = useAuth();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -54,12 +58,21 @@ const Signup = () => {
       return;
     }
     
-    // Validate agreement checkboxes for instructors
+    // Validate agreement checkboxes
     if (selectedRole === 'instructor') {
       if (!agreedToTerms || !agreedToPrivacy) {
         toast({
           title: "Error",
           description: "Please read and agree to the Instructor Terms of Service and Privacy Policy",
+          variant: "destructive",
+        });
+        return;
+      }
+    } else if (selectedRole === 'student') {
+      if (!agreedToTerms || !agreedToPrivacy) {
+        toast({
+          title: "Error",
+          description: "Please read and agree to the Participant Terms and Conditions and Privacy Policy",
           variant: "destructive",
         });
         return;
@@ -249,6 +262,9 @@ const Signup = () => {
                   if (value === 'student') {
                     setAgreedToTerms(false);
                     setAgreedToPrivacy(false);
+                  } else if (value === 'instructor') {
+                    setAgreedToTerms(false);
+                    setAgreedToPrivacy(false);
                   }
                 }}
                 className="flex gap-3 sm:gap-4"
@@ -294,6 +310,52 @@ const Signup = () => {
                 />
               </div>
             </div>
+            
+            {selectedRole === 'student' && (
+              <div className="space-y-2 pt-2 border-t">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="student-terms-agreement"
+                    checked={agreedToTerms}
+                    onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="student-terms-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
+                      I have read and agree to the{" "}
+                      <button
+                        type="button"
+                        onClick={() => setShowStudentTermsDialog(true)}
+                        className="text-primary hover:underline font-medium"
+                      >
+                        Participant Terms and Conditions
+                      </button>
+                    </Label>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="student-privacy-agreement"
+                    checked={agreedToPrivacy}
+                    onCheckedChange={(checked) => setAgreedToPrivacy(checked === true)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="student-privacy-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
+                      I have read and agree to the{" "}
+                      <button
+                        type="button"
+                        onClick={() => setShowStudentPrivacyDialog(true)}
+                        className="text-primary hover:underline font-medium"
+                      >
+                        Privacy Policy
+                      </button>
+                    </Label>
+                  </div>
+                </div>
+              </div>
+            )}
             
             {selectedRole === 'instructor' && (
               <>
@@ -434,6 +496,54 @@ const Signup = () => {
           </div>
           <div className="flex justify-end pt-4 pb-6 px-6 border-t flex-shrink-0">
             <Button onClick={() => setShowTermsDialog(false)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Student Terms and Conditions Dialog */}
+      <Dialog open={showStudentTermsDialog} onOpenChange={setShowStudentTermsDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
+            <DialogTitle>{STUDENT_TERMS_AND_CONDITIONS.title}</DialogTitle>
+            <DialogDescription>
+              {STUDENT_TERMS_AND_CONDITIONS.company} • Last Updated: {STUDENT_TERMS_AND_CONDITIONS.lastUpdated}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+            <div className="pr-4">
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+                  {STUDENT_TERMS_AND_CONDITIONS.content}
+                </pre>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end pt-4 pb-6 px-6 border-t flex-shrink-0">
+            <Button onClick={() => setShowStudentTermsDialog(false)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Student Privacy Policy Dialog */}
+      <Dialog open={showStudentPrivacyDialog} onOpenChange={setShowStudentPrivacyDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
+            <DialogTitle>{STUDENT_PRIVACY_POLICY.title}</DialogTitle>
+            <DialogDescription>
+              {STUDENT_PRIVACY_POLICY.company} • Last Updated: {STUDENT_PRIVACY_POLICY.lastUpdated}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+            <div className="pr-4">
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+                  {STUDENT_PRIVACY_POLICY.content}
+                </pre>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end pt-4 pb-6 px-6 border-t flex-shrink-0">
+            <Button onClick={() => setShowStudentPrivacyDialog(false)}>Close</Button>
           </div>
         </DialogContent>
       </Dialog>
