@@ -1,0 +1,272 @@
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { 
+  GraduationCap, 
+  Settings, 
+  CheckCircle2, 
+  AlertCircle,
+  Users,
+  Calendar,
+  DollarSign,
+  MessageSquare
+} from "lucide-react";
+
+interface InstructorModeSettings {
+  enabled: boolean;
+  instructor_bio: string;
+  instructor_specialties: string[];
+  teaching_experience: string;
+  preferred_group_sizes: string[];
+  pricing_visibility: 'public' | 'private' | 'property_only';
+}
+
+const InstructorModeToggle = () => {
+  const { user, role } = useAuth();
+  const [settings, setSettings] = useState<InstructorModeSettings>({
+    enabled: false,
+    instructor_bio: '',
+    instructor_specialties: [],
+    teaching_experience: '',
+    preferred_group_sizes: [],
+    pricing_visibility: 'private'
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (user && role === 'location_owner') {
+      fetchInstructorSettings();
+    }
+  }, [user, role]);
+
+  const fetchInstructorSettings = async () => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('instructor_mode_settings')
+        .eq('id', user?.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (profile?.instructor_mode_settings) {
+        setSettings(profile.instructor_mode_settings);
+      }
+    } catch (error) {
+      console.error('Error fetching instructor settings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveSettings = async () => {
+    if (!user) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          instructor_mode_settings: settings,
+          instructor_mode_enabled: settings.enabled
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      // Update local auth context if needed
+      // This would trigger a role change or additional permissions
+    } catch (error) {
+      console.error('Error saving instructor settings:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleInstructorMode = (enabled: boolean) => {
+    setSettings(prev => ({ ...prev, enabled }));
+  };
+
+  if (role !== 'location_owner') {
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-4 bg-muted rounded w-1/4"></div>
+            <div className="h-3 bg-muted rounded w-3/4"></div>
+            <div className="h-3 bg-muted rounded w-1/2"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <GraduationCap className="w-5 h-5" />
+          Instructor Mode
+        </CardTitle>
+        <CardDescription>
+          Enable instructor features to host your own retreats at your property
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Toggle Switch */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <Label htmlFor="instructor-mode" className="text-base font-medium">
+              Enable Instructor Mode
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Get full event tools for retreats you personally create
+            </p>
+          </div>
+          <Switch
+            id="instructor-mode"
+            checked={settings.enabled}
+            onCheckedChange={toggleInstructorMode}
+          />
+        </div>
+
+        {settings.enabled && (
+          <>
+            {/* Benefits */}
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>
+                With instructor mode enabled, you'll have access to:
+              </AlertDescription>
+            </Alert>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-start gap-3">
+                <Users className="w-5 h-5 text-primary mt-1" />
+                <div>
+                  <h4 className="font-medium text-sm">Student Management</h4>
+                  <p className="text-xs text-muted-foreground">Manage registrations and communications</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Calendar className="w-5 h-5 text-primary mt-1" />
+                <div>
+                  <h4 className="font-medium text-sm">Event Creation</h4>
+                  <p className="text-xs text-muted-foreground">Create and manage your own retreats</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <DollarSign className="w-5 h-5 text-primary mt-1" />
+                <div>
+                  <h4 className="font-medium text-sm">Payment Processing</h4>
+                  <p className="text-xs text-muted-foreground">Handle payments for your events</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <MessageSquare className="w-5 h-5 text-primary mt-1" />
+                <div>
+                  <h4 className="font-medium text-sm">Student Messaging</h4>
+                  <p className="text-xs text-muted-foreground">Communicate with your participants</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Instructor Profile */}
+            <div className="space-y-4">
+              <h4 className="font-medium">Instructor Profile</h4>
+              
+              <div className="space-y-2">
+                <Label htmlFor="bio">Teaching Bio</Label>
+                <textarea
+                  id="bio"
+                  className="w-full p-2 border rounded-md"
+                  rows={3}
+                  placeholder="Tell quilters about your teaching experience and specialties..."
+                  value={settings.instructor_bio}
+                  onChange={(e) => setSettings(prev => ({ ...prev, instructor_bio: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="experience">Teaching Experience</Label>
+                <input
+                  id="experience"
+                  type="text"
+                  className="w-full p-2 border rounded-md"
+                  placeholder="e.g., 5+ years teaching quilting workshops"
+                  value={settings.teaching_experience}
+                  onChange={(e) => setSettings(prev => ({ ...prev, teaching_experience: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Preferred Group Sizes</Label>
+                <div className="flex flex-wrap gap-2">
+                  {['Small (4-8)', 'Medium (9-15)', 'Large (16+)'].map((size) => (
+                    <Badge
+                      key={size}
+                      variant={settings.preferred_group_sizes.includes(size) ? 'default' : 'outline'}
+                      className="cursor-pointer"
+                      onClick={() => {
+                        setSettings(prev => ({
+                          ...prev,
+                          preferred_group_sizes: prev.preferred_group_sizes.includes(size)
+                            ? prev.preferred_group_sizes.filter(s => s !== size)
+                            : [...prev.preferred_group_sizes, size]
+                        }));
+                      }}
+                    >
+                      {size}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Pricing Visibility */}
+            <div className="space-y-2">
+              <Label>Pricing Visibility</Label>
+              <select
+                className="w-full p-2 border rounded-md"
+                value={settings.pricing_visibility}
+                onChange={(e) => setSettings(prev => ({ ...prev, pricing_visibility: e.target.value as any }))}
+              >
+                <option value="private">Private (only you can see)</option>
+                <option value="property_only">Property Only (show on your property page)</option>
+                <option value="public">Public (show in search results)</option>
+              </select>
+            </div>
+
+            {/* Note about Dual Role */}
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                You'll have both Property Owner and Instructor permissions. Instructor features only apply to events you personally create.
+              </AlertDescription>
+            </Alert>
+          </>
+        )}
+
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <Button onClick={saveSettings} disabled={saving}>
+            {saving ? 'Saving...' : 'Save Settings'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default InstructorModeToggle;

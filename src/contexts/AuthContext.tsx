@@ -5,10 +5,10 @@ import { supabase } from '@/lib/supabase';
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  role: 'instructor' | 'student' | 'admin' | null;
+  role: 'instructor' | 'student' | 'admin' | 'location_owner' | null;
   loading: boolean;
-  signUp: (email: string, password: string, role?: 'student' | 'instructor', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }) => Promise<{ error: any; needsConfirmation?: boolean }>;
-  signIn: (email: string, password: string) => Promise<{ error: any; role?: 'instructor' | 'student' | 'admin' | undefined; needsConfirmation?: boolean }>;
+  signUp: (email: string, password: string, role?: 'student' | 'instructor' | 'location_owner', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }, locationOwnerData?: { firstName: string; lastName: string; propertyName?: string }) => Promise<{ error: any; needsConfirmation?: boolean }>;
+  signIn: (email: string, password: string) => Promise<{ error: any; role?: 'instructor' | 'student' | 'admin' | 'location_owner' | undefined; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<{ error: any }>;
   resetPassword: (email: string) => Promise<{ error: any }>;
@@ -20,7 +20,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [role, setRole] = useState<'instructor' | 'student' | 'admin' | null>(null);
+  const [role, setRole] = useState<'instructor' | 'student' | 'admin' | 'location_owner' | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -96,7 +96,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (error) {
         console.error('Error fetching user role:', error);
         setRole('student'); // Default to student on error
-      } else if (profile?.role === 'instructor' || profile?.role === 'student' || profile?.role === 'admin') {
+      } else if (profile?.role === 'instructor' || profile?.role === 'student' || profile?.role === 'admin' || profile?.role === 'location_owner') {
         setRole(profile.role);
       } else {
         // Default to student if no role is set
@@ -110,7 +110,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string, role: 'student' | 'instructor' = 'student', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }) => {
+  const signUp = async (email: string, password: string, role: 'student' | 'instructor' | 'location_owner' = 'student', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }, locationOwnerData?: { firstName: string; lastName: string; propertyName?: string }) => {
     // Get the redirect URL - use production URL from env or current origin
     const productionUrl = import.meta.env.VITE_SUPABASE_CONFIRM_URL || 'https://www.bookmyquiltretreat.com';
     const redirectUrl = import.meta.env.PROD 
@@ -118,14 +118,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       : `${window.location.origin}/auth/confirm`;
     
     // Store role, referral code, and user data in user metadata so the database trigger can use it
-    const userMetadata: { role?: string; referred_by?: string; first_name?: string; last_name?: string; bio?: string } = {
+    const userMetadata: { role?: string; referred_by?: string; first_name?: string; last_name?: string; bio?: string; property_name?: string } = {
       role: role,
     };
     if (referralCode) {
       userMetadata.referred_by = referralCode;
     }
     
-    // For students, use studentData; for instructors, use instructorData (which includes bio)
+    // For students, use studentData; for instructors, use instructorData; for location owners, use locationOwnerData
     if (role === 'instructor' && instructorData) {
       userMetadata.first_name = instructorData.firstName;
       userMetadata.last_name = instructorData.lastName;
@@ -133,6 +133,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } else if (role === 'student' && studentData) {
       userMetadata.first_name = studentData.firstName;
       userMetadata.last_name = studentData.lastName;
+    } else if (role === 'location_owner' && locationOwnerData) {
+      userMetadata.first_name = locationOwnerData.firstName;
+      userMetadata.last_name = locationOwnerData.lastName;
+      if (locationOwnerData.propertyName) {
+        userMetadata.property_name = locationOwnerData.propertyName;
+      }
     }
     
     const { data, error } = await supabase.auth.signUp({
@@ -195,7 +201,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', data.user.id)
         .single();
       
-      return { error, role: profile?.role as 'instructor' | 'student' | 'admin' | undefined };
+      return { error, role: profile?.role as 'instructor' | 'student' | 'admin' | 'location_owner' | undefined };
     }
 
     return { error, role: undefined };

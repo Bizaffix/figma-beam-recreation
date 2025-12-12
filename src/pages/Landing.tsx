@@ -27,7 +27,7 @@ const Landing = () => {
       {/* Primary CTA Buttons at Top */}
       <section className="bg-gradient-primary text-white py-6 sm:py-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 justify-center items-center">
             <Button 
               asChild 
               size="lg" 
@@ -45,6 +45,16 @@ const Landing = () => {
             >
               <Link to="/signup?role=instructor">
                 I'm an Instructor/Host – List My Retreat
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Link>
+            </Button>
+            <Button 
+              asChild 
+              size="lg" 
+              className="border-2 border-white bg-white/10 backdrop-blur-sm text-white hover:bg-white hover:text-primary transition-all shadow-xl hover:shadow-2xl w-full sm:w-auto min-w-[200px]"
+            >
+              <Link to="/signup?role=location_owner">
+                I Own a Property – Register My Location
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Link>
             </Button>

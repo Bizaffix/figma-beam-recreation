@@ -21,7 +21,7 @@ const Signup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'student' | 'instructor'>('student');
+  const [selectedRole, setSelectedRole] = useState<'student' | 'instructor' | 'location_owner'>('student');
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [bio, setBio] = useState("");
@@ -40,7 +40,7 @@ const Signup = () => {
   
   // Set initial role from URL parameter if provided
   useEffect(() => {
-    if (roleParam === 'student' || roleParam === 'instructor') {
+    if (roleParam === 'student' || roleParam === 'instructor' || roleParam === 'location_owner') {
       setSelectedRole(roleParam);
     }
   }, [roleParam]);
@@ -48,7 +48,7 @@ const Signup = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate name fields (required for both students and instructors)
+    // Validate name fields (required for all roles)
     if (!firstName.trim() || !lastName.trim()) {
       toast({
         title: "Error",
@@ -78,6 +78,7 @@ const Signup = () => {
         return;
       }
     }
+    // Location owners don't need terms agreement for basic signup (they'll agree during property registration)
     
     setLoading(true);
     try {
@@ -91,7 +92,11 @@ const Signup = () => {
         bio: bio.trim(),
       } : undefined;
       
-      const { error, needsConfirmation } = await signUp(email, password, selectedRole, referralCode, studentData, instructorData);
+      const locationOwnerData = selectedRole === 'location_owner' ? {
+        ...studentData,
+      } : undefined;
+      
+      const { error, needsConfirmation } = await signUp(email, password, selectedRole, referralCode, studentData, instructorData, locationOwnerData);
       if (error) {
         toast({
           title: "Error",
@@ -257,7 +262,7 @@ const Signup = () => {
               <RadioGroup
                 value={selectedRole}
                 onValueChange={(value) => {
-                  setSelectedRole(value as 'student' | 'instructor');
+                  setSelectedRole(value as 'student' | 'instructor' | 'location_owner');
                   // Reset agreement checkboxes when role changes
                   if (value === 'student') {
                     setAgreedToTerms(false);
@@ -265,9 +270,12 @@ const Signup = () => {
                   } else if (value === 'instructor') {
                     setAgreedToTerms(false);
                     setAgreedToPrivacy(false);
+                  } else if (value === 'location_owner') {
+                    setAgreedToTerms(false);
+                    setAgreedToPrivacy(false);
                   }
                 }}
-                className="flex gap-3 sm:gap-4"
+                className="flex flex-col sm:flex-row gap-3 sm:gap-4"
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="student" id="role-student" />
@@ -279,6 +287,12 @@ const Signup = () => {
                   <RadioGroupItem value="instructor" id="role-instructor" />
                   <Label htmlFor="role-instructor" className="font-normal cursor-pointer text-xs sm:text-sm md:text-base">
                     Instructor
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="location_owner" id="role-location-owner" />
+                  <Label htmlFor="role-location-owner" className="font-normal cursor-pointer text-xs sm:text-sm md:text-base">
+                    Venue Owner
                   </Label>
                 </div>
               </RadioGroup>

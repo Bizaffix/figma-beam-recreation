@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
+import { PermissionsProvider } from "./contexts/PermissionsContext";
 import Index from "./pages/Index";
 import Home from "./pages/Home";
 import Landing from "./pages/Landing";
@@ -21,6 +23,8 @@ import Signup from "./pages/Signup";
 import EmailConfirm from "./pages/EmailConfirm";
 import ResetPassword from "./pages/ResetPassword";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import LocationOwnerDashboard from "./pages/LocationOwnerDashboard";
+import VenueRegistration from "./pages/VenueRegistration";
 import { useAuth } from "./contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -39,6 +43,8 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
       return <Navigate to="/admin/dashboard" replace />;
     } else if (role === 'instructor') {
       return <Navigate to="/instructor/dashboard" replace />;
+    } else if (role === 'location_owner') {
+      return <Navigate to="/location-owner/dashboard" replace />;
     } else if (role === 'student') {
       return <Navigate to="/home" replace />;
     }
@@ -55,7 +61,7 @@ const ProtectedRoute = ({
   allowedRoles 
 }: { 
   children: React.ReactNode; 
-  allowedRoles?: ('instructor' | 'student' | 'admin')[] 
+  allowedRoles?: ('instructor' | 'student' | 'admin' | 'location_owner')[] 
 }) => {
   const { user, role, loading } = useAuth();
 
@@ -83,6 +89,8 @@ const ProtectedRoute = ({
       return <Navigate to="/admin/dashboard" replace />;
     } else if (role === 'instructor') {
       return <Navigate to="/instructor/dashboard" replace />;
+    } else if (role === 'location_owner') {
+      return <Navigate to="/location-owner/dashboard" replace />;
     } else {
       return <Navigate to="/home" replace />;
     }
@@ -113,6 +121,11 @@ const InstructorRoute = ({ children }: { children: React.ReactNode }) => {
   return <ProtectedRoute allowedRoles={['instructor']}>{children}</ProtectedRoute>;
 };
 
+// Location Owner-only routes
+const LocationOwnerRoute = ({ children }: { children: React.ReactNode }) => {
+  return <ProtectedRoute allowedRoles={['location_owner']}>{children}</ProtectedRoute>;
+};
+
 // Admin-only routes
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   return <ProtectedRoute allowedRoles={['admin']}>{children}</ProtectedRoute>;
@@ -124,7 +137,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
+        <AuthProvider>
+          <PermissionsProvider>
+            <Routes>
           {/* Public Landing Page - First page users see */}
           <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
           
@@ -160,12 +175,19 @@ const App = () => (
           <Route path="/instructor/retreats/new" element={<InstructorRoute><InstructorRetreatForm /></InstructorRoute>} />
           <Route path="/instructor/retreats/:id/edit" element={<InstructorRoute><InstructorRetreatForm /></InstructorRoute>} />
           
+          {/* Protected Location Owner Routes */}
+          <Route path="/location-owner/dashboard" element={<LocationOwnerRoute><LocationOwnerDashboard /></LocationOwnerRoute>} />
+          <Route path="/location-owner/properties/new" element={<LocationOwnerRoute><VenueRegistration /></LocationOwnerRoute>} />
+          <Route path="/location-owner/properties/:id/edit" element={<LocationOwnerRoute><VenueRegistration /></LocationOwnerRoute>} />
+          
           {/* Protected Admin Routes */}
           <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           
           {/* Catch-all route - redirect to login if not authenticated */}
           <Route path="*" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />
-        </Routes>
+            </Routes>
+          </PermissionsProvider>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
