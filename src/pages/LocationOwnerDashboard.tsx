@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabase";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BottomNav } from "@/components/BottomNav";
+import { VenueCard } from "@/components/VenueCard";
 import MessagingSystem from "@/components/MessagingSystem";
 import InstructorModeToggle from "@/components/InstructorModeToggle";
 import { 
@@ -39,6 +41,8 @@ interface Property {
   id: string;
   name: string;
   location: string;
+  description?: string;
+  photos?: string[];
   sleeps: number;
   max_quilters: number;
   status: 'draft' | 'published' | 'verified';
@@ -190,6 +194,20 @@ const LocationOwnerDashboard = () => {
     }
   };
 
+  const handleVenueSelect = (venueId: string) => {
+    const venue = properties.find(p => p.id === venueId);
+    if (venue) {
+      setSelectedProperty(venue);
+      // Scroll to calendar view
+      setTimeout(() => {
+        const calendarElement = document.getElementById('calendar-view');
+        if (calendarElement) {
+          calendarElement.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    }
+  };
+
   const openMessaging = (request: EventRequest) => {
     setSelectedRequest(request);
     setShowMessagingDialog(true);
@@ -293,84 +311,82 @@ const LocationOwnerDashboard = () => {
             </Card>
           </div>
 
-          {/* Property Selector and Calendar View */}
+          {/* Venue Feed and Calendar View */}
           {properties.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-              {/* Property Selector */}
-              <div className="lg:col-span-1">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Your Venues</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {properties.map((property) => (
-                      <div
-                        key={property.id}
-                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                          selectedProperty?.id === property.id
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border hover:border-primary/50'
-                        }`}
-                        onClick={() => setSelectedProperty(property)}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-medium text-sm">{property.name}</h4>
-                            <p className="text-xs text-muted-foreground flex items-center mt-1">
-                              <MapPin className="w-3 h-3 mr-1" />
-                              {property.location}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant={
-                                property.status === 'published'
-                                  ? 'default'
-                                  : property.status === 'verified'
-                                  ? 'secondary'
-                                  : 'outline'
-                              }
-                              className="text-xs"
-                            >
-                              {property.status}
-                            </Badge>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              asChild
-                              className="h-6 w-6 p-0"
-                            >
-                              <Link to={`/location-owner/properties/${property.id}/edit`}>
-                                <Settings className="w-3 h-3" />
-                              </Link>
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+            <div className="space-y-8">
+              {/* Venue Feed */}
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold text-foreground">Your Venues</h2>
+                  <Button asChild className="bg-primary hover:bg-primary/90">
+                    <Link to="/location-owner/properties/new">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add a Venue
+                    </Link>
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {properties.map((property) => (
+                    <VenueCard
+                      key={property.id}
+                      id={property.id}
+                      name={property.name}
+                      location={property.location}
+                      description={property.description || "A beautiful quilting retreat venue perfect for creative gatherings and workshops."}
+                      photos={property.photos || []}
+                      sleeps={property.sleeps}
+                      max_quilters={property.max_quilters}
+                      status={property.status}
+                      views={property.views}
+                      saves={property.saves}
+                      inquiries={property.inquiries}
+                      onSelect={handleVenueSelect}
+                    />
+                  ))}
+                </div>
               </div>
 
-              {/* Calendar View */}
-              <div className="lg:col-span-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
+              {/* Calendar View for Selected Venue */}
+              {selectedProperty && (
+                <div id="calendar-view">
+                  <div className="mb-6">
+                    <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
                       <CalendarIcon className="w-5 h-5" />
-                      {selectedProperty?.name} - Calendar View
-                    </CardTitle>
-                    <CardDescription>
+                      {selectedProperty.name} - Calendar View
+                    </h2>
+                    <p className="text-muted-foreground">
                       View your availability and scheduled events
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Calendar
-                      mode="single"
-                      selected={new Date()}
-                      className="rounded-md border"
-                      modifiers={{
-                        booked: (date) => {
+                    </p>
+                  </div>
+                  
+                  <Card>
+                    <CardContent className="p-6">
+                      <Calendar
+                        mode="single"
+                        selected={new Date()}
+                        className="rounded-md border"
+                        modifiers={{
+                          booked: (date) => {
+                            return calendarEvents.some(event => {
+                              try {
+                                const startDate = parseISO(event.start_date);
+                                const endDate = parseISO(event.end_date);
+                                return isWithinInterval(date, { start: startDate, end: endDate });
+                              } catch (error) {
+                                return false;
+                              }
+                            });
+                          }
+                        }}
+                        modifiersStyles={{
+                          booked: {
+                            backgroundColor: '#10b981',
+                            color: 'white',
+                            fontWeight: 'bold'
+                          }
+                        }}
+                        disabled={(date) => {
                           return calendarEvents.some(event => {
                             try {
                               const startDate = parseISO(event.start_date);
@@ -380,77 +396,58 @@ const LocationOwnerDashboard = () => {
                               return false;
                             }
                           });
-                        }
-                      }}
-                      modifiersStyles={{
-                        booked: {
-                          backgroundColor: '#10b981',
-                          color: 'white',
-                          fontWeight: 'bold'
-                        }
-                      }}
-                      disabled={(date) => {
-                        // Disable dates that are already booked
-                        return calendarEvents.some(event => {
-                          try {
-                            const startDate = parseISO(event.start_date);
-                            const endDate = parseISO(event.end_date);
-                            return isWithinInterval(date, { start: startDate, end: endDate });
-                          } catch (error) {
-                            return false;
-                          }
-                        });
-                      }}
-                    />
-                    
-                    <div className="mt-6 space-y-4">
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-foreground">Legend</h4>
-                        <div className="flex items-center gap-2 text-sm">
-                          <div className="w-3 h-3 bg-green-500 rounded"></div>
-                          <span>Confirmed events (booked)</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <div className="w-3 h-3 bg-orange-500 rounded"></div>
-                          <span>Pending requests</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                          <span>Your blocked dates</span>
-                        </div>
-                      </div>
-
-                      {calendarEvents.length > 0 && (
+                        }}
+                      />
+                      
+                      <div className="mt-6 space-y-4">
                         <div className="space-y-2">
-                          <h4 className="text-sm font-medium text-foreground">Upcoming Events</h4>
-                          <div className="space-y-2 max-h-32 overflow-y-auto">
-                            {calendarEvents.slice(0, 5).map((event) => (
-                              <div key={event.id} className="flex items-center justify-between p-2 bg-muted rounded text-xs">
-                                <div>
-                                  <span className="font-medium">{event.event_title}</span>
-                                  <span className="text-muted-foreground ml-2">
-                                    {format(parseISO(event.start_date), 'MMM d')} - {format(parseISO(event.end_date), 'MMM d')}
-                                  </span>
-                                </div>
-                                <Badge variant="outline" className="text-xs">
-                                  {event.expected_headcount} people
-                                </Badge>
-                              </div>
-                            ))}
+                          <h4 className="text-sm font-medium text-foreground">Legend</h4>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-3 h-3 bg-green-500 rounded"></div>
+                            <span>Confirmed events (booked)</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-3 h-3 bg-orange-500 rounded"></div>
+                            <span>Pending requests</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                            <span>Your blocked dates</span>
                           </div>
                         </div>
-                      )}
 
-                      {calendarEvents.length === 0 && (
-                        <div className="text-center py-4">
-                          <CalendarDays className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">No confirmed events scheduled</p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+                        {calendarEvents.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-medium text-foreground">Upcoming Events</h4>
+                            <div className="space-y-2 max-h-32 overflow-y-auto">
+                              {calendarEvents.slice(0, 5).map((event) => (
+                                <div key={event.id} className="flex items-center justify-between p-2 bg-muted rounded text-xs">
+                                  <div>
+                                    <span className="font-medium">{event.event_title}</span>
+                                    <span className="text-muted-foreground ml-2">
+                                      {format(parseISO(event.start_date), 'MMM d')} - {format(parseISO(event.end_date), 'MMM d')}
+                                    </span>
+                                  </div>
+                                  <Badge variant="outline" className="text-xs">
+                                    {event.expected_headcount} people
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {calendarEvents.length === 0 && (
+                          <div className="text-center py-4">
+                            <CalendarDays className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">No confirmed events scheduled</p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
           )}
 
@@ -580,6 +577,9 @@ const LocationOwnerDashboard = () => {
 
           </div>
       </main>
+
+      {/* Bottom Navigation */}
+      <BottomNav />
 
       {/* Messaging Dialog */}
       <Dialog open={showMessagingDialog} onOpenChange={setShowMessagingDialog}>
