@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { BottomNav } from "@/components/BottomNav";
 import { VenueCard } from "@/components/VenueCard";
 import MessagingSystem from "@/components/MessagingSystem";
-import InstructorModeToggle from "@/components/InstructorModeToggle";
 import { 
   Building2, 
   Plus, 
@@ -461,22 +460,38 @@ const LocationOwnerDashboard = () => {
             </div>
 
             {properties.length === 0 ? (
-                  <Card className="text-center py-12">
-                    <CardContent>
-                      <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-foreground mb-2">No Venues Yet</h3>
-                      <p className="text-muted-foreground mb-6">
-                        Get started by adding your first retreat venue to start attracting quilters.
-                      </p>
-                      <Button asChild className="bg-primary hover:bg-primary/90">
-                        <Link to="/location-owner/properties/new">
-                          <Plus className="w-4 h-4 mr-2" />
-                          Add Your First Venue
-                        </Link>
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ) : (
+              <Card className="text-center py-12">
+                <CardContent>
+                  <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-foreground mb-2">No Venues Yet</h3>
+                  <p className="text-muted-foreground mb-6">
+                    Get started by adding your first retreat venue to start attracting quilters.
+                  </p>
+                  <Button asChild className="bg-primary hover:bg-primary/90">
+                    <Link to="/location-owner/properties/new">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Your First Venue
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : eventRequests.length === 0 ? (
+              <Card className="text-center py-12">
+                <CardContent>
+                  <CalendarDays className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-foreground mb-2">No Event Requests Yet</h3>
+                  <p className="text-muted-foreground mb-6">
+                    Once organizers request to book your venues, you'll see their requests here.
+                  </p>
+                  <Button variant="outline" asChild>
+                    <Link to="/browse">
+                      <Users className="w-4 h-4 mr-2" />
+                      Browse Events
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
               <div className="space-y-4">
                 {eventRequests.map((request) => (
                   <Card key={request.id}>
@@ -513,15 +528,15 @@ const LocationOwnerDashboard = () => {
                         </div>
                         <div>
                           <p className="text-sm font-medium text-muted-foreground">Sewing Hours</p>
-                          <p className="text-sm">{request.basic_schedule.sewing_hours}</p>
+                          <p className="text-sm">{request.basic_schedule?.sewing_hours || 'N/A'}</p>
                         </div>
                         <div>
                           <p className="text-sm font-medium text-muted-foreground">Check-in/Out</p>
-                          <p className="text-sm">{request.basic_schedule.check_in} - {request.basic_schedule.check_out}</p>
+                          <p className="text-sm">{request.basic_schedule?.check_in || 'N/A'} - {request.basic_schedule?.check_out || 'N/A'}</p>
                         </div>
                       </div>
 
-                      {request.basic_schedule.meals.length > 0 && (
+                      {request.basic_schedule?.meals && request.basic_schedule.meals.length > 0 && (
                         <div className="mb-4">
                           <p className="text-sm font-medium text-muted-foreground mb-2">Meals Included</p>
                           <div className="flex flex-wrap gap-1">
@@ -571,9 +586,6 @@ const LocationOwnerDashboard = () => {
               </div>
             )}
           </div>
-
-          {/* Instructor Mode Settings */}
-          <InstructorModeToggle />
 
           </div>
       </main>

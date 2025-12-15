@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BottomNav } from "@/components/BottomNav";
-import { Calendar, MapPin, Mail, Phone, Edit, Upload, X, Facebook, Instagram, Save, GraduationCap, Users, Loader2 } from "lucide-react";
+import { Calendar, MapPin, Mail, Phone, Edit, Upload, X, Facebook, Instagram, Save, GraduationCap, Users, Loader2, Building2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -68,7 +68,7 @@ const Profile = () => {
     navigate("/");
   };
 
-  const handleSwitchRole = async (newRole: 'student' | 'instructor') => {
+  const handleSwitchRole = async (newRole: 'student' | 'instructor' | 'location_owner') => {
     if (!user || role === newRole || switchingRole) return;
 
     setSwitchingRole(true);
@@ -88,12 +88,14 @@ const Profile = () => {
       } else {
         toast({
           title: "Success",
-          description: `Switched to ${newRole} profile`,
+          description: `Switched to ${newRole === 'student' ? 'Attendee' : newRole === 'instructor' ? 'Organizer' : 'Venue Owner'} profile`,
         });
         // Reload the page to update the role in AuthContext
         setTimeout(() => {
           if (newRole === 'instructor') {
             window.location.href = '/instructor/dashboard';
+          } else if (newRole === 'location_owner') {
+            window.location.href = '/location-owner/dashboard';
           } else {
             window.location.href = '/home';
           }
@@ -255,9 +257,9 @@ const Profile = () => {
 
       {/* Profile Content */}
       <div className="px-6 -mt-8 max-w-4xl mx-auto space-y-6">
-        {/* Profile Switcher - Two Buttons */}
+        {/* Profile Switcher - Three Buttons */}
         <div className="bg-card rounded-lg border border-border p-1 shadow-sm">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <Button
               variant={role === 'student' ? 'default' : 'ghost'}
               className={`relative flex flex-col items-center justify-center gap-2 h-auto py-5 px-4 transition-all ${
@@ -275,7 +277,7 @@ const Profile = () => {
               )}
               <div className="text-center">
                 <div className={`font-semibold text-sm ${role === 'student' ? 'text-primary-foreground' : 'text-foreground'}`}>
-                  Student
+                  Attendee
                 </div>
                 <div className={`text-xs mt-0.5 ${role === 'student' ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
                   Browse & Book
@@ -302,13 +304,40 @@ const Profile = () => {
               )}
               <div className="text-center">
                 <div className={`font-semibold text-sm ${role === 'instructor' ? 'text-primary-foreground' : 'text-foreground'}`}>
-                  Instructor
+                  Organizer
                 </div>
                 <div className={`text-xs mt-0.5 ${role === 'instructor' ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
                   Teach & Manage
                 </div>
               </div>
               {role === 'instructor' && (
+                <div className="absolute top-1 right-1 w-2 h-2 bg-primary-foreground rounded-full" />
+              )}
+            </Button>
+            <Button
+              variant={role === 'location_owner' ? 'default' : 'ghost'}
+              className={`relative flex flex-col items-center justify-center gap-2 h-auto py-5 px-4 transition-all ${
+                role === 'location_owner' 
+                  ? 'bg-primary text-primary-foreground shadow-sm' 
+                  : 'hover:bg-muted/50 text-muted-foreground'
+              }`}
+              onClick={() => handleSwitchRole('location_owner')}
+              disabled={switchingRole || role === 'location_owner'}
+            >
+              {switchingRole && role !== 'location_owner' ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Building2 className={`w-5 h-5 ${role === 'location_owner' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+              )}
+              <div className="text-center">
+                <div className={`font-semibold text-sm ${role === 'location_owner' ? 'text-primary-foreground' : 'text-foreground'}`}>
+                  Venue Owner
+                </div>
+                <div className={`text-xs mt-0.5 ${role === 'location_owner' ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                  Manage Venues
+                </div>
+              </div>
+              {role === 'location_owner' && (
                 <div className="absolute top-1 right-1 w-2 h-2 bg-primary-foreground rounded-full" />
               )}
             </Button>
