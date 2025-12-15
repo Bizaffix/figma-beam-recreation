@@ -1,7 +1,7 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { Menu, X, LogOut, User, LayoutDashboard, Compass, Home } from "lucide-react";
+import { Menu, X, LogOut, User, LayoutDashboard, Compass, Home, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import {
   DropdownMenu,
@@ -59,9 +59,11 @@ export const Header = () => {
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-2">
               <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">Q</span>
-                </div>
+                <img 
+                  src="/Final quilt logo-01.png" 
+                  alt="BookMyQuiltRetreat Logo" 
+                  className="w-12 h-12 rounded-lg"
+                />
                 <span className="font-bold text-xl text-foreground hidden sm:inline-block">
                   BookMyQuiltRetreat
                 </span>
@@ -150,20 +152,40 @@ export const Header = () => {
                 >
                   How It Works
                 </a>
-                <div className="flex items-center space-x-3">
-                  <Button asChild variant="ghost" size="sm">
-                    <Link to="/login">Sign In</Link>
-                  </Button>
-                  <Button asChild size="sm">
-                    <Link to="/signup">Sign Up</Link>
-                  </Button>
-                </div>
               </>
             )}
           </nav>
 
-            {/* Mobile Menu Button */}
-            <div className="md:hidden">
+          {/* Auth Buttons - Always Visible */}
+          {!user && (
+            <div className="flex items-center space-x-3">
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/login">Sign In</Link>
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" className="flex items-center">
+                    Sign Up
+                    <ChevronDown className="w-4 h-4 ml-2" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => navigate('/signup?role=student')}>
+                    As Attendee
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/signup?role=instructor')}>
+                    As Organizer
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/signup?role=location_owner')}>
+                    As Venue
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+
+          {/* Mobile Menu Button */}
+          <div className="md:hidden">
               <Button
                 variant="ghost"
                 size="icon"
@@ -200,9 +222,11 @@ export const Header = () => {
                   className="flex items-center space-x-2"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
-                    <span className="text-white font-bold text-lg">Q</span>
-                  </div>
+                  <img 
+                    src="/Final quilt logo-01.png" 
+                    alt="BookMyQuiltRetreat Logo" 
+                    className="w-12 h-12 rounded-lg"
+                  />
                   <span className="font-bold text-lg text-foreground">BookMyQuiltRetreat</span>
                 </Link>
                 <Button
@@ -293,25 +317,6 @@ export const Header = () => {
                       >
                         How It Works
                       </a>
-                    </div>
-                    <div className="space-y-3 pt-4 border-t">
-                      <Button 
-                        asChild 
-                        variant="outline" 
-                        className="w-full h-12 text-base font-medium border-2"
-                      >
-                        <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
-                          Sign In
-                        </Link>
-                      </Button>
-                      <Button 
-                        asChild 
-                        className="w-full h-12 text-base font-medium"
-                      >
-                        <Link to="/signup" onClick={() => setMobileMenuOpen(false)}>
-                          Sign Up
-                        </Link>
-                      </Button>
                     </div>
                   </>
                 )}

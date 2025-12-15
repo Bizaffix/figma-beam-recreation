@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin } from "lucide-react";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -63,13 +63,17 @@ const AdminDashboard = () => {
   const [totalBookings, setTotalBookings] = useState<number>(0);
   const [totalInstructors, setTotalInstructors] = useState<number>(0);
   const [totalStudents, setTotalStudents] = useState<number>(0);
+  const [totalLocationOwners, setTotalLocationOwners] = useState<number>(0);
   const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
   const [studentsDialogOpen, setStudentsDialogOpen] = useState(false);
   const [instructorsDialogOpen, setInstructorsDialogOpen] = useState(false);
+  const [locationOwnersDialogOpen, setLocationOwnersDialogOpen] = useState(false);
   const [studentsList, setStudentsList] = useState<UserProfile[]>([]);
   const [instructorsList, setInstructorsList] = useState<UserProfile[]>([]);
+  const [locationOwnersList, setLocationOwnersList] = useState<UserProfile[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [loadingInstructors, setLoadingInstructors] = useState(false);
+  const [loadingLocationOwners, setLoadingLocationOwners] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const [notificationRecipients, setNotificationRecipients] = useState<'students' | 'instructors' | null>(null);
   const [notificationSubject, setNotificationSubject] = useState('');
@@ -77,6 +81,7 @@ const AdminDashboard = () => {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [selectedInstructors, setSelectedInstructors] = useState<Set<string>>(new Set());
+  const [selectedLocationOwners, setSelectedLocationOwners] = useState<Set<string>>(new Set());
   const [emailImages, setEmailImages] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [emailSections, setEmailSections] = useState<EmailSection[]>([
@@ -147,6 +152,16 @@ const AdminDashboard = () => {
 
       if (!studentsError && studentsData) {
         setTotalStudents(studentsData.length);
+      }
+
+      // Fetch all location owners
+      const { data: locationOwnersData, error: locationOwnersError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'location_owner');
+
+      if (!locationOwnersError && locationOwnersData) {
+        setTotalLocationOwners(locationOwnersData.length);
       }
 
       // Enrich bookings with retreat info
@@ -243,6 +258,37 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchLocationOwnersList = async () => {
+    setLoadingLocationOwners(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, created_at')
+        .eq('role', 'location_owner')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching location owners:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load location owners list",
+          variant: "destructive",
+        });
+      } else {
+        setLocationOwnersList(data || []);
+      }
+    } catch (error) {
+      console.error('Unexpected error fetching location owners:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingLocationOwners(false);
+    }
+  };
+
   const handleStudentsCardClick = () => {
     setStudentsDialogOpen(true);
     if (studentsList.length === 0) {
@@ -254,6 +300,13 @@ const AdminDashboard = () => {
     setInstructorsDialogOpen(true);
     if (instructorsList.length === 0) {
       fetchInstructorsList();
+    }
+  };
+
+  const handleLocationOwnersCardClick = () => {
+    setLocationOwnersDialogOpen(true);
+    if (locationOwnersList.length === 0) {
+      fetchLocationOwnersList();
     }
   };
 
@@ -299,6 +352,18 @@ const AdminDashboard = () => {
     });
   };
 
+  const toggleLocationOwnerSelection = (locationOwnerId: string) => {
+    setSelectedLocationOwners(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(locationOwnerId)) {
+        newSet.delete(locationOwnerId);
+      } else {
+        newSet.add(locationOwnerId);
+      }
+      return newSet;
+    });
+  };
+
   const toggleAllStudents = () => {
     if (selectedStudents.size === studentsList.length) {
       setSelectedStudents(new Set());
@@ -312,6 +377,14 @@ const AdminDashboard = () => {
       setSelectedInstructors(new Set());
     } else {
       setSelectedInstructors(new Set(instructorsList.map(i => i.id)));
+    }
+  };
+
+  const toggleAllLocationOwners = () => {
+    if (selectedLocationOwners.size === locationOwnersList.length) {
+      setSelectedLocationOwners(new Set());
+    } else {
+      setSelectedLocationOwners(new Set(locationOwnersList.map(l => l.id)));
     }
   };
 
@@ -893,7 +966,7 @@ const AdminDashboard = () => {
                 <GraduationCap className="w-5 h-5 text-muted-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-300 mr-2" />
               </div>
               <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors duration-300">{totalInstructors}</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Instructors</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">organizers</p>
               <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
             </CardContent>
           </Card>
@@ -906,7 +979,20 @@ const AdminDashboard = () => {
                 <Users className="w-5 h-5 text-muted-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-300 mr-2" />
               </div>
               <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors duration-300">{totalStudents}</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Students</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">attendees</p>
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
+            </CardContent>
+          </Card>
+          <Card 
+            className="group cursor-pointer hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 dark:hover:from-purple-950/20 dark:hover:to-pink-950/20 hover:border-purple-200 dark:hover:border-purple-800 hover:shadow-lg transition-all duration-300 active:scale-[0.98]"
+            onClick={handleLocationOwnersCardClick}
+          >
+            <CardContent className="p-4 sm:p-5 text-center">
+              <div className="flex items-center justify-center mb-2">
+                <MapPin className="w-5 h-5 text-muted-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-300 mr-2" />
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors duration-300">{totalLocationOwners}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Venues</p>
               <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
             </CardContent>
           </Card>
@@ -1281,6 +1367,132 @@ const AdminDashboard = () => {
                           <div className="flex justify-between text-xs">
                             <span className="text-muted-foreground">Signed Up:</span>
                             <span>{new Date(instructor.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Location Owners Dialog */}
+      <Dialog open={locationOwnersDialogOpen} onOpenChange={(open) => {
+        setLocationOwnersDialogOpen(open);
+        if (!open) {
+          setSelectedLocationOwners(new Set());
+        }
+      }}>
+        <DialogContent className="max-w-2xl h-[100vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0 m-0 sm:m-auto rounded-none sm:rounded-lg w-full sm:w-auto left-0 top-0 sm:left-[50%] sm:top-[50%] translate-x-0 translate-y-0 sm:translate-x-[-50%] sm:translate-y-[-50%] [&>button:last-child]:hidden">
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b">
+            <DialogTitle className="sr-only">Location Owners ({totalLocationOwners})</DialogTitle>
+            <DialogDescription className="sr-only">List of location owners with selection options</DialogDescription>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <MapPin className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                <span className="text-base sm:text-lg font-semibold whitespace-nowrap">
+              Location Owners ({totalLocationOwners})
+                </span>
+                {selectedLocationOwners.size > 0 && (
+                  <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                    ({selectedLocationOwners.size} selected)
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <Button
+                  onClick={toggleAllLocationOwners}
+                  size="sm"
+                  variant="outline"
+                  className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2 whitespace-nowrap"
+                >
+                  {selectedLocationOwners.size === locationOwnersList.length && locationOwnersList.length > 0 ? 'Deselect All' : 'Select All'}
+                </Button>
+                <DialogClose asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Close</span>
+                  </Button>
+                </DialogClose>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
+            {loadingLocationOwners ? (
+              <div className="flex flex-col items-center justify-center p-8 space-y-3">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Loading location owners...</p>
+              </div>
+            ) : locationOwnersList.length === 0 ? (
+              <div className="text-center p-8">
+                <MapPin className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                <p className="text-muted-foreground">No location owners found</p>
+              </div>
+            ) : (
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-3 font-semibold w-12">
+                          <Checkbox
+                            checked={selectedLocationOwners.size === locationOwnersList.length && locationOwnersList.length > 0}
+                            onCheckedChange={toggleAllLocationOwners}
+                          />
+                        </th>
+                        <th className="text-left p-3 font-semibold">Name</th>
+                        <th className="text-left p-3 font-semibold">Email</th>
+                        <th className="text-left p-3 font-semibold">Signed Up</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {locationOwnersList.map((locationOwner) => (
+                        <tr key={locationOwner.id} className="border-b hover:bg-muted/50 transition-colors">
+                          <td className="p-3">
+                            <Checkbox
+                              checked={selectedLocationOwners.has(locationOwner.id)}
+                              onCheckedChange={() => toggleLocationOwnerSelection(locationOwner.id)}
+                            />
+                          </td>
+                          <td className="p-3 font-medium">{locationOwner.full_name || 'N/A'}</td>
+                          <td className="p-3 text-muted-foreground">{locationOwner.email}</td>
+                          <td className="p-3 text-muted-foreground">
+                            {new Date(locationOwner.created_at).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="sm:hidden space-y-3">
+                  {locationOwnersList.map((locationOwner) => (
+                    <Card key={locationOwner.id} className="border">
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={selectedLocationOwners.has(locationOwner.id)}
+                            onCheckedChange={() => toggleLocationOwnerSelection(locationOwner.id)}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                          <p className="font-semibold text-sm">{locationOwner.full_name || 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 break-all">{locationOwner.email}</p>
+                          </div>
+                        </div>
+                        <div className="pt-2 border-t">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Signed Up:</span>
+                            <span>{new Date(locationOwner.created_at).toLocaleDateString()}</span>
                           </div>
                         </div>
                       </CardContent>

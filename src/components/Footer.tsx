@@ -11,9 +11,11 @@ export const Footer = () => {
           {/* Company Info */}
           <div className="space-y-3 sm:space-y-4">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">Q</span>
-              </div>
+              <img 
+                src="/Final quilt logo-01.png" 
+                alt="BookMyQuiltRetreat Logo" 
+                className="w-12 h-12 rounded-lg"
+              />
               <span className="font-bold text-base sm:text-lg text-foreground">BookMyQuiltRetreat</span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
