@@ -1,18 +1,60 @@
-import { Home, Compass, User, LayoutDashboard, Search, Plus } from "lucide-react";
+import { Home, Compass, User, LayoutDashboard, Search, Plus, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 export const BottomNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  // Fetch unread messages count for instructors
+  useEffect(() => {
+    const fetchUnreadMessages = async () => {
+      if (!user || role !== 'instructor') return;
+
+      try {
+        // Get all retreats for this instructor
+        const { data: retreats, error: retreatsError } = await supabase
+          .from('retreats')
+          .select('id')
+          .eq('instructor_id', user.id);
+
+        if (retreatsError) throw retreatsError;
+
+        // Count unread messages for all retreats
+        let totalUnread = 0;
+        for (const retreat of retreats || []) {
+          const { count, error: countError } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('related_id', retreat.id.toString())
+            .eq('message_type', 'retreat_question')
+            .eq('sender_role', 'student')
+            .eq('read', false);
+
+          if (countError) throw countError;
+          totalUnread += count || 0;
+        }
+
+        setUnreadMessages(totalUnread);
+      } catch (error) {
+        console.error('Error fetching unread messages:', error);
+      }
+    };
+
+    fetchUnreadMessages();
+  }, [user, role]);
 
   // Different navigation for instructors vs students
   const navItems = role === 'instructor' 
     ? [
         { icon: Search, label: "Browse", path: "/instructor/browse" },
         { icon: LayoutDashboard, label: "Dash", path: "/instructor/dashboard" },
+        { icon: MessageSquare, label: "Messages", path: "/instructor/messages" },
         { icon: User, label: "Profile", path: "/profile" },
       ]
     : [
@@ -55,12 +97,17 @@ export const BottomNav = () => {
               key={item.label}
               onClick={() => navigate(item.path)}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors",
+                "flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors relative",
                 isActive ? "text-accent" : "text-muted-foreground"
               )}
             >
               <item.icon className="w-6 h-6" />
               <span className="text-xs">{item.label}</span>
+              {item.label === "Messages" && unreadMessages > 0 && (
+                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {unreadMessages > 9 ? '9+' : unreadMessages}
+                </div>
+              )}
             </button>
           );
         })}

@@ -1589,19 +1589,6 @@ const InstructorDashboard = () => {
             <h1 className="text-3xl font-bold mb-2">Instructor Dashboard</h1>
             <p className="text-white/90 text-lg">Manage your retreats</p>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => navigate('/instructor/messages')}
-            className="relative bg-white/20 hover:bg-white/30 text-white border-white/20"
-          >
-            <MessageSquare className="w-5 h-5" />
-            {unreadMessages > 0 && (
-              <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs h-5 w-5 flex items-center justify-center p-0">
-                {unreadMessages > 9 ? '9+' : unreadMessages}
-              </Badge>
-            )}
-          </Button>
         </div>
       </div>
 
