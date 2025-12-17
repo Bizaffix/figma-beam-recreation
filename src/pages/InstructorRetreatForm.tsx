@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
 import { ItineraryBuilder, ItineraryBlock } from "@/components/ItineraryBuilder";
+import { VenueSelector } from "@/components/VenueSelector";
 
 interface Retreat {
   id: number;
@@ -28,8 +29,10 @@ interface Retreat {
   location: string;
   date: string;
   duration: string;
-  level: "Beginner" | "Intermediate" | "Advanced";
+  level: "Beginner" | "Intermediate" | "Advanced" | "Any";
   price: number;
+  deposit_amount?: number | null;
+  payment_days_before_event?: number | null;
   total_spots: number;
   spots_available: number;
   image: string;
@@ -45,12 +48,14 @@ interface Retreat {
 
 interface FormData {
   title: string;
-  level: "Beginner" | "Intermediate" | "Advanced";
+  level: "Beginner" | "Intermediate" | "Advanced" | "Any";
   location: string;
   date: string;
   duration: string;
   totalSpots: number;
   price: number;
+  deposit_amount?: number | null;
+  payment_days_before_event?: number | null;
   description: string;
   image: string;
   includes: string[];
@@ -153,6 +158,8 @@ const InstructorRetreatForm = () => {
     duration: "",
     totalSpots: 0,
     price: 0,
+    deposit_amount: null,
+    payment_days_before_event: 7,
     description: "",
     image: "",
     includes: [],
@@ -168,6 +175,7 @@ const InstructorRetreatForm = () => {
   const [itineraryBlocks, setItineraryBlocks] = useState<ItineraryBlock[]>([]);
   const [locationImages, setLocationImages] = useState<string[]>([]);
   const [uploadingLocationImage, setUploadingLocationImage] = useState(false);
+  const [selectedVenue, setSelectedVenue] = useState<any>(null);
 
   // Only show this page to instructors
   if (role !== 'instructor') {
@@ -232,6 +240,8 @@ const InstructorRetreatForm = () => {
             duration: data.duration,
             totalSpots: data.total_spots,
             price: data.price,
+            deposit_amount: data.deposit_amount,
+            payment_days_before_event: data.payment_days_before_event,
             description: data.description,
             image: data.image,
             includes: data.includes || [],
@@ -304,6 +314,8 @@ const InstructorRetreatForm = () => {
         duration: formData.duration,
         level: formData.level,
         price: formData.price || 0,
+        deposit_amount: formData.deposit_amount,
+        payment_days_before_event: formData.payment_days_before_event,
         total_spots: formData.totalSpots || 0,
         spots_available: formData.totalSpots || 0,
         image: formData.image || "",
@@ -460,6 +472,8 @@ const InstructorRetreatForm = () => {
         duration: retreat.duration,
         totalSpots: retreat.total_spots,
         price: retreat.price,
+        deposit_amount: retreat.deposit_amount,
+        payment_days_before_event: retreat.payment_days_before_event,
         description: retreat.description,
         image: retreat.image,
         includes: retreat.includes || [],
@@ -523,6 +537,7 @@ const InstructorRetreatForm = () => {
       setFoodBudget(0);
       setItineraryBlocks([]);
       setLocationImages([]);
+      setSelectedVenue(null);
     }
   };
 
@@ -540,6 +555,8 @@ const InstructorRetreatForm = () => {
       duration: "",
       totalSpots: 0,
       price: 0,
+      deposit_amount: null,
+      payment_days_before_event: 7,
       description: "",
       image: "",
       includes: [],
@@ -553,6 +570,7 @@ const InstructorRetreatForm = () => {
     setVenueFees(0);
     setFoodBudget(0);
     setLocationImages([]);
+    setSelectedVenue(null);
     setAutoSaveDraftId(null);
     setLastSaved(null);
     hasUnsavedChangesRef.current = false;
@@ -714,6 +732,11 @@ const InstructorRetreatForm = () => {
     setLocationImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleLocationChange = (location: string, venueData?: any) => {
+    setFormData(prev => ({ ...prev, location }));
+    setSelectedVenue(venueData || null);
+  };
+
   const handleSave = async (published?: boolean) => {
     if (!user) return;
 
@@ -732,6 +755,8 @@ const InstructorRetreatForm = () => {
         duration: formData.duration,
         level: formData.level,
         price: formData.price || 0,
+        deposit_amount: formData.deposit_amount,
+        payment_days_before_event: formData.payment_days_before_event,
         total_spots: formData.totalSpots || 0,
         spots_available: formData.totalSpots || 0,
         image: formData.image || "",
@@ -1077,6 +1102,9 @@ const InstructorRetreatForm = () => {
 
             <div>
               <Label>Retreat Image</Label>
+              <div className="text-xs text-muted-foreground mb-2">
+                Recommended: 1200x400px (3:1 ratio) for best display • Max size: 5MB
+              </div>
               <div className="space-y-2">
                 <input
                   ref={fileInputRef}
@@ -1093,8 +1121,8 @@ const InstructorRetreatForm = () => {
                   >
                     <Upload className="w-8 h-8 text-muted-foreground" />
                     <div className="text-center">
-                      <p className="text-sm font-medium text-card-foreground">Upload File</p>
-                      <p className="text-xs text-muted-foreground mt-1">Click to select an image</p>
+                      <p className="text-sm font-medium text-card-foreground">Upload Image</p>
+                      <p className="text-xs text-muted-foreground mt-1">Click to select an image file</p>
                     </div>
                   </div>
                 )}
@@ -1103,23 +1131,29 @@ const InstructorRetreatForm = () => {
                 )}
                 {(imagePreview || formData.image) && (
                   <div className="mt-2">
-                    <img
-                      src={imagePreview || formData.image}
-                      alt="Preview"
-                      className="w-full h-48 object-cover rounded-lg border"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() => {
-                        setImagePreview("");
-                        setFormData(prev => ({ ...prev, image: "" }));
-                      }}
-                    >
-                      Remove Image
-                    </Button>
+                    <div className="relative w-full h-48 bg-muted/20 rounded-lg overflow-hidden">
+                      <img
+                        src={imagePreview || formData.image}
+                        alt="Retreat preview"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-xs text-muted-foreground">
+                        Image displayed at full size with proper aspect ratio
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setImagePreview("");
+                          setFormData(prev => ({ ...prev, image: "" }));
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1129,90 +1163,67 @@ const InstructorRetreatForm = () => {
           {/* Location & Dates */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-card-foreground">Location & Dates</h3>
+            
+            {/* Venue Selector */}
+            <VenueSelector 
+              selectedLocation={formData.location}
+              onLocationChange={handleLocationChange}
+            />
+              
+            {/* Location Images Upload */}
             <div className="space-y-2">
-              <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-primary" />
-                Location
-              </Label>
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                  <MapPin className="w-5 h-5" />
-                </div>
-                <Input
-                  value={formData.location}
-                  onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                  required
-                  className="pl-10 pr-10 h-12 text-base border-2 focus:border-primary transition-colors rounded-lg"
-                  placeholder="Enter location or Google Maps link"
+              <Label className="text-sm font-semibold text-foreground">Location Photos</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLocationImageUpload}
+                  disabled={uploadingLocationImage}
+                  className="hidden"
+                  id="location-image-upload"
                 />
-                {formData.location && (formData.location.startsWith('http://') || formData.location.startsWith('https://')) && (
-                  <a
-                    href={formData.location}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-primary hover:text-primary/80 transition-colors"
-                    title="Open location in new tab"
+                <label htmlFor="location-image-upload">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadingLocationImage}
+                    className="w-full sm:w-auto"
+                    asChild
                   >
-                    <ExternalLink className="w-5 h-5" />
-                  </a>
-                )}
+                    <span>
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploadingLocationImage ? "Uploading..." : "Upload Photo"}
+                    </span>
+                  </Button>
+                </label>
               </div>
               
-              {/* Location Images Upload */}
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-foreground">Location Photos</Label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLocationImageUpload}
-                    disabled={uploadingLocationImage}
-                    className="hidden"
-                    id="location-image-upload"
-                  />
-                  <label htmlFor="location-image-upload">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={uploadingLocationImage}
-                      className="w-full sm:w-auto"
-                      asChild
-                    >
-                      <span>
-                        <Upload className="w-4 h-4 mr-2" />
-                        {uploadingLocationImage ? "Uploading..." : "Upload Photo"}
-                      </span>
-                    </Button>
-                  </label>
-                </div>
-                
-                {locationImages.length > 0 && (
-                  <ScrollArea className="w-full whitespace-nowrap rounded-md border">
-                    <div className="flex w-max space-x-2 p-2">
-                      {locationImages.map((imgUrl, index) => (
-                        <div key={index} className="relative h-20 w-20 sm:h-24 sm:w-24 flex-shrink-0 rounded-md overflow-hidden group">
-                          <img
-                            src={imgUrl}
-                            alt={`Location ${index + 1}`}
-                            className="h-full w-full object-cover"
-                          />
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="icon"
-                            className="absolute top-0 right-0 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => removeLocationImage(index)}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                    <ScrollBar orientation="horizontal" />
-                  </ScrollArea>
-                )}
-              </div>
+              {locationImages.length > 0 && (
+                <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                  <div className="flex w-max space-x-2 p-2">
+                    {locationImages.map((imgUrl, index) => (
+                      <div key={index} className="relative h-20 w-20 sm:h-24 sm:w-24 flex-shrink-0 rounded-md overflow-hidden group">
+                        <img
+                          src={imgUrl}
+                          alt={`Location ${index + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-0 right-0 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => removeLocationImage(index)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+              )}
             </div>
 
             <div>
@@ -1265,7 +1276,7 @@ const InstructorRetreatForm = () => {
                 />
               </div>
               <div>
-                <Label># of Seats</Label>
+                <Label>Capacity</Label>
                 <Input
                   type="number"
                   value={formData.totalSpots}
@@ -1304,7 +1315,7 @@ const InstructorRetreatForm = () => {
                 <p className="text-xs text-muted-foreground mb-2">Who is this for?</p>
                 <Select
                   value={formData.level}
-                  onValueChange={(value: "Beginner" | "Intermediate" | "Advanced") =>
+                  onValueChange={(value: "Beginner" | "Intermediate" | "Advanced" | "Any") =>
                     setFormData(prev => ({ ...prev, level: value }))
                   }
                 >
@@ -1312,12 +1323,53 @@ const InstructorRetreatForm = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="Any">Any Skill Level</SelectItem>
                     <SelectItem value="Beginner">Beginner</SelectItem>
                     <SelectItem value="Intermediate">Intermediate</SelectItem>
                     <SelectItem value="Advanced">Advanced</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div>
+              <Label>Deposit Amount ($)</Label>
+              <p className="text-xs text-muted-foreground mb-2">Optional - Leave empty if no deposit required</p>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.deposit_amount || ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    deposit_amount: value === "" ? null : Number(value) 
+                  }));
+                }}
+                placeholder="Enter deposit amount (optional)"
+              />
+            </div>
+
+            <div>
+              <Label>Full Payment Timing</Label>
+              <p className="text-xs text-muted-foreground mb-2">When is the remaining balance charged?</p>
+              <Input
+                type="number"
+                min="1"
+                value={formData.payment_days_before_event || 7}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    payment_days_before_event: value === "" ? 7 : Number(value) 
+                  }));
+                }}
+                placeholder="7"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Days before the retreat starts
+              </p>
             </div>
           </div>
 

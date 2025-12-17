@@ -3,11 +3,12 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, MapPin, Calendar, Users, Clock, Heart } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, Users, Clock, Heart, MessageSquare } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Header } from "@/components/Header";
 import { useToast } from "@/hooks/use-toast";
+import MessagingSystem from "@/components/MessagingSystem";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +52,7 @@ const RetreatDetail = () => {
   const [saving, setSaving] = useState(false);
   const [showSignupDialog, setShowSignupDialog] = useState(false);
   const [actionType, setActionType] = useState<'save' | 'register'>('register');
+  const [showMessagingDialog, setShowMessagingDialog] = useState(false);
 
   // Fetch retreat from Supabase
   useEffect(() => {
@@ -427,14 +429,23 @@ const RetreatDetail = () => {
         {/* Book Button - Show to all, but prompt for signup if not logged in */}
         {retreat.published && (
           <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-card border-t border-border pb-safe">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-4xl mx-auto flex gap-2">
               {user && role === 'student' ? (
-                <Button
-                  className="w-full h-12 text-base sm:text-lg"
-                  onClick={handleRegisterClick}
-                >
-                  Book This Retreat - ${retreat.price}
-                </Button>
+                <>
+                  <Button
+                    className="flex-1 h-12 text-base sm:text-lg"
+                    onClick={handleRegisterClick}
+                  >
+                    Book This Retreat - ${retreat.price}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-12 px-4"
+                    onClick={() => setShowMessagingDialog(true)}
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </Button>
+                </>
               ) : !user ? (
                 <Button
                   className="w-full h-12 text-base sm:text-lg"
@@ -492,6 +503,35 @@ const RetreatDetail = () => {
               </Link>
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Messaging Dialog */}
+      <Dialog open={showMessagingDialog} onOpenChange={setShowMessagingDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Ask a Question</DialogTitle>
+            <DialogDescription>
+              Message the instructor about this retreat
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            {retreat && (
+              <MessagingSystem
+                context="retreat_detail"
+                retreat={{
+                  id: retreat.id,
+                  title: retreat.title,
+                  instructor_id: retreat.instructor_id,
+                  instructor_name: retreat.instructor.name,
+                  location: retreat.location,
+                  date: retreat.date,
+                  level: retreat.level
+                }}
+                onClose={() => setShowMessagingDialog(false)}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

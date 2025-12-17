@@ -17,6 +17,7 @@ import NotFound from "./pages/NotFound";
 import InstructorDashboard from "./pages/InstructorDashboard";
 import InstructorRetreatForm from "./pages/InstructorRetreatForm";
 import InstructorBrowse from "./pages/InstructorBrowse";
+import InstructorMessages from "./pages/InstructorMessages";
 import AdminDashboard from "./pages/AdminDashboard";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -24,6 +25,7 @@ import EmailConfirm from "./pages/EmailConfirm";
 import ResetPassword from "./pages/ResetPassword";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import LocationOwnerDashboard from "./pages/LocationOwnerDashboard";
+import VenueOwnerMessages from "./pages/VenueOwnerMessages";
 import VenueRegistration from "./pages/VenueRegistration";
 import { useAuth } from "./contexts/AuthContext";
 
@@ -172,11 +174,13 @@ const App = () => (
           {/* Protected Instructor Routes */}
           <Route path="/instructor/browse" element={<InstructorRoute><InstructorBrowse /></InstructorRoute>} />
           <Route path="/instructor/dashboard" element={<InstructorRoute><InstructorDashboard /></InstructorRoute>} />
+          <Route path="/instructor/messages" element={<InstructorRoute><InstructorMessages /></InstructorRoute>} />
           <Route path="/instructor/retreats/new" element={<InstructorRoute><InstructorRetreatForm /></InstructorRoute>} />
           <Route path="/instructor/retreats/:id/edit" element={<InstructorRoute><InstructorRetreatForm /></InstructorRoute>} />
           
           {/* Protected Location Owner Routes */}
           <Route path="/location-owner/dashboard" element={<LocationOwnerRoute><LocationOwnerDashboard /></LocationOwnerRoute>} />
+          <Route path="/location-owner/messages" element={<LocationOwnerRoute><VenueOwnerMessages /></LocationOwnerRoute>} />
           <Route path="/location-owner/properties/new" element={<LocationOwnerRoute><VenueRegistration /></LocationOwnerRoute>} />
           <Route path="/location-owner/properties/:id/edit" element={<LocationOwnerRoute><VenueRegistration /></LocationOwnerRoute>} />
           

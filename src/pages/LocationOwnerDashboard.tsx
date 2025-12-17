@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,7 +38,7 @@ import { format, isWithinInterval, parseISO } from "date-fns";
 
 interface Property {
   id: string;
-  name: string;
+  property_name: string;
   location: string;
   description?: string;
   photos?: string[];
@@ -53,18 +53,21 @@ interface Property {
   stay_types: string[];
   house_rules: string[];
   availability_calendar: string[];
+  owner_id: string;
 }
 
 interface EventRequest {
   id: string;
   event_title: string;
   instructor_name: string;
+  instructor_id: string;
   property_name: string;
+  property_id: string;
+  property_owner_id: string;
   start_date: string;
   end_date: string;
   expected_headcount: number;
   status: 'pending' | 'approved' | 'declined';
-  property_id: string;
   basic_schedule: {
     check_in: string;
     check_out: string;
@@ -76,6 +79,7 @@ interface EventRequest {
 
 const LocationOwnerDashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [properties, setProperties] = useState<Property[]>([]);
   const [eventRequests, setEventRequests] = useState<EventRequest[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<EventRequest[]>([]);
@@ -83,6 +87,7 @@ const LocationOwnerDashboard = () => {
   const [selectedRequest, setSelectedRequest] = useState<EventRequest | null>(null);
   const [showMessagingDialog, setShowMessagingDialog] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [stats, setStats] = useState({
     totalViews: 0,
     totalSaves: 0,
@@ -94,6 +99,7 @@ const LocationOwnerDashboard = () => {
   useEffect(() => {
     if (user) {
       fetchProperties();
+      fetchUnreadMessages();
     }
   }, [user]);
 
@@ -103,6 +109,54 @@ const LocationOwnerDashboard = () => {
       fetchCalendarEvents();
     }
   }, [selectedProperty]);
+
+  const fetchUnreadMessages = async () => {
+    if (!user) return;
+    
+    try {
+      // Get all properties for this venue owner
+      const { data: properties, error: propertiesError } = await supabase
+        .from('properties')
+        .select('id')
+        .eq('owner_id', user.id);
+
+      if (propertiesError) throw propertiesError;
+
+      if (!properties || properties.length === 0) {
+        setUnreadMessages(0);
+        return;
+      }
+
+      // Get event requests for all properties
+      const propertyIds = properties.map(p => p.id);
+      const { data: eventRequests, error: requestsError } = await supabase
+        .from('event_requests')
+        .select('id')
+        .in('property_id', propertyIds);
+
+      if (requestsError) throw requestsError;
+
+      if (!eventRequests || eventRequests.length === 0) {
+        setUnreadMessages(0);
+        return;
+      }
+
+      // Count unread messages for all event requests
+      const eventRequestIds = eventRequests.map(er => er.id);
+      const { count, error: countError } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .in('related_id', eventRequestIds)
+        .eq('message_type', 'event_request')
+        .eq('receiver_id', user.id)
+        .eq('read', false);
+
+      if (countError) throw countError;
+      setUnreadMessages(count || 0);
+    } catch (error) {
+      console.error('Error fetching unread messages:', error);
+    }
+  };
 
   const fetchEventRequests = async () => {
     if (!user) return;
@@ -238,12 +292,30 @@ const LocationOwnerDashboard = () => {
                   Manage your venue listings and track their performance
                 </p>
               </div>
-              <Button asChild className="bg-primary hover:bg-primary/90">
-                <Link to="/location-owner/properties/new">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add a Venue
-                </Link>
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => navigate('/location-owner/messages')}
+                  className="relative"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  {unreadMessages > 0 && (
+                    <Badge 
+                      variant="destructive" 
+                      className="absolute -top-2 -right-2 text-xs px-1.5 py-0.5 h-5 min-w-[20px] flex items-center justify-center"
+                    >
+                      {unreadMessages > 99 ? '99+' : unreadMessages}
+                    </Badge>
+                  )}
+                </Button>
+                <Button asChild className="bg-primary hover:bg-primary/90">
+                  <Link to="/location-owner/properties/new">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add a Venue
+                  </Link>
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -330,7 +402,7 @@ const LocationOwnerDashboard = () => {
                     <VenueCard
                       key={property.id}
                       id={property.id}
-                      name={property.name}
+                      name={property.property_name}
                       location={property.location}
                       description={property.description || "A beautiful quilting retreat venue perfect for creative gatherings and workshops."}
                       photos={property.photos || []}
@@ -352,7 +424,7 @@ const LocationOwnerDashboard = () => {
                   <div className="mb-6">
                     <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
                       <CalendarIcon className="w-5 h-5" />
-                      {selectedProperty.name} - Calendar View
+                      {selectedProperty.property_name} - Calendar View
                     </h2>
                     <p className="text-muted-foreground">
                       View your availability and scheduled events

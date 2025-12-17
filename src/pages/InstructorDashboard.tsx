@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight, Share2, CheckCircle2 } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight, Share2, CheckCircle2, MessageSquare } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -155,6 +155,7 @@ const InstructorDashboard = () => {
   const [invitesCount, setInvitesCount] = useState<number>(0);
   const [completedRetreats, setCompletedRetreats] = useState<number>(0);
   const [bookedSeats, setBookedSeats] = useState<number>(0);
+  const [unreadMessages, setUnreadMessages] = useState<number>(0);
   
   const [formData, setFormData] = useState<FormData>({
     title: "",
@@ -294,6 +295,44 @@ const InstructorDashboard = () => {
 
     fetchData();
   }, [user, toast]);
+
+  // Fetch unread messages count
+  useEffect(() => {
+    const fetchUnreadMessages = async () => {
+      if (!user || role !== 'instructor') return;
+
+      try {
+        // Get all retreats for this instructor
+        const { data: retreats, error: retreatsError } = await supabase
+          .from('retreats')
+          .select('id')
+          .eq('instructor_id', user.id);
+
+        if (retreatsError) throw retreatsError;
+
+        // Count unread messages for all retreats
+        let totalUnread = 0;
+        for (const retreat of retreats || []) {
+          const { count, error: countError } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('related_id', retreat.id.toString())
+            .eq('message_type', 'retreat_question')
+            .eq('sender_role', 'student')
+            .eq('read', false);
+
+          if (countError) throw countError;
+          totalUnread += count || 0;
+        }
+
+        setUnreadMessages(totalUnread);
+      } catch (error) {
+        console.error('Error fetching unread messages:', error);
+      }
+    };
+
+    fetchUnreadMessages();
+  }, [user, role]);
 
   // Update formData.date and calculate duration when dateRange changes
   useEffect(() => {
@@ -1332,7 +1371,7 @@ const InstructorDashboard = () => {
                 />
               </div>
               <div>
-                <Label># of Seats</Label>
+                <Label>Capacity</Label>
                 <Input
                   type="number"
                   value={formData.totalSpots}
@@ -1545,8 +1584,25 @@ const InstructorDashboard = () => {
     <div className="min-h-screen bg-gradient-hero pb-20">
       {/* Header */}
       <div className="bg-gradient-primary text-white px-6 py-8">
-        <h1 className="text-3xl font-bold mb-2">Instructor Dashboard</h1>
-        <p className="text-white/90 text-lg">Manage your retreats</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Instructor Dashboard</h1>
+            <p className="text-white/90 text-lg">Manage your retreats</p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate('/instructor/messages')}
+            className="relative bg-white/20 hover:bg-white/30 text-white border-white/20"
+          >
+            <MessageSquare className="w-5 h-5" />
+            {unreadMessages > 0 && (
+              <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs h-5 w-5 flex items-center justify-center p-0">
+                {unreadMessages > 9 ? '9+' : unreadMessages}
+              </Badge>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Stats - Only show when not editing */}

@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 interface RetreatCardProps {
   id: number;
   image: string;
-  level: "Beginner" | "Intermediate" | "Advanced";
+  level: "Beginner" | "Intermediate" | "Advanced" | "Any";
   title: string;
   instructor: {
     name: string;
@@ -37,6 +37,7 @@ export const RetreatCard = ({
   const navigate = useNavigate();
   
   const levelColors = {
+    Any: "bg-blue-100 text-blue-700 hover:bg-blue-100",
     Beginner: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100",
     Intermediate: "bg-amber-100 text-amber-700 hover:bg-amber-100",
     Advanced: "bg-rose-100 text-rose-700 hover:bg-rose-100",
@@ -54,7 +55,7 @@ export const RetreatCard = ({
           className="w-full h-48 object-cover"
         />
         <Badge className={`absolute top-3 right-3 ${levelColors[level]}`}>
-          {level}
+          {level === "Any" ? "Any Skill Level" : level}
         </Badge>
       </div>
       

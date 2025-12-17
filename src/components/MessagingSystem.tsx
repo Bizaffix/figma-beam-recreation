@@ -6,9 +6,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { format } from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
 import { 
   Send, 
   MessageSquare, 
@@ -18,24 +19,32 @@ import {
   Calendar,
   Users,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  ArrowLeft
 } from "lucide-react";
 
 interface Message {
   id: string;
   sender_id: string;
   sender_name: string;
-  sender_role: 'instructor' | 'location_owner';
+  sender_role: 'instructor' | 'location_owner' | 'student';
+  receiver_id?: string;
+  receiver_name?: string;
   content: string;
   created_at: string;
   read: boolean;
+  message_type: 'event_request' | 'retreat_question' | 'attendee_communication' | 'venue_communication';
+  related_id?: string; // retreat_id, event_request_id, or booking_id
 }
 
 interface EventRequest {
   id: string;
   event_title: string;
   instructor_name: string;
+  instructor_id: string;
   property_name: string;
+  property_id: string;
+  property_owner_id: string;
   start_date: string;
   end_date: string;
   expected_headcount: number;
@@ -46,50 +55,185 @@ interface EventRequest {
     sewing_hours: string;
     meals: string[];
   };
+  created_at: string;
 }
+
+interface Retreat {
+  id: number;
+  title: string;
+  instructor_id: string;
+  instructor_name: string;
+  location: string;
+  date: string;
+  level: string;
+}
+
+interface Booking {
+  id: string;
+  retreat_id: number;
+  student_id: string;
+  student_name: string;
+  student_email: string;
+  amount: number;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  created_at: string;
+}
+
+type MessagingContext = 'event_request' | 'retreat_detail' | 'organizer_dashboard' | 'inbox';
 
 interface MessagingSystemProps {
-  eventRequest: EventRequest;
+  context?: MessagingContext;
+  eventRequest?: EventRequest;
+  retreat?: Retreat;
+  booking?: Booking;
+  recipientId?: string;
+  recipientName?: string;
+  recipientRole?: 'instructor' | 'location_owner' | 'student';
   onClose?: () => void;
+  onBack?: () => void;
 }
 
-const MessagingSystem = ({ eventRequest, onClose }: MessagingSystemProps) => {
+const MessagingSystem = ({ 
+  context = 'event_request', 
+  eventRequest, 
+  retreat, 
+  booking, 
+  recipientId, 
+  recipientName, 
+  recipientRole,
+  onClose, 
+  onBack 
+}: MessagingSystemProps) => {
   const { user, role } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [availableRecipients, setAvailableRecipients] = useState<Array<{
+    id: string;
+    name: string;
+    role: 'instructor' | 'location_owner' | 'student';
+  }>>([]);
+  const [selectedRecipientId, setSelectedRecipientId] = useState('');
+  const [selectedRecipientName, setSelectedRecipientName] = useState('');
+
+  // Determine message context and fetch related data
+  const getMessageContext = () => {
+    switch (context) {
+      case 'event_request':
+        return {
+          messageType: 'event_request' as const,
+          relatedId: eventRequest?.id,
+          title: eventRequest?.event_title || 'Event Discussion',
+          subtitle: `${eventRequest?.instructor_name} ↔ ${eventRequest?.property_name}`
+        };
+      case 'retreat_detail':
+        return {
+          messageType: 'retreat_question' as const,
+          relatedId: retreat?.id?.toString(),
+          title: retreat?.title || 'Retreat Questions',
+          subtitle: `Questions about ${retreat?.title}`
+        };
+      case 'organizer_dashboard':
+        return {
+          messageType: 'attendee_communication' as const,
+          relatedId: booking?.id,
+          title: `Communication with ${booking?.student_name}`,
+          subtitle: `Regarding booking for retreat`
+        };
+      default:
+        return {
+          messageType: 'retreat_question' as const,
+          relatedId: retreat?.id?.toString(),
+          title: 'Messages',
+          subtitle: 'General conversation'
+        };
+    }
+  };
+
+  const messageContext = getMessageContext();
 
   useEffect(() => {
+    if (!messageContext.relatedId) return;
+    
     fetchMessages();
-    // Set up real-time subscription
-    const subscription = supabase
-      .channel(`messages:${eventRequest.id}`)
-      .on('postgres_changes', 
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
+    fetchAvailableRecipients();
+  }, [messageContext.relatedId, context]);
+
+  // Real-time subscription for new messages
+  useEffect(() => {
+    if (!user || !messageContext.relatedId) return;
+
+    const channel = supabase
+      .channel(`messages-${messageContext.relatedId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
           table: 'messages',
-          filter: `event_request_id=eq.${eventRequest.id}`
-        }, 
+          filter: `related_id=eq.${messageContext.relatedId}`
+        },
         (payload) => {
-          setMessages(prev => [...prev, payload.new as Message]);
+          const newMessage = payload.new as Message;
+          
+          // Only add message if it's relevant to this conversation
+          if (newMessage.sender_id === user?.id || 
+              newMessage.receiver_id === user?.id) {
+            setMessages(prev => [...prev, newMessage]);
+          }
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(subscription);
+      supabase.removeChannel(channel);
     };
-  }, [eventRequest.id]);
+  }, [messageContext.relatedId]);
 
   const fetchMessages = async () => {
+    if (!messageContext.relatedId) return;
+    
     try {
-      const { data: messages, error } = await supabase
+      let query = supabase
         .from('messages')
         .select('*')
-        .eq('event_request_id', eventRequest.id)
+        .eq('related_id', messageContext.relatedId)
         .order('created_at', { ascending: true });
+
+      // For retreat questions, only show messages between the two participants
+      if (context === 'retreat_detail' && retreat) {
+        // Get the current user's conversation partner
+        let partnerId: string | undefined;
+        
+        if (role === 'student') {
+          partnerId = retreat.instructor_id;
+        } else if (role === 'instructor') {
+          // For instructor, find the student they're conversing with
+          const { data: lastStudentMessage } = await supabase
+            .from('messages')
+            .select('sender_id')
+            .eq('related_id', messageContext.relatedId)
+            .eq('message_type', 'retreat_question')
+            .eq('sender_role', 'student')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          
+          partnerId = lastStudentMessage?.sender_id;
+        }
+
+        if (partnerId) {
+          query = query.or(`and(sender_id.eq.${user?.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user?.id})`);
+        }
+      }
+
+      // For specific conversation contexts, filter by participants
+      if (context === 'organizer_dashboard' && booking) {
+        query = query.or(`sender_id.eq.${user?.id},receiver_id.eq.${user?.id}`);
+      }
+
+      const { data: messages, error } = await query;
 
       if (error) throw error;
       setMessages(messages || []);
@@ -99,7 +243,7 @@ const MessagingSystem = ({ eventRequest, onClose }: MessagingSystemProps) => {
         await supabase
           .from('messages')
           .update({ read: true })
-          .eq('event_request_id', eventRequest.id)
+          .eq('related_id', messageContext.relatedId)
           .neq('sender_id', user?.id);
       }
     } catch (error) {
@@ -109,31 +253,149 @@ const MessagingSystem = ({ eventRequest, onClose }: MessagingSystemProps) => {
     }
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !user) return;
+  const fetchAvailableRecipients = async () => {
+    try {
+      let recipients: Array<{ id: string; name: string; role: 'instructor' | 'location_owner' | 'student' }> = [];
 
+      switch (context) {
+        case 'retreat_detail':
+          if (retreat && role === 'student') {
+            // Student can message the retreat instructor
+            recipients.push({
+              id: retreat.instructor_id,
+              name: retreat.instructor_name,
+              role: 'instructor'
+            });
+          } else if (retreat && role === 'instructor') {
+            // Instructor can message students who booked this retreat
+            const { data: bookings } = await supabase
+              .from('bookings')
+              .select('student_id, student_name')
+              .eq('retreat_id', retreat.id)
+              .eq('status', 'confirmed');
+            
+            if (bookings) {
+              recipients = bookings.map(booking => ({
+                id: booking.student_id,
+                name: booking.student_name,
+                role: 'student'
+              }));
+            }
+          }
+          break;
+        
+        case 'organizer_dashboard':
+          if (booking) {
+            // Organizer can message the specific student
+            recipients.push({
+              id: booking.student_id,
+              name: booking.student_name,
+              role: 'student'
+            });
+          }
+          break;
+      }
+
+      setAvailableRecipients(recipients);
+    } catch (error) {
+      console.error('Error fetching recipients:', error);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !user || !messageContext.relatedId) return;
+
+    const messageText = newMessage.trim();
+    setNewMessage("");
     setSending(true);
+
+    // Determine receiver based on context
+    let receiverId: string | undefined;
+    let receiverName: string | undefined;
+
+    if (context === 'event_request') {
+      // For event requests, determine the other party
+      if (role === 'instructor') {
+        receiverId = eventRequest?.property_owner_id;
+        receiverName = 'Property Owner';
+      } else if (role === 'location_owner') {
+        receiverId = eventRequest?.instructor_id;
+        receiverName = eventRequest?.instructor_name;
+      } else if (role === 'student') {
+        // Students shouldn't be in event request context, but handle anyway
+        receiverId = eventRequest?.instructor_id;
+        receiverName = eventRequest?.instructor_name;
+      }
+    } else if (context === 'retreat_detail' && retreat) {
+      // For retreat questions, always set the instructor as receiver
+      if (role === 'student') {
+        receiverId = retreat.instructor_id;
+        receiverName = retreat.instructor_name;
+      } else if (role === 'instructor') {
+        // For instructor replying, try to determine the student from existing messages
+        const studentMessage = messages.find(m => m.sender_role === 'student');
+        if (studentMessage) {
+          receiverId = studentMessage.sender_id;
+          receiverName = studentMessage.sender_name;
+        }
+      }
+    } else if (selectedRecipientId) {
+      // Direct messaging
+      receiverId = selectedRecipientId;
+      receiverName = selectedRecipientName;
+    }
+
+    // Create optimistic message for instant display
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`, // Temporary ID
+      related_id: messageContext.relatedId,
+      message_type: messageContext.messageType,
+      sender_id: user.id,
+      sender_name: user.user_metadata?.first_name && user.user_metadata?.last_name 
+        ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+        : user.email?.split('@')[0] || 'Unknown',
+      sender_role: role as 'instructor' | 'location_owner' | 'student',
+      receiver_id: receiverId || null,
+      receiver_name: receiverName || null,
+      content: messageText,
+      created_at: new Date().toISOString(),
+      read: false
+    };
+
+    // Add message to local state instantly
+    setMessages(prev => [...prev, optimisticMessage]);
+
     try {
       const messageData = {
-        event_request_id: eventRequest.id,
+        related_id: messageContext.relatedId,
+        message_type: messageContext.messageType,
         sender_id: user.id,
-        sender_name: user.user_metadata?.first_name && user.user_metadata?.last_name 
-          ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-          : user.email?.split('@')[0] || 'Unknown',
-        sender_role: role as 'instructor' | 'location_owner',
-        content: newMessage.trim(),
+        sender_name: optimisticMessage.sender_name,
+        sender_role: role as 'instructor' | 'location_owner' | 'student',
+        receiver_id: receiverId || null,
+        receiver_name: receiverName || null,
+        content: messageText,
         read: false
       };
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('messages')
-        .insert(messageData);
+        .insert(messageData)
+        .select()
+        .single();
 
       if (error) throw error;
 
-      setNewMessage("");
+      // Replace optimistic message with real message
+      if (data) {
+        setMessages(prev => prev.map(msg => 
+          msg.id === optimisticMessage.id ? data : msg
+        ));
+      }
     } catch (error) {
       console.error('Error sending message:', error);
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
     } finally {
       setSending(false);
     }
@@ -146,6 +408,32 @@ const MessagingSystem = ({ eventRequest, onClose }: MessagingSystemProps) => {
       .join('')
       .toUpperCase()
       .slice(0, 2);
+  };
+
+  const formatDateForSeparator = (date: Date) => {
+    if (isToday(date)) return 'Today';
+    if (isYesterday(date)) return 'Yesterday';
+    return format(date, 'MMM d, yyyy');
+  };
+
+  const formatMessageTime = (date: Date) => {
+    return format(date, 'h:mm a');
+  };
+
+  const groupMessagesByDate = (messages: Message[]) => {
+    const groups: Record<string, Message[]> = {};
+    
+    messages.forEach(message => {
+      const messageDate = new Date(message.created_at);
+      const dateKey = formatDateForSeparator(messageDate);
+      
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(message);
+    });
+    
+    return groups;
   };
 
   const isMessageFromOtherParty = (message: Message) => {
@@ -167,132 +455,143 @@ const MessagingSystem = ({ eventRequest, onClose }: MessagingSystemProps) => {
 
   return (
     <Card className="h-[600px] flex flex-col">
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <MessageSquare className="w-5 h-5" />
-              Logistics Discussion
-            </CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              {eventRequest.event_title}
-            </p>
-          </div>
-          {onClose && (
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              ×
-            </Button>
-          )}
-        </div>
-        
-        {/* Event Details Summary */}
-        <div className="bg-muted/50 p-3 rounded-lg space-y-2">
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-1">
-              <MapPin className="w-4 h-4" />
-              <span>{eventRequest.property_name}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Calendar className="w-4 h-4" />
-              <span>{eventRequest.start_date} - {eventRequest.end_date}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Users className="w-4 h-4" />
-              <span>{eventRequest.expected_headcount} people</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 text-sm">
-            <span>Check-in: {eventRequest.basic_schedule.check_in}</span>
-            <span>Check-out: {eventRequest.basic_schedule.check_out}</span>
-            <span>Sewing: {eventRequest.basic_schedule.sewing_hours}</span>
-          </div>
-          {eventRequest.basic_schedule.meals.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {eventRequest.basic_schedule.meals.map((meal, index) => (
-                <Badge key={index} variant="outline" className="text-xs">
-                  {meal}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </div>
-      </CardHeader>
-
-      <CardContent className="flex-1 flex flex-col p-0">
-        {/* Messages Area */}
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-4">
-            {messages.length === 0 ? (
-              <div className="text-center py-8">
-                <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No messages yet</p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Start the conversation about logistics and setup requirements.
-                </p>
-              </div>
-            ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex gap-3 ${isMessageFromOtherParty(message) ? 'flex-row' : 'flex-row-reverse'}`}
-                >
-                  <Avatar className="w-8 h-8 flex-shrink-0">
-                    <AvatarFallback className="text-xs">
-                      {getInitials(message.sender_name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className={`max-w-[70%] ${isMessageFromOtherParty(message) ? 'items-start' : 'items-end'} flex flex-col`}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium">{message.sender_name}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {message.sender_role === 'instructor' ? 'Instructor' : 'Property Owner'}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {format(new Date(message.created_at), 'MMM d, h:mm a')}
-                      </span>
-                    </div>
-                    <div className={`rounded-lg p-3 ${
-                      isMessageFromOtherParty(message) 
-                        ? 'bg-muted' 
-                        : 'bg-primary text-primary-foreground'
-                    }`}>
-                      <p className="text-sm">{message.content}</p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </ScrollArea>
-
-        {/* Message Input */}
-        <div className="border-t p-4">
-          <div className="flex gap-2">
-            <Textarea
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Ask about arrival times, setup needs, extra tables, supplies, etc..."
-              className="flex-1 min-h-[60px] resize-none"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-            />
-            <Button 
-              onClick={sendMessage} 
-              disabled={!newMessage.trim() || sending}
-              className="self-end"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Press Enter to send, Shift+Enter for new line
+      {/* Fixed Chat Header */}
+      <div className="bg-white border-b px-4 py-3 flex items-center gap-3 flex-shrink-0">
+        {onClose && (
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+        )}
+        <Avatar className="w-10 h-10">
+          <AvatarFallback className="bg-primary/10 text-sm">
+            {context === 'retreat_detail' && retreat 
+              ? getInitials(retreat.instructor_name)
+              : context === 'event_request' && eventRequest
+              ? getInitials(role === 'instructor' ? 'Property Owner' : eventRequest.instructor_name)
+              : '?'
+            }
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex-1">
+          <h3 className="font-semibold">
+            {context === 'retreat_detail' && retreat 
+              ? retreat.instructor_name
+              : context === 'event_request' && eventRequest
+              ? (role === 'instructor' ? 'Property Owner' : eventRequest.instructor_name)
+              : 'Chat'
+            }
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {context === 'retreat_detail' && retreat 
+              ? `About ${retreat.title}`
+              : context === 'event_request' && eventRequest
+              ? `Event: ${eventRequest.event_title}`
+              : 'Conversation'
+            }
           </p>
         </div>
-      </CardContent>
+      </div>
+
+      {/* Scrollable Message Area */}
+      <ScrollArea className="flex-1 p-4 bg-gray-50">
+        <div className="space-y-1">
+          {messages.length === 0 ? (
+            <div className="text-center py-12">
+              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No messages yet</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {context === 'retreat_detail' 
+                  ? 'Ask about the retreat, schedule, accommodations, or any questions you have.'
+                  : context === 'organizer_dashboard'
+                  ? 'Send important updates or answer questions about the retreat.'
+                  : 'Start the conversation about logistics and setup requirements.'
+                }
+              </p>
+            </div>
+          ) : (
+            Object.entries(groupMessagesByDate(messages)).map(([dateKey, dateMessages]) => (
+              <div key={dateKey} className="space-y-3">
+                {/* Date Separator */}
+                <div className="flex items-center justify-center my-4">
+                  <span className="bg-white px-3 py-1 text-xs text-muted-foreground rounded-full border">
+                    {dateKey}
+                  </span>
+                </div>
+                
+                {/* Messages for this date */}
+                {dateMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.sender_id === user?.id ? 'justify-end' : 'justify-start'} mb-2`}
+                  >
+                    <div className={`max-w-[70%] ${message.sender_id === user?.id ? 'order-2' : 'order-1'}`}>
+                      <div className={`rounded-2xl px-4 py-2 ${
+                        message.sender_id === user?.id 
+                          ? 'bg-primary text-primary-foreground rounded-br-sm' 
+                          : 'bg-white text-foreground rounded-bl-sm border'
+                      }`}>
+                        <p className="text-sm leading-relaxed break-words">
+                          {message.content}
+                        </p>
+                      </div>
+                      <div className={`text-xs text-muted-foreground mt-1 ${
+                        message.sender_id === user?.id ? 'text-right' : 'text-left'
+                      }`}>
+                        {formatMessageTime(new Date(message.created_at))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+
+      {/* Fixed Message Input Footer */}
+      <div className="border-t bg-white p-4 flex-shrink-0">
+        {availableRecipients.length > 1 && (
+          <div className="mb-3">
+            <Select value={selectedRecipientId || ''} onValueChange={(value) => {
+              const recipient = availableRecipients.find(r => r.id === value);
+              setSelectedRecipientId(recipient?.id || '');
+              setSelectedRecipientName(recipient?.name || '');
+            }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select recipient..." />
+              </SelectTrigger>
+              <SelectContent>
+                {availableRecipients.map((recipient) => (
+                  <SelectItem key={recipient.id} value={recipient.id}>
+                    {recipient.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div className="flex gap-2 items-end">
+          <Textarea
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            placeholder="Type a message..."
+            className="flex-1 min-h-[44px] max-h-32 resize-none border-gray-200 focus:border-primary"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+          />
+          <Button 
+            onClick={sendMessage} 
+            disabled={!newMessage.trim() || sending}
+            className="px-4 py-2 h-[44px] bg-primary hover:bg-primary/90"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
     </Card>
   );
 };
