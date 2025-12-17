@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { format, isToday, isYesterday, formatDistanceToNow } from "date-fns";
@@ -49,6 +50,14 @@ interface Conversation {
   participant_role: string;
 }
 
+interface Retreat {
+  id: number;
+  title: string;
+  location: string;
+  date: string;
+  level: string;
+}
+
 const InstructorMessages = () => {
   const { user, role } = useAuth();
   const navigate = useNavigate();
@@ -59,6 +68,8 @@ const InstructorMessages = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedEventFilter, setSelectedEventFilter] = useState<string>("all");
+  const [retreats, setRetreats] = useState<Retreat[]>([]);
 
   useEffect(() => {
     if (role !== 'instructor') {
@@ -68,6 +79,17 @@ const InstructorMessages = () => {
 
     fetchConversations();
   }, [user, role, navigate]);
+
+  // Filter conversations based on selected event and search term
+  const filteredConversations = conversations.filter((conversation) => {
+    const matchesEvent = selectedEventFilter === "all" || conversation.retreat_id === selectedEventFilter;
+    const matchesSearch = searchTerm === "" || 
+      conversation.participant_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      conversation.retreat_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      conversation.last_message.content.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchesEvent && matchesSearch;
+  });
 
   useEffect(() => {
     if (!user || role !== 'instructor') return;
@@ -112,18 +134,19 @@ const InstructorMessages = () => {
   const fetchConversations = async () => {
     try {
       // Get all retreats for this instructor
-      const { data: retreats, error: retreatsError } = await supabase
+      const { data: retreatsData, error: retreatsError } = await supabase
         .from('retreats')
         .select('id, title, location, date, level')
         .eq('instructor_id', user?.id)
         .eq('published', true);
 
       if (retreatsError) throw retreatsError;
+      setRetreats(retreatsData || []);
 
       // For each retreat, get unique student conversations
       const conversationsData: Conversation[] = [];
 
-      for (const retreat of retreats || []) {
+      for (const retreat of retreatsData || []) {
         // Get all unique students who have messaged about this retreat
         const { data: studentMessages, error: studentMessagesError } = await supabase
           .from('messages')
@@ -330,12 +353,7 @@ const InstructorMessages = () => {
     return groups;
   };
 
-  const filteredConversations = conversations.filter(conv =>
-    conv.retreat_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    conv.participant_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    conv.retreat_location.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
+  
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -378,16 +396,37 @@ const InstructorMessages = () => {
             )}
           </div>
           
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search conversations..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
+          {/* Search Bar and Event Filter */}
+          <div className="space-y-3">
+            {/* Event Filter */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-foreground whitespace-nowrap">Event:</label>
+              <Select value={selectedEventFilter} onValueChange={setSelectedEventFilter}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="All Events" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Events</SelectItem>
+                  {retreats.map((retreat) => (
+                    <SelectItem key={retreat.id} value={retreat.id.toString()}>
+                      {retreat.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search conversations..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+            </div>
           </div>
         </div>
       </div>
