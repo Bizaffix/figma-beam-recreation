@@ -70,6 +70,7 @@ const InstructorMessages = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEventFilter, setSelectedEventFilter] = useState<string>("all");
   const [retreats, setRetreats] = useState<Retreat[]>([]);
+  const [eventRequests, setEventRequests] = useState<any[]>([]);
 
   useEffect(() => {
     if (role !== 'instructor') {
@@ -82,7 +83,23 @@ const InstructorMessages = () => {
 
   // Filter conversations based on selected event and search term
   const filteredConversations = conversations.filter((conversation) => {
-    const matchesEvent = selectedEventFilter === "all" || conversation.retreat_id === selectedEventFilter;
+    const isVenueConversation = conversation.retreat_id.startsWith('event-');
+    const isRetreatConversation = !isVenueConversation;
+    
+    let matchesEvent = true;
+    
+    if (selectedEventFilter === "retreats") {
+      matchesEvent = isRetreatConversation;
+    } else if (selectedEventFilter === "venues") {
+      matchesEvent = isVenueConversation;
+    } else if (selectedEventFilter === "all") {
+      matchesEvent = true;
+    } else {
+      // Specific retreat or event request
+      matchesEvent = conversation.retreat_id === selectedEventFilter ||
+        (isVenueConversation && conversation.retreat_id.replace('event-', '') === selectedEventFilter);
+    }
+    
     const matchesSearch = searchTerm === "" || 
       conversation.participant_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       conversation.retreat_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -111,10 +128,22 @@ const InstructorMessages = () => {
           fetchConversations();
           
           // If currently viewing the conversation with this sender, update messages
+          // Handle both retreat, event request, and direct message conversations
           if (selectedConversation && 
-              selectedConversation.participant_id === newMessage.sender_id &&
-              selectedConversation.retreat_id === newMessage.related_id) {
-            fetchMessages(selectedConversation.retreat_id);
+              selectedConversation.participant_id === newMessage.sender_id) {
+            
+            // Check if this message belongs to the current conversation
+            const isCurrentRetreat = selectedConversation.retreat_id === newMessage.related_id;
+            const isCurrentEventRequest = newMessage.related_id && 
+              `event-${newMessage.related_id}` === selectedConversation.retreat_id;
+            const isCurrentDirectMessage = newMessage.message_type === 'venue_communication' ||
+              (newMessage.message_type === 'event_request' && 
+               selectedConversation.retreat_id.startsWith('direct-') &&
+               selectedConversation.participant_id === newMessage.sender_id);
+            
+            if (isCurrentRetreat || isCurrentEventRequest || isCurrentDirectMessage) {
+              fetchMessages(selectedConversation.retreat_id);
+            }
           }
         }
       )
@@ -133,6 +162,8 @@ const InstructorMessages = () => {
 
   const fetchConversations = async () => {
     try {
+      console.log('Starting fetchConversations for instructor:', user?.id);
+      
       // Get all retreats for this instructor
       const { data: retreatsData, error: retreatsError } = await supabase
         .from('retreats')
@@ -141,11 +172,60 @@ const InstructorMessages = () => {
         .eq('published', true);
 
       if (retreatsError) throw retreatsError;
+      console.log('Retreats data:', retreatsData);
       setRetreats(retreatsData || []);
 
-      // For each retreat, get unique student conversations
-      const conversationsData: Conversation[] = [];
+      // Get all event requests for this instructor
+      const { data: eventRequestsData, error: eventRequestsError } = await supabase
+        .from('event_requests')
+        .select('*')
+        .eq('instructor_id', user?.id);
 
+      if (eventRequestsError) throw eventRequestsError;
+      console.log('Event requests data:', eventRequestsData);
+      setEventRequests(eventRequestsData || []);
+
+      // Also get any messages received by this instructor from venue owners
+      const { data: receivedMessages, error: receivedMessagesError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('receiver_id', user?.id)
+        .in('message_type', ['event_request', 'venue_communication'])
+        .eq('sender_role', 'location_owner')
+        .order('created_at', { ascending: false });
+
+      if (receivedMessagesError) throw receivedMessagesError;
+      console.log('Received messages from venue owners:', receivedMessages);
+
+      // Also get any direct messages sent by this instructor to venue owners
+      const { data: directMessages, error: directMessagesError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('sender_id', user?.id)
+        .in('message_type', ['event_request', 'venue_communication'])
+        .eq('sender_role', 'instructor')
+        .order('created_at', { ascending: false });
+
+      if (directMessagesError) throw directMessagesError;
+      console.log('Direct messages data:', directMessages);
+
+      // Combine received and sent direct messages, filter out event request messages that are already handled
+      const allDirectMessages = [...(receivedMessages || []), ...(directMessages || [])]
+        .filter(msg => {
+          // Include venue_communication messages and event_request messages that don't have existing event requests
+          if (msg.message_type === 'venue_communication') return true;
+          if (msg.message_type === 'event_request') {
+            // Only include if related_id doesn't match an existing event request
+            return !eventRequestsData?.some(req => req.id === msg.related_id);
+          }
+          return false;
+        });
+      console.log('All direct messages combined:', allDirectMessages);
+
+      const conversationsData: Conversation[] = [];
+      const processedEventIds = new Set<string>();
+
+      // Process retreat conversations (with students)
       for (const retreat of retreatsData || []) {
         // Get all unique students who have messaged about this retreat
         const { data: studentMessages, error: studentMessagesError } = await supabase
@@ -190,6 +270,57 @@ const InstructorMessages = () => {
             retreat_date: retreat.date,
             retreat_level: retreat.level,
             last_message: {
+              id: `temp-${lastMessage.id}`,
+              sender_id: lastMessage.sender_id,
+              sender_name: lastMessage.sender_name,
+              sender_role: lastMessage.sender_role,
+              content: lastMessage.content,
+              created_at: lastMessage.created_at,
+              read: false,
+              message_type: 'retreat_question',
+              related_id: retreat.id.toString()
+            },
+            unread_count: count || 0,
+            participant_id: studentId,
+            participant_name: lastMessage.sender_name,
+            participant_role: 'student'
+          });
+        }
+      }
+
+      // Process event request conversations (with venue owners)
+      for (const eventRequest of eventRequestsData || []) {
+        processedEventIds.add(eventRequest.id);
+        
+        // Get all messages between instructor and venue owner for this event request
+        const { data: venueMessages, error: venueMessagesError } = await supabase
+          .from('messages')
+          .select('id, sender_id, sender_name, sender_role, created_at, content, read, receiver_id')
+          .eq('related_id', eventRequest.id)
+          .eq('message_type', 'event_request')
+          .or(`sender_id.eq.${user?.id},receiver_id.eq.${user?.id}`)
+          .order('created_at', { ascending: false });
+
+        if (venueMessagesError) throw venueMessagesError;
+
+        if (venueMessages && venueMessages.length > 0) {
+          const lastMessage = venueMessages[0];
+          
+          // Count unread messages from venue owner
+          const unreadCount = venueMessages.filter(m => 
+            m.sender_id !== user?.id && 
+            m.receiver_id && m.receiver_id === user?.id && 
+            m.read === false
+          ).length;
+
+          // Create a conversation for the venue owner
+          conversationsData.push({
+            retreat_id: `event-${eventRequest.id}`, // Use event request ID with prefix
+            retreat_title: `Venue: ${eventRequest.property_name}`,
+            retreat_location: eventRequest.property_name,
+            retreat_date: eventRequest.start_date,
+            retreat_level: 'Venue Communication', // Different level to distinguish
+            last_message: {
               id: lastMessage.id,
               sender_id: lastMessage.sender_id,
               sender_name: lastMessage.sender_name,
@@ -197,16 +328,79 @@ const InstructorMessages = () => {
               content: lastMessage.content,
               created_at: lastMessage.created_at,
               read: lastMessage.read || false,
-              message_type: 'retreat_question',
-              related_id: retreat.id.toString()
+              message_type: 'event_request',
+              related_id: eventRequest.id,
+              receiver_id: lastMessage.receiver_id
             },
-            unread_count: count || 0,
-            participant_id: studentId,
-            participant_name: lastMessage.sender_name,
-            participant_role: lastMessage.sender_role
+            unread_count: unreadCount,
+            participant_id: eventRequest.property_owner_id,
+            participant_name: 'Property Owner', // We'll need to fetch this from profiles
+            participant_role: 'location_owner'
           });
         }
       }
+
+      // Process direct messages that aren't associated with existing event requests
+      console.log('Processing direct messages...');
+      const groupedDirectMessages = allDirectMessages?.reduce((groups: Record<string, any[]>, message) => {
+        // Group by the other participant (either sender or receiver)
+        const otherParticipantId = message.sender_id === user?.id ? message.receiver_id : message.sender_id;
+        const key = `direct-${otherParticipantId}`;
+        if (!groups[key]) {
+          groups[key] = [];
+        }
+        groups[key].push(message);
+        return groups;
+      }, {});
+
+      console.log('Grouped direct messages:', groupedDirectMessages);
+
+      for (const [key, messages] of Object.entries(groupedDirectMessages || {})) {
+        const messageGroup = messages as any[];
+        const lastMessage = messageGroup[0];
+        
+        console.log('Processing direct message group:', key, messageGroup);
+        
+        // Determine the other participant
+        const otherParticipantId = lastMessage.sender_id === user?.id ? lastMessage.receiver_id : lastMessage.sender_id;
+        const otherParticipantName = lastMessage.sender_id === user?.id ? 'Property Owner' : lastMessage.sender_name;
+        const isFromInstructor = lastMessage.sender_id === user?.id;
+        
+        // Count unread messages (only count messages received from venue owners that are unread)
+        const unreadCount = messageGroup.filter(m => 
+          m.sender_id !== user?.id && 
+          m.receiver_id === user?.id && 
+          m.read === false
+        ).length;
+
+        console.log('Creating conversation for direct message:', key, 'unread:', unreadCount, 'other participant:', otherParticipantId);
+
+        conversationsData.push({
+          retreat_id: key,
+          retreat_title: 'Venue Inquiry',
+          retreat_location: 'Direct Message',
+          retreat_date: new Date().toISOString().split('T')[0],
+          retreat_level: 'Venue Communication',
+          last_message: {
+            id: lastMessage.id,
+            sender_id: lastMessage.sender_id,
+            sender_name: lastMessage.sender_name,
+            sender_role: lastMessage.sender_role,
+            content: lastMessage.content,
+            created_at: lastMessage.created_at,
+            read: lastMessage.read || false,
+            message_type: 'event_request',
+            related_id: lastMessage.related_id,
+            receiver_id: lastMessage.receiver_id
+          },
+          unread_count: unreadCount,
+          participant_id: otherParticipantId,
+          participant_name: otherParticipantName,
+          participant_role: 'location_owner'
+        });
+      }
+
+      console.log('Final conversations data:', conversationsData);
 
       // Sort conversations by most recent message
       conversationsData.sort((a, b) => 
@@ -225,27 +419,53 @@ const InstructorMessages = () => {
     if (!selectedConversation) return;
     
     try {
-      // Only fetch messages between instructor and the specific student
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('related_id', retreatId)
-        .eq('message_type', 'retreat_question')
-        .or(`and(sender_id.eq.${user?.id},receiver_id.eq.${selectedConversation.participant_id}),and(sender_id.eq.${selectedConversation.participant_id},receiver_id.eq.${user?.id})`)
-        .order('created_at', { ascending: true });
+      // Determine if this is an event request, retreat, or direct conversation
+      const isEventRequest = retreatId.startsWith('event-');
+      const isDirectMessage = retreatId.startsWith('direct-');
+      const actualId = isEventRequest ? retreatId.replace('event-', '') : 
+                      isDirectMessage ? `direct-${selectedConversation.participant_id}` : retreatId;
+      const messageType = isEventRequest || isDirectMessage ? 'event_request' : 'retreat_question';
+      
+      let data;
+      
+      if (isDirectMessage) {
+        // For direct messages, fetch by participant and message type
+        const { data: directData, error: directError } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('message_type', messageType)
+          .or(`and(sender_id.eq.${user?.id},receiver_id.eq.${selectedConversation.participant_id}),and(sender_id.eq.${selectedConversation.participant_id},receiver_id.eq.${user?.id})`)
+          .order('created_at', { ascending: true });
+        
+        if (directError) throw directError;
+        data = directData;
+      } else {
+        // For event request and retreat messages, fetch by related_id
+        const { data: relatedData, error: relatedError } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('related_id', actualId)
+          .eq('message_type', messageType)
+          .or(`sender_id.eq.${user?.id},receiver_id.eq.${user?.id}`)
+          .order('created_at', { ascending: true });
 
-      if (error) throw error;
+        if (relatedError) throw relatedError;
+        data = relatedData;
+      }
+
       setMessages(data || []);
 
-      // Mark student messages as read
+      // Mark messages as read
       if (data && data.length > 0) {
-        await supabase
-          .from('messages')
-          .update({ read: true })
-          .eq('related_id', retreatId)
-          .eq('sender_id', selectedConversation.participant_id)
-          .eq('sender_role', 'student')
-          .neq('sender_id', user?.id);
+        const unreadMessages = data.filter(m => m.receiver_id === user.id && !m.read);
+        if (unreadMessages.length > 0) {
+          await supabase
+            .from('messages')
+            .update({ read: true })
+            .eq('receiver_id', user.id)
+            .eq('message_type', messageType)
+            .in('id', unreadMessages.map(m => m.id));
+        }
       }
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -259,11 +479,18 @@ const InstructorMessages = () => {
     setNewMessage("");
     setSending(true);
 
+    // Determine if this is an event request, retreat, or direct conversation
+    const isEventRequest = selectedConversation.retreat_id.startsWith('event-');
+    const isDirectMessage = selectedConversation.retreat_id.startsWith('direct-');
+    const actualId = isEventRequest ? selectedConversation.retreat_id.replace('event-', '') : 
+                    isDirectMessage ? `direct-${selectedConversation.participant_id}` : selectedConversation.retreat_id;
+    const messageType = isEventRequest || isDirectMessage ? 'event_request' : 'retreat_question';
+
     // Create optimistic message for instant display
     const optimisticMessage: Message = {
       id: `temp-${Date.now()}`, // Temporary ID
-      related_id: selectedConversation.retreat_id,
-      message_type: 'retreat_question',
+      related_id: actualId,
+      message_type: messageType,
       sender_id: user.id,
       sender_name: user.user_metadata?.first_name && user.user_metadata?.last_name 
         ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
@@ -281,8 +508,8 @@ const InstructorMessages = () => {
 
     try {
       const messageData = {
-        related_id: selectedConversation.retreat_id,
-        message_type: 'retreat_question',
+        related_id: actualId,
+        message_type: messageType,
         sender_id: user.id,
         sender_name: optimisticMessage.sender_name,
         sender_role: 'instructor' as const,
@@ -407,9 +634,16 @@ const InstructorMessages = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Events</SelectItem>
+                  <SelectItem value="retreats">Retreats Only</SelectItem>
+                  <SelectItem value="venues">Venue Communications Only</SelectItem>
                   {retreats.map((retreat) => (
                     <SelectItem key={retreat.id} value={retreat.id.toString()}>
                       {retreat.title}
+                    </SelectItem>
+                  ))}
+                  {eventRequests.map((event) => (
+                    <SelectItem key={event.id} value={event.id}>
+                      Venue: {event.property_name}
                     </SelectItem>
                   ))}
                 </SelectContent>
