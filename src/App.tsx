@@ -18,6 +18,7 @@ import InstructorDashboard from "./pages/InstructorDashboard";
 import InstructorRetreatForm from "./pages/InstructorRetreatForm";
 import InstructorBrowse from "./pages/InstructorBrowse";
 import InstructorMessages from "./pages/InstructorMessages";
+import StudentMessages from "./pages/StudentMessages";
 import AdminDashboard from "./pages/AdminDashboard";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -162,6 +163,7 @@ const App = () => (
           {/* Protected Student Routes */}
           <Route path="/home" element={<StudentRoute><Home /></StudentRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/student/messages" element={<StudentRoute><StudentMessages /></StudentRoute>} />
           
           {/* Public Retreat Detail - can view without login */}
           <Route path="/retreat/:id" element={<RetreatDetail />} />

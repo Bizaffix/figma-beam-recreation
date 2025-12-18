@@ -11,33 +11,91 @@ export const BottomNav = () => {
   const { role, user } = useAuth();
   const [unreadMessages, setUnreadMessages] = useState(0);
 
-  // Fetch unread messages count for instructors
+  // Fetch unread messages count for instructors and students
   useEffect(() => {
     const fetchUnreadMessages = async () => {
-      if (!user || role !== 'instructor') return;
+      if (!user) return;
 
       try {
-        // Get all retreats for this instructor
-        const { data: retreats, error: retreatsError } = await supabase
-          .from('retreats')
-          .select('id')
-          .eq('instructor_id', user.id);
-
-        if (retreatsError) throw retreatsError;
-
-        // Count unread messages for all retreats
         let totalUnread = 0;
-        for (const retreat of retreats || []) {
-          const { count, error: countError } = await supabase
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('related_id', retreat.id.toString())
-            .eq('message_type', 'retreat_question')
-            .eq('sender_role', 'student')
-            .eq('read', false);
 
-          if (countError) throw countError;
-          totalUnread += count || 0;
+        if (role === 'instructor') {
+          // Get all retreats for this instructor
+          const { data: retreats, error: retreatsError } = await supabase
+            .from('retreats')
+            .select('id')
+            .eq('instructor_id', user.id);
+
+          if (retreatsError) throw retreatsError;
+
+          // Count unread messages for all retreats
+          for (const retreat of retreats || []) {
+            const { count, error: countError } = await supabase
+              .from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('related_id', retreat.id.toString())
+              .eq('message_type', 'retreat_question')
+              .eq('sender_role', 'student')
+              .eq('read', false);
+
+            if (countError) throw countError;
+            totalUnread += count || 0;
+          }
+        } else if (role === 'student') {
+          // Get all retreats this student has booked or saved
+          const { data: bookings, error: bookingsError } = await supabase
+            .from('bookings')
+            .select('retreat_id')
+            .eq('user_id', user.id);
+
+          if (bookingsError) throw bookingsError;
+
+          // Count unread messages for all booked retreats
+          for (const booking of bookings || []) {
+            const { count, error: countError } = await supabase
+              .from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('related_id', booking.retreat_id.toString())
+              .eq('message_type', 'retreat_question')
+              .eq('sender_role', 'instructor')
+              .eq('receiver_id', user.id)
+              .eq('read', false);
+
+            if (countError) throw countError;
+            totalUnread += count || 0;
+          }
+        } else if (role === 'location_owner') {
+          // Get all properties for this location owner
+          const { data: properties, error: propertiesError } = await supabase
+            .from('properties')
+            .select('id')
+            .eq('owner_id', user.id);
+
+          if (propertiesError) throw propertiesError;
+
+          // Get event requests for these properties
+          const propertyIds = properties?.map(p => p.id) || [];
+          const { data: eventRequests, error: requestsError } = await supabase
+            .from('event_requests')
+            .select('id')
+            .in('property_id', propertyIds);
+
+          if (requestsError) throw requestsError;
+
+          // Count unread messages for all event requests
+          for (const eventRequest of eventRequests || []) {
+            const { count, error: countError } = await supabase
+              .from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('related_id', eventRequest.id)
+              .eq('message_type', 'event_request')
+              .eq('sender_role', 'instructor')
+              .eq('receiver_id', user.id)
+              .eq('read', false);
+
+            if (countError) throw countError;
+            totalUnread += count || 0;
+          }
         }
 
         setUnreadMessages(totalUnread);
@@ -49,7 +107,7 @@ export const BottomNav = () => {
     fetchUnreadMessages();
   }, [user, role]);
 
-  // Different navigation for instructors vs students
+  // Different navigation for instructors vs students vs location owners
   const navItems = role === 'instructor' 
     ? [
         { icon: Search, label: "Browse", path: "/instructor/browse" },
@@ -57,9 +115,16 @@ export const BottomNav = () => {
         { icon: MessageSquare, label: "Messages", path: "/instructor/messages" },
         { icon: User, label: "Profile", path: "/profile" },
       ]
+    : role === 'location_owner'
+    ? [
+        { icon: LayoutDashboard, label: "Dash", path: "/location-owner/dashboard" },
+        { icon: MessageSquare, label: "Messages", path: "/location-owner/messages" },
+        { icon: User, label: "Profile", path: "/profile" },
+      ]
     : [
         { icon: Compass, label: "Browse", path: "/browse" },
         { icon: Home, label: "Home", path: "/home" },
+        { icon: MessageSquare, label: "Messages", path: "/student/messages" },
         { icon: User, label: "Profile", path: "/profile" },
       ];
 
