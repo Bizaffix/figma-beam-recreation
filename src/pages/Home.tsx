@@ -276,7 +276,7 @@ const Home = () => {
           </CardContent>
         </Card>
 
-        {/* Create Instructor Profile - Only show for students */}
+        {/* Create Instructor Profile - Only show for students, hide when Organizer is active */}
         {role === 'student' && (
           <Card>
             <CardContent className="p-6">
