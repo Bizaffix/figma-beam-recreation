@@ -319,15 +319,29 @@ const RetreatDetail = () => {
             </div>
 
             {/* Instructor */}
-            <div className="flex items-center gap-3 py-4 sm:py-6 border-y border-border">
-              <img
-                src={retreat.instructor.avatar || "/placeholder.svg"}
-                alt={retreat.instructor.name}
-                className="w-12 h-12 rounded-full object-cover flex-shrink-0"
-              />
-              <div className="min-w-0">
-                <p className="font-semibold text-card-foreground truncate">{retreat.instructor.name}</p>
-                <p className="text-sm text-muted-foreground">Instructor</p>
+            <div className="py-4 sm:py-6 border-y border-border">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={retreat.instructor.avatar || "/placeholder.svg"}
+                    alt={retreat.instructor.name}
+                    className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-card-foreground truncate">{retreat.instructor.name}</p>
+                    <p className="text-sm text-muted-foreground">Instructor</p>
+                  </div>
+                </div>
+                {user && role === 'student' && (
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto h-12 px-4 sm:px-6 text-sm sm:text-base font-medium"
+                    onClick={() => setShowMessagingDialog(true)}
+                  >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    Message Organizer
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -411,7 +425,19 @@ const RetreatDetail = () => {
         {/* About Instructor */}
         <Card>
           <CardContent className="p-4 sm:p-6">
-            <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">About the Instructor</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+              <h2 className="text-lg sm:text-xl font-semibold text-card-foreground">About the Instructor</h2>
+              {user && role === 'student' && (
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto h-12 px-4 sm:px-6 text-sm sm:text-base font-medium"
+                  onClick={() => setShowMessagingDialog(true)}
+                >
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Message Organizer
+                </Button>
+              )}
+            </div>
             <div className="flex items-start gap-3 sm:gap-4">
               <img
                 src={retreat.instructor.avatar || "/placeholder.svg"}
@@ -433,17 +459,10 @@ const RetreatDetail = () => {
               {user && role === 'student' ? (
                 <>
                   <Button
-                    className="flex-1 h-12 text-base sm:text-lg"
+                    className="flex-1 h-12 text-base sm:text-lg font-medium"
                     onClick={handleRegisterClick}
                   >
-                    Book This Retreat - ${retreat.price}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-12 px-4"
-                    onClick={() => setShowMessagingDialog(true)}
-                  >
-                    <MessageSquare className="w-4 h-4" />
+                    Book Now - ${retreat.price}
                   </Button>
                 </>
               ) : !user ? (
