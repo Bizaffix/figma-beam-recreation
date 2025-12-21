@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2 } from "lucide-react";
+import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2, Plus, DollarSign, CreditCard, Users } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1389,333 +1389,447 @@ const InstructorRetreatForm = () => {
             </div>
           </div>
 
-          {/* Price and Skill Level */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          {/* Dedicated Pricing Section */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                <DollarSign className="w-4 h-4 text-green-600" />
+              </div>
+              <h2 className="text-xl font-bold text-card-foreground">Pricing & Payment</h2>
+              <Badge variant="outline" className="text-xs">Configure all pricing options</Badge>
+            </div>
+
+            {/* Basic Pricing */}
+            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-blue-50 to-purple-50">
+              <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                <CreditCard className="w-5 h-5" />
+                Basic Pricing
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Base Price ($)</Label>
+                  <p className="text-xs text-muted-foreground mb-2">Per Student</p>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.price || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        price: value === "" ? undefined : Number(value) 
+                      }));
+                    }}
+                    placeholder="Enter price"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label>Skill Level</Label>
+                  <p className="text-xs text-muted-foreground mb-2">Who is this for?</p>
+                  <Select
+                    value={formData.level}
+                    onValueChange={(value: "Beginner" | "Intermediate" | "Advanced" | "Any") =>
+                      setFormData(prev => ({ ...prev, level: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Any">Any Skill Level</SelectItem>
+                      <SelectItem value="Beginner">Beginner</SelectItem>
+                      <SelectItem value="Intermediate">Intermediate</SelectItem>
+                      <SelectItem value="Advanced">Advanced</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Deposit Settings */}
+            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-orange-50 to-yellow-50">
+              <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5" />
+                Deposit Settings
+              </h3>
+              
               <div>
-                <Label>Price ($)</Label>
-                <p className="text-xs text-muted-foreground mb-2">Per Student</p>
+                <Label>Deposit Amount ($)</Label>
+                <p className="text-xs text-muted-foreground mb-2">Optional - Leave empty if no deposit required</p>
                 <Input
                   type="number"
                   step="0.01"
                   min="0"
-                  value={formData.price || ""}
+                  value={formData.deposit_amount || ""}
                   onChange={(e) => {
                     const value = e.target.value;
                     setFormData(prev => ({ 
                       ...prev, 
-                      price: value === "" ? undefined : Number(value) 
+                      deposit_amount: value === "" ? null : Number(value) 
                     }));
                   }}
-                  placeholder="Enter price"
-                  required
+                  placeholder="Enter deposit amount (optional)"
                 />
-              </div>
-
-              <div>
-                <Label>Skill Level</Label>
-                <p className="text-xs text-muted-foreground mb-2">Who is this for?</p>
-                <Select
-                  value={formData.level}
-                  onValueChange={(value: "Beginner" | "Intermediate" | "Advanced" | "Any") =>
-                    setFormData(prev => ({ ...prev, level: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Any">Any Skill Level</SelectItem>
-                    <SelectItem value="Beginner">Beginner</SelectItem>
-                    <SelectItem value="Intermediate">Intermediate</SelectItem>
-                    <SelectItem value="Advanced">Advanced</SelectItem>
-                  </SelectContent>
-                </Select>
+                
+                {formData.deposit_amount && formData.deposit_amount > 0 && (
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <Label className="text-sm font-medium">Refundable Deposit</Label>
+                        <p className="text-xs text-muted-foreground">Allow students to get refund on deposit</p>
+                      </div>
+                      <Switch
+                        checked={formData.deposit_refundable || false}
+                        onCheckedChange={(checked) =>
+                          setFormData(prev => ({ ...prev, deposit_refundable: checked }))
+                        }
+                      />
+                    </div>
+                    
+                    {formData.deposit_refundable && (
+                      <div>
+                        <Label className="text-sm">Refund Cutoff (days before event)</Label>
+                        <p className="text-xs text-muted-foreground mb-2">Last day students can request deposit refund</p>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={formData.deposit_refund_days_before || 7}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              deposit_refund_days_before: value === "" ? 7 : Number(value) 
+                            }));
+                          }}
+                          placeholder="7"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div>
-              <Label>Deposit Amount ($)</Label>
-              <p className="text-xs text-muted-foreground mb-2">Optional - Leave empty if no deposit required</p>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.deposit_amount || ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    deposit_amount: value === "" ? null : Number(value) 
-                  }));
-                }}
-                placeholder="Enter deposit amount (optional)"
-              />
+            {/* Payment Timing */}
+            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-purple-50 to-pink-50">
+              <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                <CalendarIcon className="w-5 h-5" />
+                Payment Timing
+              </h3>
               
-              {formData.deposit_amount && formData.deposit_amount > 0 && (
-                <div className="mt-4 space-y-3">
+              <div>
+                <Label>Full Payment Timing</Label>
+                <p className="text-xs text-muted-foreground mb-2">When is the remaining balance charged?</p>
+                <Input
+                  type="number"
+                  min="1"
+                  value={formData.payment_days_before_event || 7}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      payment_days_before_event: value === "" ? 7 : Number(value) 
+                    }));
+                  }}
+                  placeholder="7"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Days before the retreat starts
+                </p>
+                
+                <div className="mt-3">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <Label className="text-sm font-medium">Refundable Deposit</Label>
-                      <p className="text-xs text-muted-foreground">Allow students to get refund on deposit</p>
+                      <Label className="text-sm font-medium">Non-Refundable Full Payment</Label>
+                      <p className="text-xs text-muted-foreground">Full payment cannot be refunded once charged</p>
                     </div>
                     <Switch
-                      checked={formData.deposit_refundable || false}
+                      checked={formData.full_payment_non_refundable || false}
                       onCheckedChange={(checked) =>
-                        setFormData(prev => ({ ...prev, deposit_refundable: checked }))
+                        setFormData(prev => ({ ...prev, full_payment_non_refundable: checked }))
                       }
                     />
                   </div>
-                  
-                  {formData.deposit_refundable && (
-                    <div>
-                      <Label className="text-sm">Refund Cutoff (days before event)</Label>
-                      <p className="text-xs text-muted-foreground mb-2">Last day students can request deposit refund</p>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={formData.deposit_refund_days_before || 7}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setFormData(prev => ({ 
-                            ...prev, 
-                            deposit_refund_days_before: value === "" ? 7 : Number(value) 
-                          }));
-                        }}
-                        placeholder="7"
-                      />
+                </div>
+              </div>
+            </div>
+
+            {/* Discount Coupon */}
+            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-green-50 to-emerald-50">
+              <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                <Share2 className="w-5 h-5" />
+                Discount Coupon
+              </h3>
+              
+              <div>
+                <Label>Discount Coupon Code</Label>
+                <p className="text-xs text-muted-foreground mb-2">Optional - Students can use this code for a discount</p>
+                <Input
+                  value={formData.discount_coupon || ""}
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      discount_coupon: value === "" ? null : value 
+                    }));
+                  }}
+                  placeholder="DISCOUNT20"
+                  maxLength={20}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Code will be displayed to students for discount application
+                </p>
+              </div>
+            </div>
+
+            {/* Price Options */}
+            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Price Options
+                </h3>
+                {(!formData.price_variants || formData.price_variants.length === 0) && (
+                  <Badge variant="destructive" className="text-xs">
+                    At least one price option required
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Offer different pricing tiers for students to choose from (at least one required)
+              </p>
+              
+              {/* Add new price variant */}
+              <div className="space-y-3 p-4 border-2 border-dashed rounded-lg bg-muted/30">
+                <h4 className="font-medium text-card-foreground">Add New Price Option</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-sm font-medium">Option Name *</Label>
+                    <Input
+                      value={newPriceVariant.name}
+                      onChange={(e) => setNewPriceVariant(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., VIP Pass, Early Bird, Standard"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Price ($) *</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newPriceVariant.price}
+                      onChange={(e) => setNewPriceVariant(prev => ({ ...prev, price: e.target.value }))}
+                      placeholder="299.00"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Description</Label>
+                    <Input
+                      value={newPriceVariant.description}
+                      onChange={(e) => setNewPriceVariant(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="What's included in this option?"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <Button 
+                  type="button" 
+                  onClick={addPriceVariant}
+                  disabled={!newPriceVariant.name.trim() || !newPriceVariant.price.trim()}
+                  size="sm"
+                  className="mt-2"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Price Option
+                </Button>
+              </div>
+
+              {/* Display existing price variants */}
+              {formData.price_variants && formData.price_variants.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-card-foreground">Current Price Options ({formData.price_variants.length})</h4>
+                    <Badge variant="outline" className="text-xs">
+                      {formData.price_variants.length} option{formData.price_variants.length !== 1 ? 's' : ''} configured
+                    </Badge>
+                  </div>
+                  {formData.price_variants.map((variant, index) => (
+                    <div key={variant.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-sm font-semibold text-blue-600">{index + 1}</span>
+                          </div>
+                          <div>
+                            <div className="font-semibold text-card-foreground">{variant.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              ${variant.price.toFixed(2)}
+                              {variant.description && ` • ${variant.description}`}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removePriceVariant(variant.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
             </div>
 
-            <div>
-              <Label>Full Payment Timing</Label>
-              <p className="text-xs text-muted-foreground mb-2">When is the remaining balance charged?</p>
-              <Input
-                type="number"
-                min="1"
-                value={formData.payment_days_before_event || 7}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    payment_days_before_event: value === "" ? 7 : Number(value) 
-                  }));
-                }}
-                placeholder="7"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Days before the retreat starts
+            {/* Add-ons */}
+            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-green-50 to-teal-50">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                  <Plus className="w-5 h-5" />
+                  Add-ons & Extras
+                </h3>
+                {formData.add_ons && formData.add_ons.length > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    {formData.add_ons.length} add-on{formData.add_ons.length !== 1 ? 's' : ''}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Offer additional items or services that students can purchase with their booking
               </p>
               
-              <div className="mt-3">
-                <div className="flex items-center justify-between">
+              {/* Add new add-on */}
+              <div className="space-y-4 p-4 border-2 border-dashed rounded-lg bg-muted/30">
+                <h4 className="font-medium text-card-foreground">Add New Add-on</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium">Add-on Name *</Label>
+                    <Input
+                      value={newAddOn.name}
+                      onChange={(e) => setNewAddOn(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., Airport Transfer, Lunch Package, Materials Kit"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Price ($) *</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newAddOn.price}
+                      onChange={(e) => setNewAddOn(prev => ({ ...prev, price: e.target.value }))}
+                      placeholder="50.00"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Description</Label>
+                  <Textarea
+                    value={newAddOn.description}
+                    onChange={(e) => setNewAddOn(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Describe what this add-on includes and any important details students should know..."
+                    rows={3}
+                    className="resize-none"
+                  />
+                </div>
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex-1">
-                    <Label className="text-sm font-medium">Non-Refundable Full Payment</Label>
-                    <p className="text-xs text-muted-foreground">Full payment cannot be refunded once charged</p>
+                    <Label className="text-sm font-medium text-blue-800">Required Add-on</Label>
+                    <p className="text-xs text-blue-600">Students must purchase this add-on automatically</p>
                   </div>
                   <Switch
-                    checked={formData.full_payment_non_refundable || false}
+                    checked={newAddOn.required}
                     onCheckedChange={(checked) =>
-                      setFormData(prev => ({ ...prev, full_payment_non_refundable: checked }))
+                      setNewAddOn(prev => ({ ...prev, required: checked }))
                     }
                   />
                 </div>
+                <Button 
+                  type="button" 
+                  onClick={addAddOn}
+                  disabled={!newAddOn.name.trim() || !newAddOn.price.trim()}
+                  size="sm"
+                  className="mt-2"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Add-on
+                </Button>
               </div>
-            </div>
 
-            <div>
-              <Label>Discount Coupon Code</Label>
-              <p className="text-xs text-muted-foreground mb-2">Optional - Students can use this code for a discount</p>
-              <Input
-                value={formData.discount_coupon || ""}
-                onChange={(e) => {
-                  const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    discount_coupon: value === "" ? null : value 
-                  }));
-                }}
-                placeholder="Enter coupon code (e.g., SAVE20)"
-                maxLength={20}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Code will be displayed to students for discount application
-              </p>
-            </div>
-          </div>
-
-          {/* Price Variants */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Price Options</h3>
-            <p className="text-sm text-muted-foreground">
-              Offer different seat types or pricing tiers for students to choose from
-            </p>
-            
-            {/* Add new price variant */}
-            <div className="space-y-3 p-4 border rounded-lg">
-              <h4 className="font-medium text-card-foreground">Add New Price Option</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <Label className="text-sm">Option Name</Label>
-                  <Input
-                    value={newPriceVariant.name}
-                    onChange={(e) => setNewPriceVariant(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g., VIP Pass"
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm">Price ($)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newPriceVariant.price}
-                    onChange={(e) => setNewPriceVariant(prev => ({ ...prev, price: e.target.value }))}
-                    placeholder="299.00"
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm">Description (Optional)</Label>
-                  <Input
-                    value={newPriceVariant.description}
-                    onChange={(e) => setNewPriceVariant(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Premium access"
-                  />
-                </div>
-              </div>
-              <Button 
-                type="button" 
-                onClick={addPriceVariant}
-                disabled={!newPriceVariant.name.trim() || !newPriceVariant.price.trim()}
-                size="sm"
-              >
-                Add Price Option
-              </Button>
-            </div>
-
-            {/* Display existing price variants */}
-            {formData.price_variants && formData.price_variants.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-medium text-card-foreground">Current Price Options</h4>
-                {formData.price_variants.map((variant) => (
-                  <div key={variant.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div className="flex-1">
-                      <div className="font-medium">{variant.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        ${variant.price.toFixed(2)}
-                        {variant.description && ` • ${variant.description}`}
-                      </div>
+              {/* Display existing add-ons */}
+              {formData.add_ons && formData.add_ons.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-card-foreground">Current Add-ons ({formData.add_ons.length})</h4>
+                    <div className="flex items-center gap-2">
+                      {formData.add_ons.filter(a => a.required).length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {formData.add_ons.filter(a => a.required).length} required
+                        </Badge>
+                      )}
+                      {formData.add_ons.filter(a => !a.required).length > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {formData.add_ons.filter(a => !a.required).length} optional
+                        </Badge>
+                      )}
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removePriceVariant(variant.id)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Add-ons */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Add-ons & Extras</h3>
-            <p className="text-sm text-muted-foreground">
-              Offer additional items or services that students can purchase with their booking
-            </p>
-            
-            {/* Add new add-on */}
-            <div className="space-y-3 p-4 border rounded-lg">
-              <h4 className="font-medium text-card-foreground">Add New Add-on</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-sm">Add-on Name</Label>
-                  <Input
-                    value={newAddOn.name}
-                    onChange={(e) => setNewAddOn(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g., Airport Transfer"
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm">Price ($)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newAddOn.price}
-                    onChange={(e) => setNewAddOn(prev => ({ ...prev, price: e.target.value }))}
-                    placeholder="50.00"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Description (Optional)</Label>
-                <Input
-                  value={newAddOn.description}
-                  onChange={(e) => setNewAddOn(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Round-trip airport transfer service"
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <Label className="text-sm font-medium">Required Add-on</Label>
-                  <p className="text-xs text-muted-foreground">Students must purchase this add-on</p>
-                </div>
-                <Switch
-                  checked={newAddOn.required}
-                  onCheckedChange={(checked) =>
-                    setNewAddOn(prev => ({ ...prev, required: checked }))
-                  }
-                />
-              </div>
-              <Button 
-                type="button" 
-                onClick={addAddOn}
-                disabled={!newAddOn.name.trim() || !newAddOn.price.trim()}
-                size="sm"
-              >
-                Add Add-on
-              </Button>
-            </div>
-
-            {/* Display existing add-ons */}
-            {formData.add_ons && formData.add_ons.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-medium text-card-foreground">Current Add-ons</h4>
-                {formData.add_ons.map((addOn) => (
-                  <div key={addOn.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{addOn.name}</span>
-                        {addOn.required && (
-                          <Badge variant="secondary" className="text-xs">Required</Badge>
+                  {formData.add_ons.map((addOn, index) => (
+                    <div key={addOn.id} className="flex items-start justify-between p-4 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                            <span className="text-sm font-semibold text-green-600">{index + 1}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-card-foreground">{addOn.name}</span>
+                            {addOn.required && (
+                              <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-800 border-orange-200">
+                                Required
+                              </Badge>
+                            )}
+                            {!addOn.required && (
+                              <Badge variant="outline" className="text-xs">
+                                Optional
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        {addOn.description && (
+                          <div className="text-sm text-muted-foreground mb-2 bg-white/50 p-2 rounded border">
+                            {addOn.description}
+                          </div>
                         )}
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-green-600">${addOn.price.toFixed(2)}</span>
+                          <span className="text-xs text-muted-foreground">per student</span>
+                        </div>
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        ${addOn.price.toFixed(2)}
-                        {addOn.description && ` • ${addOn.description}`}
-                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeAddOn(addOn.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeAddOn(addOn.id)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Financial Breakdown */}

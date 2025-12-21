@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { Users, DollarSign, CreditCard, AlertCircle, CheckCircle, Clock, RefreshCw, Mail, Phone, Calendar, Search, Filter, Download, UserCheck, UserX, TrendingUp, Activity } from "lucide-react";
+import { Users, DollarSign, CreditCard, AlertCircle, CheckCircle, Clock, RefreshCw, Mail, Phone, Calendar, Search, Filter, Download, UserCheck, UserX, TrendingUp, Activity, Send, MessageSquare, Bell } from "lucide-react";
 
 interface Booking {
   id: string;
@@ -54,6 +54,9 @@ const UserManagement = () => {
   const [refundDialog, setRefundDialog] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
   const [refundReason, setRefundReason] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [notifyDialog, setNotifyDialog] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
+  const [notifyMessage, setNotifyMessage] = useState("");
+  const [sendingNotification, setSendingNotification] = useState<string | null>(null);
 
   // Calculate statistics
   const stats = {
@@ -195,6 +198,61 @@ const UserManagement = () => {
       });
     } finally {
       setProcessingRefund(null);
+    }
+  };
+
+  // Send notification to user
+  const sendNotification = async (booking: Booking) => {
+    if (!notifyMessage.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a message to send",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSendingNotification(booking.id);
+
+    try {
+      // In a real implementation, this would send an email or push notification
+      // For now, we'll simulate the notification process and store it in the messages table
+      
+      const { error } = await supabase
+        .from('messages')
+        .insert({
+          message_type: 'attendee_communication',
+          related_id: booking.id,
+          sender_id: user?.id,
+          sender_name: user?.user_metadata?.first_name && user?.user_metadata?.last_name 
+  ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`.trim()
+  : 'Instructor',
+          sender_role: 'instructor',
+          receiver_email: booking.email,
+          content: notifyMessage.trim(),
+          read: false,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Notification Sent",
+        description: `Message has been sent to ${booking.full_name}`,
+      });
+
+      setNotifyDialog({ open: false, booking: null });
+      setNotifyMessage("");
+    } catch (error: any) {
+      console.error('Error sending notification:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send notification",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingNotification(null);
     }
   };
 
@@ -458,7 +516,63 @@ const UserManagement = () => {
                               </div>
                             </TableCell>
                             <TableCell className="px-6 py-4">
-                              <div className="flex justify-center">
+                              <div className="flex justify-center gap-2">
+                                {/* Notify Button */}
+                                <Dialog
+                                  open={notifyDialog.open && notifyDialog.booking?.id === booking.id}
+                                  onOpenChange={(open) => setNotifyDialog({ open, booking: open ? booking : null })}
+                                >
+                                  <DialogTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 transition-colors"
+                                    >
+                                      <Bell className="w-4 h-4 mr-2" />
+                                      Notify
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent className="max-w-md">
+                                    <DialogHeader>
+                                      <DialogTitle className="text-lg font-semibold">Send Notification</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="space-y-4">
+                                      <div className="p-4 bg-muted/50 rounded-lg">
+                                        <p className="text-sm text-muted-foreground mb-2">Sending message to:</p>
+                                        <p className="font-medium">{booking.full_name}</p>
+                                        <p className="text-sm text-muted-foreground">{booking.email}</p>
+                                      </div>
+                                      <div>
+                                        <Label className="text-sm font-medium mb-2 block">Message</Label>
+                                        <Textarea
+                                          value={notifyMessage}
+                                          onChange={(e) => setNotifyMessage(e.target.value)}
+                                          placeholder="Enter your message to the student..."
+                                          rows={4}
+                                          className="resize-none"
+                                        />
+                                      </div>
+                                      <div className="flex gap-3 pt-2">
+                                        <Button
+                                          variant="outline"
+                                          onClick={() => setNotifyDialog({ open: false, booking: null })}
+                                          className="flex-1"
+                                        >
+                                          Cancel
+                                        </Button>
+                                        <Button
+                                          onClick={() => booking && sendNotification(booking)}
+                                          disabled={sendingNotification === booking.id}
+                                          className="flex-1 bg-blue-600 hover:bg-blue-700"
+                                        >
+                                          {sendingNotification === booking.id ? "Sending..." : "Send Message"}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                                
+                                {/* Refund Button */}
                                 {booking.payment_status === 'fully_paid' && (
                                   <Dialog
                                     open={refundDialog.open && refundDialog.booking?.id === booking.id}
@@ -598,9 +712,65 @@ const UserManagement = () => {
                             </div>
                           </div>
                           
-                          {/* Refund Action */}
-                          {booking.payment_status === 'fully_paid' && (
-                            <div className="pt-3 border-t">
+                          {/* Actions */}
+                          <div className="pt-3 border-t space-y-2">
+                            {/* Notify Button */}
+                            <Dialog
+                              open={notifyDialog.open && notifyDialog.booking?.id === booking.id}
+                              onOpenChange={(open) => setNotifyDialog({ open, booking: open ? booking : null })}
+                            >
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 transition-colors py-3"
+                                >
+                                  <Bell className="w-4 h-4 mr-2" />
+                                  Send Notification
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                  <DialogTitle className="text-lg font-semibold">Send Notification</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div className="p-4 bg-muted/50 rounded-lg">
+                                    <p className="text-sm text-muted-foreground mb-2">Sending message to:</p>
+                                    <p className="font-medium">{booking.full_name}</p>
+                                    <p className="text-sm text-muted-foreground">{booking.email}</p>
+                                  </div>
+                                  <div>
+                                    <Label className="text-sm font-medium mb-2 block">Message</Label>
+                                    <Textarea
+                                      value={notifyMessage}
+                                      onChange={(e) => setNotifyMessage(e.target.value)}
+                                      placeholder="Enter your message to the student..."
+                                      rows={4}
+                                      className="resize-none"
+                                    />
+                                  </div>
+                                  <div className="flex gap-3 pt-2">
+                                    <Button
+                                      variant="outline"
+                                      onClick={() => setNotifyDialog({ open: false, booking: null })}
+                                      className="flex-1"
+                                    >
+                                      Cancel
+                                    </Button>
+                                    <Button
+                                      onClick={() => booking && sendNotification(booking)}
+                                      disabled={sendingNotification === booking.id}
+                                      className="flex-1 bg-blue-600 hover:bg-blue-700"
+                                    >
+                                      {sendingNotification === booking.id ? "Sending..." : "Send Message"}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                            
+                            {/* Refund Button */}
+                            {booking.payment_status === 'fully_paid' && (
                               <Dialog
                                 open={refundDialog.open && refundDialog.booking?.id === booking.id}
                                 onOpenChange={(open) => setRefundDialog({ open, booking: open ? booking : null })}
@@ -654,8 +824,8 @@ const UserManagement = () => {
                                   </div>
                                 </DialogContent>
                               </Dialog>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
