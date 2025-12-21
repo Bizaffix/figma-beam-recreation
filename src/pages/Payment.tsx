@@ -15,7 +15,18 @@ interface RetreatData {
   location: string;
   date: string;
   price: number;
+  spots_available: number;
+  total_spots: number;
+  published: boolean;
   image: string;
+  deposit_amount?: number | null;
+  deposit_refundable?: boolean | null;
+  deposit_refund_days_before?: number | null;
+  payment_days_before_event?: number | null;
+  full_payment_non_refundable?: boolean | null;
+  discount_coupon?: string | null;
+  price_variants?: { id: string; name: string; price: number; description?: string }[] | null;
+  add_ons?: { id: string; name: string; price: number; description?: string; required?: boolean }[] | null;
 }
 
 const Payment = () => {
@@ -32,9 +43,36 @@ const Payment = () => {
   const [processing, setProcessing] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const bookingFromState = (location.state as any)?.booking;
+  const selectedPriceVariant = bookingFromState?.price_variant || null;
+  const selectedAddOns = bookingFromState?.selected_add_ons || [];
 
   // Stripe Card Element error state
   const [cardError, setCardError] = useState<string>("");
+
+  // Calculate total price based on selections
+  const calculateTotalPrice = () => {
+    let basePrice = retreat?.price || 0;
+    
+    // Use selected price variant if available
+    if (retreat?.price_variants && retreat.price_variants.length > 0 && selectedPriceVariant) {
+      const variant = retreat.price_variants.find(v => v.id === selectedPriceVariant);
+      if (variant) {
+        basePrice = variant.price;
+      }
+    }
+    
+    // Add selected add-ons
+    let addOnsTotal = 0;
+    if (retreat?.add_ons) {
+      retreat.add_ons.forEach(addOn => {
+        if (addOn.required || selectedAddOns.includes(addOn.id)) {
+          addOnsTotal += addOn.price;
+        }
+      });
+    }
+    
+    return basePrice + addOnsTotal;
+  };
 
   // Fetch retreat and create payment intent
   useEffect(() => {
@@ -52,9 +90,10 @@ const Payment = () => {
 
       try {
         // Create payment intent
+        const totalPrice = calculateTotalPrice();
         const { clientSecret: secret, error } = await createPaymentIntent(
           retreatData.id,
-          retreatData.price,
+          totalPrice,
           bookingFromState
         );
 
@@ -87,7 +126,7 @@ const Payment = () => {
         try {
           const { data, error } = await supabase
             .from('retreats')
-            .select('id, title, location, date, price, image')
+            .select('*')
             .eq('id', Number(id))
             .eq('published', true)
             .single();
@@ -257,7 +296,12 @@ const Payment = () => {
                 </div>
               </div>
               <div className="text-left sm:text-right w-full sm:w-auto flex-shrink-0">
-                <p className="text-base sm:text-lg font-bold text-primary">${retreat.price}</p>
+                <p className="text-base sm:text-lg font-bold text-primary">${calculateTotalPrice().toFixed(2)}</p>
+                {retreat.price_variants && retreat.price_variants.length > 0 && selectedPriceVariant && (
+                  <p className="text-xs text-muted-foreground">
+                    {retreat.price_variants.find(v => v.id === selectedPriceVariant)?.name}
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -320,13 +364,43 @@ const Payment = () => {
         <Card>
           <CardContent className="p-4 sm:p-6">
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm sm:text-base text-muted-foreground">
-                <span>Retreat price</span>
-                <span>${retreat.price}</span>
-              </div>
-              <div className="flex items-center justify-between text-base sm:text-lg font-semibold text-card-foreground">
+              {/* Base Price or Selected Price Variant */}
+              {retreat.price_variants && retreat.price_variants.length > 0 && selectedPriceVariant ? (
+                <div className="flex items-center justify-between text-sm sm:text-base text-muted-foreground">
+                  <span>
+                    {retreat.price_variants.find(v => v.id === selectedPriceVariant)?.name}
+                  </span>
+                  <span>
+                    ${retreat.price_variants.find(v => v.id === selectedPriceVariant)?.price.toFixed(2)}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-sm sm:text-base text-muted-foreground">
+                  <span>Retreat price</span>
+                  <span>${retreat.price}</span>
+                </div>
+              )}
+              
+              {/* Add-ons */}
+              {retreat.add_ons && retreat.add_ons.length > 0 && (
+                <>
+                  {retreat.add_ons
+                    .filter(addOn => addOn.required || selectedAddOns.includes(addOn.id))
+                    .map(addOn => (
+                      <div key={addOn.id} className="flex items-center justify-between text-sm sm:text-base text-muted-foreground">
+                        <span>
+                          {addOn.name}
+                          {addOn.required && <span className="text-xs ml-1">(required)</span>}
+                        </span>
+                        <span>${addOn.price.toFixed(2)}</span>
+                      </div>
+                    ))}
+                </>
+              )}
+              
+              <div className="flex items-center justify-between text-base sm:text-lg font-semibold text-card-foreground pt-2 border-t">
                 <span>Total</span>
-                <span className="text-primary">${retreat.price}</span>
+                <span className="text-primary">${calculateTotalPrice().toFixed(2)}</span>
               </div>
             </div>
           </CardContent>

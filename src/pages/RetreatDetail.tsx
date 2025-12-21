@@ -25,7 +25,7 @@ interface RetreatData {
   location: string;
   date: string;
   duration: string;
-  level: "Beginner" | "Intermediate" | "Advanced";
+  level: "Any" | "Beginner" | "Intermediate" | "Advanced";
   price: number;
   total_spots: number;
   spots_available: number;
@@ -39,6 +39,14 @@ interface RetreatData {
     avatar: string;
     bio: string;
   };
+  deposit_amount?: number | null;
+  deposit_refundable?: boolean | null;
+  deposit_refund_days_before?: number | null;
+  payment_days_before_event?: number | null;
+  full_payment_non_refundable?: boolean | null;
+  discount_coupon?: string | null;
+  price_variants?: { id: string; name: string; price: number; description?: string }[] | null;
+  add_ons?: { id: string; name: string; price: number; description?: string; required?: boolean }[] | null;
 }
 
 const RetreatDetail = () => {
@@ -314,7 +322,22 @@ const RetreatDetail = () => {
                 </h1>
               </div>
               <div className="text-left sm:text-right">
-                <p className="text-2xl sm:text-3xl font-bold text-primary">${retreat.price}</p>
+                {retreat.price_variants && retreat.price_variants.length > 0 ? (
+                  <div>
+                    <p className="text-xs sm:text-sm text-muted-foreground mb-1">Starting from</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-primary">
+                      ${Math.min(...retreat.price_variants.map(v => v.price)).toFixed(2)}
+                    </p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      {retreat.price_variants.length} option{retreat.price_variants.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-2xl sm:text-3xl font-bold text-primary">${retreat.price}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">per person</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -462,7 +485,10 @@ const RetreatDetail = () => {
                     className="flex-1 h-12 text-base sm:text-lg font-medium"
                     onClick={handleRegisterClick}
                   >
-                    Book Now - ${retreat.price}
+                    {retreat.price_variants && retreat.price_variants.length > 0 
+                      ? `Book Now - Starting from $${Math.min(...retreat.price_variants.map(v => v.price)).toFixed(2)}`
+                      : `Book Now - $${retreat.price}`
+                    }
                   </Button>
                 </>
               ) : !user ? (
@@ -470,7 +496,10 @@ const RetreatDetail = () => {
                   className="w-full h-12 text-base sm:text-lg"
                   onClick={handleRegisterClick}
                 >
-                  Register for This Retreat - ${retreat.price}
+                  {retreat.price_variants && retreat.price_variants.length > 0 
+                    ? `Register for This Retreat - Starting from $${Math.min(...retreat.price_variants.map(v => v.price)).toFixed(2)}`
+                    : `Register for This Retreat - $${retreat.price}`
+                  }
                 </Button>
               ) : null}
             </div>

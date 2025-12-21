@@ -18,6 +18,14 @@ interface RetreatData {
   total_spots: number;
   published: boolean;
   image: string;
+  deposit_amount?: number | null;
+  deposit_refundable?: boolean | null;
+  deposit_refund_days_before?: number | null;
+  payment_days_before_event?: number | null;
+  full_payment_non_refundable?: boolean | null;
+  discount_coupon?: string | null;
+  price_variants?: { id: string; name: string; price: number; description?: string }[] | null;
+  add_ons?: { id: string; name: string; price: number; description?: string; required?: boolean }[] | null;
 }
 
 const Booking = () => {
@@ -31,21 +39,50 @@ const Booking = () => {
   // Form state - must be declared before any conditional returns
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [skillLevel, setSkillLevel] = useState<"Beginner" | "Intermediate" | "Advanced" | "">("");
+  const [skillLevel, setSkillLevel] = useState<"Any" | "Beginner" | "Intermediate" | "Advanced" | "">("");
+  const [selectedPriceVariant, setSelectedPriceVariant] = useState("");
+  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   
   // Form validation errors
   const [errors, setErrors] = useState({
     fullName: "",
     email: "",
     skillLevel: "",
+    priceVariant: "",
   });
   
+  // Price calculation function
+  const calculateTotalPrice = () => {
+    let basePrice = retreat?.price || 0;
+    
+    // Use selected price variant if available
+    if (retreat?.price_variants && retreat.price_variants.length > 0 && selectedPriceVariant) {
+      const variant = retreat.price_variants.find(v => v.id === selectedPriceVariant);
+      if (variant) {
+        basePrice = variant.price;
+      }
+    }
+    
+    // Add selected add-ons
+    let addOnsTotal = 0;
+    if (retreat?.add_ons) {
+      retreat.add_ons.forEach(addOn => {
+        if (addOn.required || selectedAddOns.includes(addOn.id)) {
+          addOnsTotal += addOn.price;
+        }
+      });
+    }
+    
+    return basePrice + addOnsTotal;
+  };
+
   // Validation function
   const validateForm = () => {
     const newErrors = {
       fullName: "",
       email: "",
       skillLevel: "",
+      priceVariant: "",
     };
     
     let isValid = true;
@@ -77,10 +114,24 @@ const Booking = () => {
       isValid = false;
     }
     
+    // Validate price variant if available
+    if (retreat?.price_variants && retreat.price_variants.length > 0 && !selectedPriceVariant) {
+      newErrors.priceVariant = "Please select a pricing option";
+      isValid = false;
+    }
+    
     setErrors(newErrors);
     return isValid;
   };
   
+  useEffect(() => {
+    // Auto-select required add-ons when retreat data loads
+    if (retreat?.add_ons) {
+      const requiredAddOns = retreat.add_ons.filter(addOn => addOn.required).map(addOn => addOn.id);
+      setSelectedAddOns(requiredAddOns);
+    }
+  }, [retreat]);
+
   // Handle field blur for real-time validation
   const handleBlur = (field: 'fullName' | 'email' | 'skillLevel') => {
     const newErrors = { ...errors };
@@ -125,7 +176,13 @@ const Booking = () => {
       navigate(`/retreat/${id}/payment`, {
         state: {
           retreat,
-          booking: { fullName: fullName.trim(), email: email.trim(), skillLevel: skillLevel },
+          booking: { 
+            fullName: fullName.trim(), 
+            email: email.trim(), 
+            skillLevel: skillLevel,
+            price_variant: selectedPriceVariant,
+            selected_add_ons: selectedAddOns
+          },
         },
       });
     }
@@ -186,7 +243,7 @@ const Booking = () => {
         try {
           const { data, error } = await supabase
             .from('retreats')
-            .select('id, title, location, date, price, spots_available, total_spots, published, image')
+            .select('*')
             .eq('id', Number(id))
             .eq('published', true)
             .single();
@@ -262,7 +319,24 @@ const Booking = () => {
                 </div>
               </div>
               <div className="text-left sm:text-right w-full sm:w-auto flex-shrink-0">
-                <p className="text-base sm:text-lg font-bold text-primary">${retreat.price}</p>
+                {retreat.price_variants && retreat.price_variants.length > 0 ? (
+                  <div>
+                    <p className="text-base sm:text-lg font-bold text-primary">
+                      ${calculateTotalPrice().toFixed(2)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedPriceVariant ? 
+                        retreat.price_variants.find(v => v.id === selectedPriceVariant)?.name :
+                        'Select pricing option'
+                      }
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-base sm:text-lg font-bold text-primary">${calculateTotalPrice().toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">per person</p>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
@@ -316,7 +390,7 @@ const Booking = () => {
                 <Label htmlFor="skillLevel">Your Skill Level *</Label>
                 <Select
                   value={skillLevel}
-                  onValueChange={(value: "Beginner" | "Intermediate" | "Advanced") => {
+                  onValueChange={(value: "Any" | "Beginner" | "Intermediate" | "Advanced") => {
                     setSkillLevel(value);
                     if (errors.skillLevel) {
                       setErrors({ ...errors, skillLevel: "" });
@@ -327,6 +401,7 @@ const Booking = () => {
                     <SelectValue placeholder="Select your skill level" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="Any">Any Skill Level</SelectItem>
                     <SelectItem value="Beginner">Beginner</SelectItem>
                     <SelectItem value="Intermediate">Intermediate</SelectItem>
                     <SelectItem value="Advanced">Advanced</SelectItem>
@@ -336,6 +411,107 @@ const Booking = () => {
                   <p className="text-sm text-destructive mt-1">{errors.skillLevel}</p>
                 )}
               </div>
+
+              {/* Price Variants Selection */}
+              {retreat.price_variants && retreat.price_variants.length > 0 && (
+                <div>
+                  <Label htmlFor="priceVariant">Select Pricing Option *</Label>
+                  <p className="text-xs text-muted-foreground mb-2">Choose your preferred pricing tier</p>
+                  <div className="space-y-3">
+                    {retreat.price_variants.map((variant) => (
+                      <div 
+                        key={variant.id}
+                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                          selectedPriceVariant === variant.id 
+                            ? 'border-primary bg-primary/5' 
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                        onClick={() => {
+                          setSelectedPriceVariant(variant.id);
+                          if (errors.priceVariant) {
+                            setErrors({ ...errors, priceVariant: "" });
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="font-medium text-card-foreground">{variant.name}</div>
+                            {variant.description && (
+                              <div className="text-sm text-muted-foreground mt-1">{variant.description}</div>
+                            )}
+                          </div>
+                          <div className="text-lg font-bold text-primary">${variant.price.toFixed(2)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {errors.priceVariant && (
+                    <p className="text-sm text-destructive mt-1">{errors.priceVariant}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Add-ons Selection */}
+              {retreat.add_ons && retreat.add_ons.length > 0 && (
+                <div>
+                  <Label>Additional Options</Label>
+                  <p className="text-xs text-muted-foreground mb-2">Enhance your retreat experience</p>
+                  <div className="space-y-3">
+                    {retreat.add_ons.map((addOn) => {
+                      const isSelected = selectedAddOns.includes(addOn.id) || addOn.required;
+                      return (
+                        <div 
+                          key={addOn.id}
+                          className={`p-3 border rounded-lg transition-colors ${
+                            addOn.required 
+                              ? 'border-orange-200 bg-orange-50 cursor-not-allowed' 
+                              : isSelected
+                                ? 'border-primary bg-primary/5 cursor-pointer'
+                                : 'border-border cursor-pointer hover:border-primary/50'
+                          }`}
+                          onClick={() => {
+                            if (!addOn.required) {
+                              if (isSelected) {
+                                setSelectedAddOns(prev => prev.filter(id => id !== addOn.id));
+                              } else {
+                                setSelectedAddOns(prev => [...prev, addOn.id]);
+                              }
+                            }
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <div className="font-medium text-card-foreground">{addOn.name}</div>
+                                {addOn.required && (
+                                  <span className="text-xs bg-orange-100 text checked:by-orange-800 px-2 py-1 rounded">Required</span>
+                                )}
+                              </div>
+                              {addOn.description && (
+                                <div className="text-sm text-muted-foreground mt-1">{addOn.description}</div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-lg font-bold text-primary">${addOn.price.toFixed(2)}</div>
+                              {!addOn.required && (
+                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                  isSelected ? 'border-primary bg-primary' : 'border-border'
+                                }`}>
+                                  {isSelected && (
+                                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -343,13 +519,43 @@ const Booking = () => {
         <Card>
           <CardContent className="p-4 sm:p-6">
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span>Retreat price</span>
-                <span>${retreat.price}</span>
-              </div>
-              <div className="flex items-center justify-between font-semibold text-card-foreground">
+              {/* Base Price or Selected Price Variant */}
+              {retreat.price_variants && retreat.price_variants.length > 0 && selectedPriceVariant ? (
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>
+                    {retreat.price_variants.find(v => v.id === selectedPriceVariant)?.name}
+                  </span>
+                  <span>
+                    ${retreat.price_variants.find(v => v.id === selectedPriceVariant)?.price.toFixed(2)}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Retreat price</span>
+                  <span>${retreat.price}</span>
+                </div>
+              )}
+              
+              {/* Add-ons */}
+              {retreat.add_ons && retreat.add_ons.length > 0 && (
+                <>
+                  {retreat.add_ons
+                    .filter(addOn => addOn.required || selectedAddOns.includes(addOn.id))
+                    .map(addOn => (
+                      <div key={addOn.id} className="flex items-center justify-between text-muted-foreground">
+                        <span>
+                          {addOn.name}
+                          {addOn.required && <span className="text-xs ml-1">(required)</span>}
+                        </span>
+                        <span>${addOn.price.toFixed(2)}</span>
+                      </div>
+                    ))}
+                </>
+              )}
+              
+              <div className="flex items-center justify-between font-semibold text-card-foreground pt-2 border-t">
                 <span>Total</span>
-                <span className="text-primary">${retreat.price}</span>
+                <span className="text-primary">${calculateTotalPrice().toFixed(2)}</span>
               </div>
             </div>
           </CardContent>
