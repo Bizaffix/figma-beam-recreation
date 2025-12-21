@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight, Share2, CheckCircle2, MessageSquare } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight, Share2, CheckCircle2, MessageSquare, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 import { ItineraryBuilder, ItineraryBlock } from "@/components/ItineraryBuilder";
+import UserManagement from "@/components/UserManagement";
 
 interface Retreat {
   id: number;
@@ -1706,18 +1708,32 @@ const InstructorDashboard = () => {
         </div>
       )}
 
-      {/* Retreats List */}
-      <div className="px-6 space-y-6 max-w-4xl mx-auto">
-        {loading ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground text-lg">Loading retreats...</p>
-          </div>
-        ) : (
-          <>
-            {/* Note: Form creation moved to /instructor/retreats/new - use the + button in bottom nav */}
+      {/* Main Content with Tabs */}
+      <div className="px-6 max-w-6xl mx-auto">
+        {editingId === null && (
+          <Tabs defaultValue="retreats" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-2 max-w-md">
+              <TabsTrigger value="retreats" className="flex items-center gap-2">
+                <CalendarIcon className="w-4 h-4" />
+                Retreats
+              </TabsTrigger>
+              <TabsTrigger value="users" className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                User Management
+              </TabsTrigger>
+            </TabsList>
 
-            {/* All Retreats (Published and Drafts) */}
-            {allRetreats.map((retreat) => {
+            <TabsContent value="retreats" className="space-y-6">
+              {loading ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground text-lg">Loading retreats...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Note: Form creation moved to /instructor/retreats/new - use the + button in bottom nav */}
+
+                  {/* All Retreats (Published and Drafts) */}
+                  {allRetreats.map((retreat) => {
 
               return (
                 <Card key={retreat.id} className="overflow-hidden">
@@ -1811,6 +1827,13 @@ const InstructorDashboard = () => {
               </div>
             )}
           </>
+        )}
+        </TabsContent>
+
+        <TabsContent value="users">
+          <UserManagement />
+        </TabsContent>
+      </Tabs>
         )}
       </div>
 

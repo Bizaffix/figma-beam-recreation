@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2 } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
@@ -32,7 +33,10 @@ interface Retreat {
   level: "Beginner" | "Intermediate" | "Advanced" | "Any";
   price: number;
   deposit_amount?: number | null;
+  deposit_refundable?: boolean | null;
+  deposit_refund_days_before?: number | null;
   payment_days_before_event?: number | null;
+  full_payment_non_refundable?: boolean | null;
   total_spots: number;
   spots_available: number;
   image: string;
@@ -44,6 +48,9 @@ interface Retreat {
   food_budget?: number | null;
   itinerary_blocks?: ItineraryBlock[] | null;
   location_images?: string[] | null;
+  discount_coupon?: string | null;
+  price_variants?: { id: string; name: string; price: number; description?: string }[] | null;
+  add_ons?: { id: string; name: string; price: number; description?: string; required?: boolean }[] | null;
 }
 
 interface FormData {
@@ -55,12 +62,18 @@ interface FormData {
   totalSpots: number;
   price: number;
   deposit_amount?: number | null;
+  deposit_refundable?: boolean | null;
+  deposit_refund_days_before?: number | null;
   payment_days_before_event?: number | null;
+  full_payment_non_refundable?: boolean | null;
   description: string;
   image: string;
   includes: string[];
   schedule: { day: string; activities: string }[];
   published: boolean;
+  discount_coupon?: string | null;
+  price_variants?: { id: string; name: string; price: number; description?: string }[];
+  add_ons?: { id: string; name: string; price: number; description?: string; required?: boolean }[];
 }
 
 // Helper function to parse date string like "Nov 5-8, 2025" to date range
@@ -159,12 +172,18 @@ const InstructorRetreatForm = () => {
     totalSpots: 0,
     price: 0,
     deposit_amount: null,
+    deposit_refundable: false,
+    deposit_refund_days_before: 7,
     payment_days_before_event: 7,
+    full_payment_non_refundable: false,
     description: "",
     image: "",
     includes: [],
     schedule: [],
     published: false,
+    discount_coupon: null,
+    price_variants: [],
+    add_ons: [],
   });
 
   const [includeItem, setIncludeItem] = useState("");
@@ -176,6 +195,8 @@ const InstructorRetreatForm = () => {
   const [locationImages, setLocationImages] = useState<string[]>([]);
   const [uploadingLocationImage, setUploadingLocationImage] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState<any>(null);
+  const [newPriceVariant, setNewPriceVariant] = useState({ name: "", price: "", description: "" });
+  const [newAddOn, setNewAddOn] = useState({ name: "", price: "", description: "", required: false });
 
   // Only show this page to instructors
   if (role !== 'instructor') {
@@ -241,12 +262,18 @@ const InstructorRetreatForm = () => {
             totalSpots: data.total_spots,
             price: data.price,
             deposit_amount: data.deposit_amount,
+            deposit_refundable: data.deposit_refundable || false,
+            deposit_refund_days_before: data.deposit_refund_days_before || 7,
             payment_days_before_event: data.payment_days_before_event,
+            full_payment_non_refundable: data.full_payment_non_refundable || false,
             description: data.description,
             image: data.image,
             includes: data.includes || [],
             schedule: data.schedule || [],
             published: data.published || false,
+            discount_coupon: data.discount_coupon,
+            price_variants: data.price_variants || [],
+            add_ons: data.add_ons || [],
           });
           if (data.image) setImagePreview(data.image);
           if (data.date) setDateRange(parseDateString(data.date));
@@ -315,7 +342,10 @@ const InstructorRetreatForm = () => {
         level: formData.level,
         price: formData.price || 0,
         deposit_amount: formData.deposit_amount,
+        deposit_refundable: formData.deposit_refundable || false,
+        deposit_refund_days_before: formData.deposit_refund_days_before || 7,
         payment_days_before_event: formData.payment_days_before_event,
+        full_payment_non_refundable: formData.full_payment_non_refundable || false,
         total_spots: formData.totalSpots || 0,
         spots_available: formData.totalSpots || 0,
         image: formData.image || "",
@@ -327,6 +357,9 @@ const InstructorRetreatForm = () => {
         location_images: locationImages.length > 0 ? locationImages : null,
         published: false,
         instructor_id: user.id,
+        discount_coupon: formData.discount_coupon,
+        price_variants: formData.price_variants && formData.price_variants.length > 0 ? formData.price_variants : null,
+        add_ons: formData.add_ons && formData.add_ons.length > 0 ? formData.add_ons : null,
       };
 
       if (editingId === 'new') {
@@ -473,12 +506,18 @@ const InstructorRetreatForm = () => {
         totalSpots: retreat.total_spots,
         price: retreat.price,
         deposit_amount: retreat.deposit_amount,
+        deposit_refundable: retreat.deposit_refundable || false,
+        deposit_refund_days_before: retreat.deposit_refund_days_before || 7,
         payment_days_before_event: retreat.payment_days_before_event,
+        full_payment_non_refundable: retreat.full_payment_non_refundable || false,
         description: retreat.description,
         image: retreat.image,
         includes: retreat.includes || [],
         schedule: retreat.schedule || [],
         published: retreat.published || false,
+        discount_coupon: retreat.discount_coupon,
+        price_variants: retreat.price_variants || [],
+        add_ons: retreat.add_ons || [],
       });
       setDateRange(parseDateString(retreat.date));
       setImagePreview("");
@@ -538,6 +577,8 @@ const InstructorRetreatForm = () => {
       setItineraryBlocks([]);
       setLocationImages([]);
       setSelectedVenue(null);
+      setNewPriceVariant({ name: "", price: "", description: "" });
+      setNewAddOn({ name: "", price: "", description: "", required: false });
     }
   };
 
@@ -556,12 +597,18 @@ const InstructorRetreatForm = () => {
       totalSpots: 0,
       price: 0,
       deposit_amount: null,
+      deposit_refundable: false,
+      deposit_refund_days_before: 7,
       payment_days_before_event: 7,
+      full_payment_non_refundable: false,
       description: "",
       image: "",
       includes: [],
       schedule: [],
       published: false,
+      discount_coupon: null,
+      price_variants: [],
+      add_ons: [],
     });
     setDateRange(undefined);
     setImagePreview("");
@@ -573,6 +620,8 @@ const InstructorRetreatForm = () => {
     setSelectedVenue(null);
     setAutoSaveDraftId(null);
     setLastSaved(null);
+    setNewPriceVariant({ name: "", price: "", description: "" });
+    setNewAddOn({ name: "", price: "", description: "", required: false });
     hasUnsavedChangesRef.current = false;
     
     // Refresh drafts list
@@ -756,7 +805,10 @@ const InstructorRetreatForm = () => {
         level: formData.level,
         price: formData.price || 0,
         deposit_amount: formData.deposit_amount,
+        deposit_refundable: formData.deposit_refundable || false,
+        deposit_refund_days_before: formData.deposit_refund_days_before || 7,
         payment_days_before_event: formData.payment_days_before_event,
+        full_payment_non_refundable: formData.full_payment_non_refundable || false,
         total_spots: formData.totalSpots || 0,
         spots_available: formData.totalSpots || 0,
         image: formData.image || "",
@@ -768,6 +820,9 @@ const InstructorRetreatForm = () => {
         location_images: locationImages.length > 0 ? locationImages : null,
         published: published !== undefined ? published : (formData.published || false),
         instructor_id: user.id,
+        discount_coupon: formData.discount_coupon,
+        price_variants: formData.price_variants && formData.price_variants.length > 0 ? formData.price_variants : null,
+        add_ons: formData.add_ons && formData.add_ons.length > 0 ? formData.add_ons : null,
       };
 
       if (editingId === 'new') {
@@ -1040,6 +1095,53 @@ const InstructorRetreatForm = () => {
     setFormData(prev => ({
       ...prev,
       includes: prev.includes?.filter((_, i) => i !== index) || []
+    }));
+  };
+
+  const addPriceVariant = () => {
+    if (newPriceVariant.name.trim() && newPriceVariant.price.trim()) {
+      const variant = {
+        id: `variant-${Date.now()}`,
+        name: newPriceVariant.name.trim(),
+        price: Number(newPriceVariant.price),
+        description: newPriceVariant.description.trim()
+      };
+      setFormData(prev => ({
+        ...prev,
+        price_variants: [...(prev.price_variants || []), variant]
+      }));
+      setNewPriceVariant({ name: "", price: "", description: "" });
+    }
+  };
+
+  const removePriceVariant = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      price_variants: prev.price_variants?.filter(variant => variant.id !== id) || []
+    }));
+  };
+
+  const addAddOn = () => {
+    if (newAddOn.name.trim() && newAddOn.price.trim()) {
+      const addOn = {
+        id: `addon-${Date.now()}`,
+        name: newAddOn.name.trim(),
+        price: Number(newAddOn.price),
+        description: newAddOn.description.trim(),
+        required: newAddOn.required
+      };
+      setFormData(prev => ({
+        ...prev,
+        add_ons: [...(prev.add_ons || []), addOn]
+      }));
+      setNewAddOn({ name: "", price: "", description: "", required: false });
+    }
+  };
+
+  const removeAddOn = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      add_ons: prev.add_ons?.filter(addOn => addOn.id !== id) || []
     }));
   };
 
@@ -1349,6 +1451,43 @@ const InstructorRetreatForm = () => {
                 }}
                 placeholder="Enter deposit amount (optional)"
               />
+              
+              {formData.deposit_amount && formData.deposit_amount > 0 && (
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <Label className="text-sm font-medium">Refundable Deposit</Label>
+                      <p className="text-xs text-muted-foreground">Allow students to get refund on deposit</p>
+                    </div>
+                    <Switch
+                      checked={formData.deposit_refundable || false}
+                      onCheckedChange={(checked) =>
+                        setFormData(prev => ({ ...prev, deposit_refundable: checked }))
+                      }
+                    />
+                  </div>
+                  
+                  {formData.deposit_refundable && (
+                    <div>
+                      <Label className="text-sm">Refund Cutoff (days before event)</Label>
+                      <p className="text-xs text-muted-foreground mb-2">Last day students can request deposit refund</p>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={formData.deposit_refund_days_before || 7}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            deposit_refund_days_before: value === "" ? 7 : Number(value) 
+                          }));
+                        }}
+                        placeholder="7"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
@@ -1370,7 +1509,213 @@ const InstructorRetreatForm = () => {
               <p className="text-xs text-muted-foreground mt-1">
                 Days before the retreat starts
               </p>
+              
+              <div className="mt-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <Label className="text-sm font-medium">Non-Refundable Full Payment</Label>
+                    <p className="text-xs text-muted-foreground">Full payment cannot be refunded once charged</p>
+                  </div>
+                  <Switch
+                    checked={formData.full_payment_non_refundable || false}
+                    onCheckedChange={(checked) =>
+                      setFormData(prev => ({ ...prev, full_payment_non_refundable: checked }))
+                    }
+                  />
+                </div>
+              </div>
             </div>
+
+            <div>
+              <Label>Discount Coupon Code</Label>
+              <p className="text-xs text-muted-foreground mb-2">Optional - Students can use this code for a discount</p>
+              <Input
+                value={formData.discount_coupon || ""}
+                onChange={(e) => {
+                  const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    discount_coupon: value === "" ? null : value 
+                  }));
+                }}
+                placeholder="Enter coupon code (e.g., SAVE20)"
+                maxLength={20}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Code will be displayed to students for discount application
+              </p>
+            </div>
+          </div>
+
+          {/* Price Variants */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-card-foreground">Price Options</h3>
+            <p className="text-sm text-muted-foreground">
+              Offer different seat types or pricing tiers for students to choose from
+            </p>
+            
+            {/* Add new price variant */}
+            <div className="space-y-3 p-4 border rounded-lg">
+              <h4 className="font-medium text-card-foreground">Add New Price Option</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-sm">Option Name</Label>
+                  <Input
+                    value={newPriceVariant.name}
+                    onChange={(e) => setNewPriceVariant(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g., VIP Pass"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">Price ($)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newPriceVariant.price}
+                    onChange={(e) => setNewPriceVariant(prev => ({ ...prev, price: e.target.value }))}
+                    placeholder="299.00"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">Description (Optional)</Label>
+                  <Input
+                    value={newPriceVariant.description}
+                    onChange={(e) => setNewPriceVariant(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Premium access"
+                  />
+                </div>
+              </div>
+              <Button 
+                type="button" 
+                onClick={addPriceVariant}
+                disabled={!newPriceVariant.name.trim() || !newPriceVariant.price.trim()}
+                size="sm"
+              >
+                Add Price Option
+              </Button>
+            </div>
+
+            {/* Display existing price variants */}
+            {formData.price_variants && formData.price_variants.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-card-foreground">Current Price Options</h4>
+                {formData.price_variants.map((variant) => (
+                  <div key={variant.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                    <div className="flex-1">
+                      <div className="font-medium">{variant.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        ${variant.price.toFixed(2)}
+                        {variant.description && ` • ${variant.description}`}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removePriceVariant(variant.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add-ons */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-card-foreground">Add-ons & Extras</h3>
+            <p className="text-sm text-muted-foreground">
+              Offer additional items or services that students can purchase with their booking
+            </p>
+            
+            {/* Add new add-on */}
+            <div className="space-y-3 p-4 border rounded-lg">
+              <h4 className="font-medium text-card-foreground">Add New Add-on</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-sm">Add-on Name</Label>
+                  <Input
+                    value={newAddOn.name}
+                    onChange={(e) => setNewAddOn(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g., Airport Transfer"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">Price ($)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newAddOn.price}
+                    onChange={(e) => setNewAddOn(prev => ({ ...prev, price: e.target.value }))}
+                    placeholder="50.00"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Description (Optional)</Label>
+                <Input
+                  value={newAddOn.description}
+                  onChange={(e) => setNewAddOn(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Round-trip airport transfer service"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">Required Add-on</Label>
+                  <p className="text-xs text-muted-foreground">Students must purchase this add-on</p>
+                </div>
+                <Switch
+                  checked={newAddOn.required}
+                  onCheckedChange={(checked) =>
+                    setNewAddOn(prev => ({ ...prev, required: checked }))
+                  }
+                />
+              </div>
+              <Button 
+                type="button" 
+                onClick={addAddOn}
+                disabled={!newAddOn.name.trim() || !newAddOn.price.trim()}
+                size="sm"
+              >
+                Add Add-on
+              </Button>
+            </div>
+
+            {/* Display existing add-ons */}
+            {formData.add_ons && formData.add_ons.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-card-foreground">Current Add-ons</h4>
+                {formData.add_ons.map((addOn) => (
+                  <div key={addOn.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{addOn.name}</span>
+                        {addOn.required && (
+                          <Badge variant="secondary" className="text-xs">Required</Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        ${addOn.price.toFixed(2)}
+                        {addOn.description && ` • ${addOn.description}`}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeAddOn(addOn.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Financial Breakdown */}
