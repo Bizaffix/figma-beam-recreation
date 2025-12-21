@@ -48,7 +48,13 @@ interface Retreat {
   food_budget?: number | null;
   itinerary_blocks?: ItineraryBlock[] | null;
   location_images?: string[] | null;
-  discount_coupon?: string | null;
+  discount_coupon?: {
+  code: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  max_uses?: number;
+  expires_at?: string;
+} | null;
   price_variants?: { id: string; name: string; price: number; description?: string }[] | null;
   add_ons?: { id: string; name: string; price: number; description?: string; required?: boolean }[] | null;
 }
@@ -71,7 +77,13 @@ interface FormData {
   includes: string[];
   schedule: { day: string; activities: string }[];
   published: boolean;
-  discount_coupon?: string | null;
+  discount_coupon?: {
+  code: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  max_uses?: number;
+  expires_at?: string;
+} | null;
   price_variants?: { id: string; name: string; price: number; description?: string }[];
   add_ons?: { id: string; name: string; price: number; description?: string; required?: boolean }[];
 }
@@ -197,6 +209,13 @@ const InstructorRetreatForm = () => {
   const [selectedVenue, setSelectedVenue] = useState<any>(null);
   const [newPriceVariant, setNewPriceVariant] = useState({ name: "", price: "", description: "" });
   const [newAddOn, setNewAddOn] = useState({ name: "", price: "", description: "", required: false });
+  const [discountCoupon, setDiscountCoupon] = useState({
+    code: "",
+    type: 'percentage' as 'percentage' | 'fixed',
+    value: "",
+    max_uses: "",
+    expires_at: ""
+  });
 
   // Only show this page to instructors
   if (role !== 'instructor') {
@@ -1565,24 +1584,175 @@ const InstructorRetreatForm = () => {
                 Discount Coupon
               </h3>
               
-              <div>
-                <Label>Discount Coupon Code</Label>
-                <p className="text-xs text-muted-foreground mb-2">Optional - Students can use this code for a discount</p>
-                <Input
-                  value={formData.discount_coupon || ""}
-                  onChange={(e) => {
-                    const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      discount_coupon: value === "" ? null : value 
-                    }));
-                  }}
-                  placeholder="DISCOUNT20"
-                  maxLength={20}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Code will be displayed to students for discount application
-                </p>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Coupon Code</Label>
+                    <p className="text-xs text-muted-foreground mb-2">Unique code students will enter</p>
+                    <Input
+                      value={discountCoupon.code}
+                      onChange={(e) => {
+                        const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                        setDiscountCoupon(prev => ({ ...prev, code: value }));
+                      }}
+                      placeholder="SAVE20"
+                      maxLength={20}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label>Discount Type</Label>
+                    <p className="text-xs text-muted-foreground mb-2">How the discount is calculated</p>
+                    <Select
+                      value={discountCoupon.type}
+                      onValueChange={(value: 'percentage' | 'fixed') => 
+                        setDiscountCoupon(prev => ({ ...prev, type: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">Percentage (%)</SelectItem>
+                        <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Discount Value</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      {discountCoupon.type === 'percentage' ? 'Percentage discount (0-100)' : 'Fixed amount in dollars'}
+                    </p>
+                    <Input
+                      type="number"
+                      step={discountCoupon.type === 'percentage' ? '1' : '0.01'}
+                      min={discountCoupon.type === 'percentage' ? '1' : '0.01'}
+                      max={discountCoupon.type === 'percentage' ? '100' : '10000'}
+                      value={discountCoupon.value}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setDiscountCoupon(prev => ({ 
+                          ...prev, 
+                          value: value
+                        }));
+                      }}
+                      placeholder={discountCoupon.type === 'percentage' ? '20' : '50.00'}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label>Maximum Uses (Optional)</Label>
+                    <p className="text-xs text-muted-foreground mb-2">Leave empty for unlimited uses</p>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={discountCoupon.max_uses}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setDiscountCoupon(prev => ({ 
+                          ...prev, 
+                          max_uses: value
+                        }));
+                      }}
+                      placeholder="Unlimited"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <Label>Expiration Date (Optional)</Label>
+                  <p className="text-xs text-muted-foreground mb-2">Leave empty for no expiration</p>
+                  <Input
+                    type="date"
+                    value={discountCoupon.expires_at}
+                    onChange={(e) => {
+                      setDiscountCoupon(prev => ({ 
+                        ...prev, 
+                        expires_at: e.target.value 
+                      }));
+                    }}
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (discountCoupon.code && discountCoupon.value) {
+                        setFormData(prev => ({
+                          ...prev,
+                          discount_coupon: {
+                            code: discountCoupon.code,
+                            type: discountCoupon.type,
+                            value: Number(discountCoupon.value),
+                            max_uses: discountCoupon.max_uses ? Number(discountCoupon.max_uses) : undefined,
+                            expires_at: discountCoupon.expires_at || undefined
+                          }
+                        }));
+                        toast({
+                          title: "Discount Coupon Created",
+                          description: `Coupon ${discountCoupon.code} has been added to this retreat.`,
+                        });
+                      } else {
+                        toast({
+                          title: "Missing Information",
+                          description: "Please enter coupon code and discount value.",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                  >
+                    Create Discount
+                  </Button>
+                  
+                  {formData.discount_coupon && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, discount_coupon: null }));
+                        setDiscountCoupon({
+                          code: "",
+                          type: 'percentage',
+                          value: "",
+                          max_uses: "",
+                          expires_at: ""
+                        });
+                      }}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      Remove Discount
+                    </Button>
+                  )}
+                </div>
+                
+                {formData.discount_coupon && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-green-800">{formData.discount_coupon.code}</div>
+                        <div className="text-sm text-green-600">
+                          {formData.discount_coupon.type === 'percentage' 
+                            ? `${formData.discount_coupon.value}% off`
+                            : `$${formData.discount_coupon.value.toFixed(2)} off`
+                          }
+                          {formData.discount_coupon.max_uses && ` • Max ${formData.discount_coupon.max_uses} uses`}
+                          {formData.discount_coupon.expires_at && ` • Expires ${new Date(formData.discount_coupon.expires_at).toLocaleDateString()}`}
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="bg-green-100 text-green-800">
+                        Active
+                      </Badge>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
