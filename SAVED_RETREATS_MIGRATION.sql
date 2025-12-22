@@ -59,3 +59,14 @@ BEGIN
   END IF;
 END $$;
 
+-- Add content_cards column to retreats table
+-- This migration adds support for flexible content sections
+
+ALTER TABLE retreats 
+ADD COLUMN content_cards JSONB;
+
+-- Add index for better performance on content cards queries
+CREATE INDEX idx_retreats_content_cards ON retreats USING GIN (content_cards);
+
+-- Add comment to describe the new column
+COMMENT ON COLUMN retreats.content_cards IS 'Array of content cards with title, description, images, and order for organizing retreat details';

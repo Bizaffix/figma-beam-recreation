@@ -23,6 +23,15 @@ import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
 import { ItineraryBuilder, ItineraryBlock } from "@/components/ItineraryBuilder";
 import { VenueSelector } from "@/components/VenueSelector";
 
+interface ContentCard {
+  id: string;
+  title: string;
+  description: string;
+  images: string[];
+  videos: string[];
+  order: number;
+}
+
 interface Retreat {
   id: number;
   title: string;
@@ -57,6 +66,7 @@ interface Retreat {
 } | null;
   price_variants?: { id: string; name: string; price: number; description?: string }[] | null;
   add_ons?: { id: string; name: string; price: number; description?: string; required?: boolean }[] | null;
+  content_cards?: ContentCard[] | null;
 }
 
 interface FormData {
@@ -86,6 +96,7 @@ interface FormData {
 } | null;
   price_variants?: { id: string; name: string; price: number; description?: string }[];
   add_ons?: { id: string; name: string; price: number; description?: string; required?: boolean }[];
+  content_cards?: ContentCard[];
 }
 
 // Helper function to parse date string like "Nov 5-8, 2025" to date range
@@ -196,6 +207,7 @@ const InstructorRetreatForm = () => {
     discount_coupon: null,
     price_variants: [],
     add_ons: [],
+    content_cards: [],
   });
 
   const [includeItem, setIncludeItem] = useState("");
@@ -216,6 +228,17 @@ const InstructorRetreatForm = () => {
     max_uses: "",
     expires_at: ""
   });
+  const [contentCards, setContentCards] = useState<ContentCard[]>([]);
+  const [newContentCard, setNewContentCard] = useState({ 
+    title: "", 
+    description: "",
+    images: [] as string[],
+    videos: [] as string[]
+  });
+  const [uploadingContentCardImage, setUploadingContentCardImage] = useState(false);
+  const [uploadingContentCardVideo, setUploadingContentCardVideo] = useState(false);
+  const [newContentCardImages, setNewContentCardImages] = useState<string[]>([]);
+  const [newContentCardVideos, setNewContentCardVideos] = useState<string[]>([]);
 
   // Only show this page to instructors
   if (role !== 'instructor') {
@@ -293,6 +316,7 @@ const InstructorRetreatForm = () => {
             discount_coupon: data.discount_coupon,
             price_variants: data.price_variants || [],
             add_ons: data.add_ons || [],
+            content_cards: data.content_cards || [],
           });
           if (data.image) setImagePreview(data.image);
           if (data.date) setDateRange(parseDateString(data.date));
@@ -304,6 +328,9 @@ const InstructorRetreatForm = () => {
           }
           if (data.location_images && Array.isArray(data.location_images)) {
             setLocationImages(data.location_images);
+          }
+          if (data.content_cards && Array.isArray(data.content_cards)) {
+            setContentCards(data.content_cards);
           }
           if (data.schedule && Array.isArray(data.schedule) && data.schedule.length > 0) {
             if (data.itinerary_blocks && Array.isArray(data.itinerary_blocks)) {
@@ -379,6 +406,7 @@ const InstructorRetreatForm = () => {
         discount_coupon: formData.discount_coupon,
         price_variants: formData.price_variants && formData.price_variants.length > 0 ? formData.price_variants : null,
         add_ons: formData.add_ons && formData.add_ons.length > 0 ? formData.add_ons : null,
+        content_cards: contentCards.length > 0 ? contentCards : null,
       };
 
       if (editingId === 'new') {
@@ -456,6 +484,15 @@ const InstructorRetreatForm = () => {
     formData.totalSpots,
     formData.image,
     formData.includes,
+    formData.deposit_amount,
+    formData.deposit_refundable,
+    formData.deposit_refund_days_before,
+    formData.payment_days_before_event,
+    formData.full_payment_non_refundable,
+    formData.discount_coupon,
+    formData.price_variants,
+    formData.add_ons,
+    contentCards,
     itineraryBlocks,
     venueFees,
     foodBudget,
@@ -495,6 +532,15 @@ const InstructorRetreatForm = () => {
     formData.totalSpots,
     formData.image,
     formData.includes,
+    formData.deposit_amount,
+    formData.deposit_refundable,
+    formData.deposit_refund_days_before,
+    formData.payment_days_before_event,
+    formData.full_payment_non_refundable,
+    formData.discount_coupon,
+    formData.price_variants,
+    formData.add_ons,
+    contentCards,
     venueFees,
     foodBudget,
     itineraryBlocks,
@@ -537,6 +583,7 @@ const InstructorRetreatForm = () => {
         discount_coupon: retreat.discount_coupon,
         price_variants: retreat.price_variants || [],
         add_ons: retreat.add_ons || [],
+        content_cards: retreat.content_cards || [],
       });
       setDateRange(parseDateString(retreat.date));
       setImagePreview("");
@@ -557,6 +604,11 @@ const InstructorRetreatForm = () => {
         setLocationImages(retreat.location_images);
       } else {
         setLocationImages([]);
+      }
+      if (retreat.content_cards && Array.isArray(retreat.content_cards)) {
+        setContentCards(retreat.content_cards);
+      } else {
+        setContentCards([]);
       }
       if (retreat.schedule && Array.isArray(retreat.schedule) && retreat.schedule.length > 0) {
         if (retreat.itinerary_blocks && Array.isArray(retreat.itinerary_blocks)) {
@@ -584,6 +636,10 @@ const InstructorRetreatForm = () => {
         includes: [],
         schedule: [],
         published: false,
+        discount_coupon: null,
+        price_variants: [],
+        add_ons: [],
+        content_cards: [],
       });
       setDateRange(undefined);
       setImagePreview("");
@@ -598,6 +654,10 @@ const InstructorRetreatForm = () => {
       setSelectedVenue(null);
       setNewPriceVariant({ name: "", price: "", description: "" });
       setNewAddOn({ name: "", price: "", description: "", required: false });
+      setContentCards([]);
+      setNewContentCard({ title: "", description: "", images: [], videos: [] });
+      setNewContentCardImages([]);
+      setNewContentCardVideos([]);
     }
   };
 
@@ -628,6 +688,7 @@ const InstructorRetreatForm = () => {
       discount_coupon: null,
       price_variants: [],
       add_ons: [],
+      content_cards: [],
     });
     setDateRange(undefined);
     setImagePreview("");
@@ -641,6 +702,10 @@ const InstructorRetreatForm = () => {
     setLastSaved(null);
     setNewPriceVariant({ name: "", price: "", description: "" });
     setNewAddOn({ name: "", price: "", description: "", required: false });
+    setContentCards([]);
+    setNewContentCard({ title: "", description: "", images: [], videos: [] });
+    setNewContentCardImages([]);
+    setNewContentCardVideos([]);
     hasUnsavedChangesRef.current = false;
     
     // Refresh drafts list
@@ -842,6 +907,7 @@ const InstructorRetreatForm = () => {
         discount_coupon: formData.discount_coupon,
         price_variants: formData.price_variants && formData.price_variants.length > 0 ? formData.price_variants : null,
         add_ons: formData.add_ons && formData.add_ons.length > 0 ? formData.add_ons : null,
+        content_cards: contentCards.length > 0 ? contentCards : null,
       };
 
       if (editingId === 'new') {
@@ -1164,6 +1230,271 @@ const InstructorRetreatForm = () => {
     }));
   };
 
+  const addContentCard = () => {
+    if (!newContentCard.title.trim()) return;
+    
+    const card: ContentCard = {
+      id: `card-${Date.now()}`,
+      title: newContentCard.title,
+      description: newContentCard.description,
+      images: newContentCardImages,
+      videos: newContentCardVideos,
+      order: contentCards.length
+    };
+    
+    setContentCards(prev => [...prev, card]);
+    setNewContentCard({ title: "", description: "", images: [], videos: [] });
+    setNewContentCardImages([]);
+    setNewContentCardVideos([]);
+  };
+
+  const handleNewContentCardImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Image size must be less than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingContentCardImage(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/content-cards/${Date.now()}.${fileExt}`;
+      const filePath = `retreats/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('retreat-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error uploading content card image:', uploadError);
+        toast({
+          title: "Error",
+          description: uploadError.message || "Failed to upload image",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('retreat-images')
+        .getPublicUrl(filePath);
+
+      setNewContentCardImages(prev => [...prev, publicUrl]);
+
+      toast({
+        title: "Success",
+        description: "Content card image uploaded successfully",
+      });
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while uploading image",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingContentCardImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleNewContentCardVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Check if video already exists
+    if (newContentCardVideos.length >= 1) {
+      toast({
+        title: "Error",
+        description: "Only one video can be uploaded per content section",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!file.type.startsWith('video/')) {
+      toast({
+        title: "Error",
+        description: "Please select a video file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Video size must be less than 50MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingContentCardVideo(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/content-cards/videos/${Date.now()}.${fileExt}`;
+      const filePath = `retreats/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('retreat-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error uploading content card video:', uploadError);
+        toast({
+          title: "Error",
+          description: uploadError.message || "Failed to upload video",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('retreat-images')
+        .getPublicUrl(filePath);
+
+      // Replace existing video (only one allowed)
+      setNewContentCardVideos([publicUrl]);
+
+      toast({
+        title: "Success",
+        description: "Content card video uploaded successfully",
+      });
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while uploading video",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingContentCardVideo(false);
+      e.target.value = '';
+    }
+  };
+
+  const removeNewContentCardImage = (imageUrl: string) => {
+    setNewContentCardImages(prev => prev.filter(img => img !== imageUrl));
+  };
+
+  const removeNewContentCardVideo = (videoUrl: string) => {
+    setNewContentCardVideos(prev => prev.filter(vid => vid !== videoUrl));
+  };
+
+  const removeContentCard = (id: string) => {
+    setContentCards(prev => prev.filter(card => card.id !== id));
+  };
+
+  const updateContentCard = (id: string, updates: Partial<ContentCard>) => {
+    setContentCards(prev => prev.map(card => 
+      card.id === id ? { ...card, ...updates } : card
+    ));
+  };
+
+  const handleContentCardImageUpload = async (cardId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Image size must be less than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingContentCardImage(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/content-cards/${Date.now()}.${fileExt}`;
+      const filePath = `retreats/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('retreat-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error uploading content card image:', uploadError);
+        toast({
+          title: "Error",
+          description: uploadError.message || "Failed to upload image",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('retreat-images')
+        .getPublicUrl(filePath);
+
+      updateContentCard(cardId, {
+        images: [...(contentCards.find(c => c.id === cardId)?.images || []), publicUrl]
+      });
+
+      toast({
+        title: "Success",
+        description: "Content card image uploaded successfully",
+      });
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while uploading image",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingContentCardImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const removeContentCardImage = (cardId: string, imageUrl: string) => {
+    const card = contentCards.find(c => c.id === cardId);
+    if (card) {
+      updateContentCard(cardId, {
+        images: card.images.filter(img => img !== imageUrl)
+      });
+    }
+  };
+
   const renderForm = () => {
     const isNew = editingId === 'new';
     
@@ -1212,13 +1543,439 @@ const InstructorRetreatForm = () => {
             </div>
 
             <div>
-              <Label>Description</Label>
-              <Textarea
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                rows={4}
-                required
-              />
+              <Label>Event Details Content Cards</Label>
+              <div className="text-xs text-muted-foreground mb-2">
+                Create organized content sections with titles, descriptions, and photos
+              </div>
+              
+              {/* Add New Content Card */}
+              <div className="border rounded-lg p-4 space-y-3 mb-4 bg-gradient-to-r from-purple-50 to-blue-50">
+                <h4 className="font-medium text-card-foreground">Create New Content Section</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-sm">Section Title</Label>
+                    <Input
+                      value={newContentCard.title}
+                      onChange={(e) => setNewContentCard(prev => ({ ...prev, title: e.target.value }))}
+                      placeholder="e.g., Core Event Description"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm">Template</Label>
+                    <Select onValueChange={(value) => {
+                      const templates = {
+                        "core": { title: "Core Event Description", description: "Describe the main event, what participants will experience, and what makes this retreat special.", images: [], videos: [] },
+                        "lodging": { title: "Lodging, Rooms, Amenities", description: "Details about accommodation options, room types, and available amenities.", images: [], videos: [] },
+                        "volunteer": { title: "Volunteer Opportunities", description: "Information about ways participants can contribute and get involved.", images: [], videos: [] },
+                        "food": { title: "Food, Dietary Needs", description: "Meal plans, dietary accommodations, and food-related information.", images: [], videos: [] }
+                      };
+                      if (templates[value as keyof typeof templates]) {
+                        setNewContentCard(templates[value as keyof typeof templates]);
+                      }
+                    }}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Choose template" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="core">Core Event Description</SelectItem>
+                        <SelectItem value="lodging">Lodging, Rooms, Amenities</SelectItem>
+                        <SelectItem value="volunteer">Volunteer Opportunities</SelectItem>
+                        <SelectItem value="food">Food, Dietary Needs</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm">Section Description</Label>
+                  <Textarea
+                    value={newContentCard.description}
+                    onChange={(e) => setNewContentCard(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Enter the content for this section..."
+                    rows={3}
+                    className="mt-1"
+                  />
+                </div>
+                
+                {/* Media Upload for New Content Card */}
+                <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-xl p-6 border border-slate-200/60 shadow-sm">
+                  <div className="flex items-center justify-between mb-6 flex-col sm:flex-row gap-4 sm:gap-0">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <Label className="text-sm font-semibold text-slate-700">Section Media</Label>
+                        <p className="text-xs text-slate-500">Add photos and videos to bring your content to life</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => document.getElementById('new-content-image')?.click()}
+                        className="text-xs bg-white hover:bg-blue-50 border-blue-200 text-blue-700 hover:text-blue-800 transition-all duration-200 shadow-sm flex-1 sm:flex-none min-w-[100px]"
+                      >
+                        <Upload className="w-3 h-3 mr-1" />
+                        <span className="hidden sm:inline">Add Images</span>
+                        <span className="sm:hidden">Images</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => document.getElementById('new-content-video')?.click()}
+                        className="text-xs bg-white hover:bg-purple-50 border-purple-200 text-purple-700 hover:text-purple-800 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none min-w-[100px]"
+                        disabled={newContentCardVideos.length >= 1}
+                      >
+                        <Upload className="w-3 h-3 mr-1" />
+                        <span className="hidden sm:inline">Add Video</span>
+                        <span className="sm:hidden">Video</span>
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Images Section */}
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 bg-gradient-to-br from-green-400 to-blue-500 rounded-md flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-slate-600">Images</Label>
+                        <p className="text-xs text-slate-400">Multiple photos allowed • Max 5MB each</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-3 p-4 bg-white/60 rounded-lg border border-slate-200/50 min-h-[100px]">
+                      {newContentCardImages.map((imageUrl, imgIndex) => (
+                        <div key={imgIndex} className="relative group">
+                          <div className="relative overflow-hidden rounded-lg border-2 border-slate-200 shadow-sm hover:shadow-md transition-all duration-200">
+                            <img
+                              src={imageUrl}
+                              alt={`New content card ${imgIndex + 1}`}
+                              className="w-24 h-24 object-cover group-hover:scale-105 transition-transform duration-200"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="absolute -top-2 -right-2 w-6 h-6 p-0 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
+                            onClick={() => removeNewContentCardImage(imageUrl)}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                      <div className="relative group">
+                        <div className="w-24 h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center hover:border-blue-400 hover:bg-blue-50/30 transition-all duration-200 cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleNewContentCardImageUpload}
+                            className="hidden"
+                            id="new-content-image"
+                          />
+                          <label
+                            htmlFor="new-content-image"
+                            className="cursor-pointer p-4"
+                          >
+                            <Plus className="w-6 h-6 text-slate-400 group-hover:text-blue-500 transition-colors duration-200" />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Video Section */}
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 bg-gradient-to-br from-red-400 to-pink-500 rounded-md flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-slate-600">Video</Label>
+                        <p className="text-xs text-slate-400">Only one video allowed • Max 50MB</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-3 p-4 bg-white/60 rounded-lg border border-slate-200/50 min-h-[100px]">
+                      {newContentCardVideos.map((videoUrl, vidIndex) => (
+                        <div key={vidIndex} className="relative group">
+                          <div className="w-40 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg border-2 border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center overflow-hidden">
+                            <div className="text-center">
+                              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-600 rounded-full flex items-center justify-center mb-2 mx-auto group-hover:scale-110 transition-transform duration-200">
+                                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                                </svg>
+                              </div>
+                              <p className="text-xs text-slate-600 font-medium">Video uploaded</p>
+                              <p className="text-xs text-slate-400">Click to replace</p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="absolute -top-2 -right-2 w-6 h-6 p-0 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
+                            onClick={() => removeNewContentCardVideo(videoUrl)}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                      {newContentCardVideos.length === 0 && (
+                        <div className="relative group">
+                          <div className="w-40 h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center hover:border-purple-400 hover:bg-purple-50/30 transition-all duration-200 cursor-pointer">
+                            <input
+                              type="file"
+                              accept="video/*"
+                              onChange={handleNewContentCardVideoUpload}
+                              className="hidden"
+                              id="new-content-video"
+                            />
+                            <label
+                              htmlFor="new-content-video"
+                              className="cursor-pointer p-4"
+                            >
+                              <div className="text-center">
+                                <Plus className="w-6 h-6 text-slate-400 group-hover:text-purple-500 transition-colors duration-200 mx-auto mb-1" />
+                                <p className="text-xs text-slate-400 group-hover:text-purple-600 transition-colors duration-200">Add video</p>
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {newContentCardImages.length === 0 && newContentCardVideos.length === 0 && (
+                    <div className="text-center py-8 px-4 bg-gradient-to-br from-blue-50/50 to-purple-50/50 rounded-lg border border-blue-200/30">
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                      </div>
+                      <p className="text-sm font-medium text-slate-700 mb-1">No media added yet</p>
+                      <p className="text-xs text-slate-500">Add photos and/or a video to make your content more engaging</p>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  onClick={addContentCard}
+                  disabled={!newContentCard.title.trim()}
+                  className="w-full"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Content Section
+                </Button>
+              </div>
+
+              {/* Display Existing Content Cards */}
+              {contentCards.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-card-foreground">Content Sections ({contentCards.length})</h4>
+                    <Badge variant="outline" className="text-xs">
+                      {contentCards.length} section{contentCards.length !== 1 ? 's' : ''} created
+                    </Badge>
+                  </div>
+                  {contentCards.map((card, index) => (
+                    <div key={card.id} className="border rounded-lg p-4 bg-gradient-to-r from-green-50 to-blue-50">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <Input
+                            value={card.title}
+                            onChange={(e) => updateContentCard(card.id, { title: e.target.value })}
+                            className="font-medium mb-2"
+                            placeholder="Section title"
+                          />
+                          <Textarea
+                            value={card.description}
+                            onChange={(e) => updateContentCard(card.id, { description: e.target.value })}
+                            rows={3}
+                            placeholder="Section content..."
+                            className="mb-3"
+                          />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeContentCard(card.id)}
+                          className="ml-2 text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      
+                      {/* Media Upload for Content Card */}
+                      <div className="bg-gradient-to-br from-slate-50/50 to-blue-50/20 rounded-lg p-4 border border-slate-200/40">
+                        <div className="flex items-center justify-between mb-4 flex-col sm:flex-row gap-3 sm:gap-0">
+                          <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md flex items-center justify-center flex-shrink-0">
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <Label className="text-sm font-medium text-slate-700">Section Media</Label>
+                          </div>
+                          <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => document.getElementById(`content-image-${card.id}`)?.click()}
+                              className="text-xs bg-white hover:bg-blue-50 border-blue-200 text-blue-700 hover:text-blue-800 transition-all duration-200 shadow-sm flex-1 sm:flex-none min-w-[80px]"
+                            >
+                              <Upload className="w-3 h-3 mr-1" />
+                              <span className="hidden sm:inline">Add Images</span>
+                              <span className="sm:hidden">Images</span>
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => document.getElementById(`content-video-${card.id}`)?.click()}
+                              className="text-xs bg-white hover:bg-purple-50 border-purple-200 text-purple-700 hover:text-purple-800 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none min-w-[80px]"
+                              disabled={card.videos && card.videos.length >= 1}
+                            >
+                              <Upload className="w-3 h-3 mr-1" />
+                              <span className="hidden sm:inline">Add Video</span>
+                              <span className="sm:hidden">Video</span>
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        {/* Images Display */}
+                        <div className="mb-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-5 h-5 bg-gradient-to-br from-green-400 to-blue-500 rounded-sm flex items-center justify-center">
+                              <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <Label className="text-xs text-slate-600">Images ({card.images?.length || 0})</Label>
+                          </div>
+                          <div className="flex flex-wrap gap-2 p-3 bg-white/40 rounded-lg border border-slate-200/30 min-h-[80px]">
+                            {card.images?.map((imageUrl, imgIndex) => (
+                              <div key={imgIndex} className="relative group">
+                                <div className="relative overflow-hidden rounded-md border-2 border-slate-200 shadow-sm hover:shadow-md transition-all duration-200">
+                                  <img
+                                    src={imageUrl}
+                                    alt={`${card.title} ${imgIndex + 1}`}
+                                    className="w-20 h-20 object-cover group-hover:scale-105 transition-transform duration-200"
+                                  />
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                                </div>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
+                                  onClick={() => removeContentCardImage(card.id, imageUrl)}
+                                >
+                                  <X className="w-2 h-2" />
+                                </Button>
+                              </div>
+                            ))}
+                            <div className="relative group">
+                              <div className="w-20 h-20 border-2 border-dashed border-slate-300 rounded-md flex items-center justify-center hover:border-blue-400 hover:bg-blue-50/30 transition-all duration-200 cursor-pointer">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleContentCardImageUpload(card.id, e)}
+                                  className="hidden"
+                                  id={`content-image-${card.id}`}
+                                />
+                                <label
+                                  htmlFor={`content-image-${card.id}`}
+                                  className="cursor-pointer p-3"
+                                >
+                                  <Plus className="w-5 h-5 text-slate-400 group-hover:text-blue-500 transition-colors duration-200" />
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Videos Display */}
+                        <div className="mb-2">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-5 h-5 bg-gradient-to-br from-red-400 to-pink-500 rounded-sm flex items-center justify-center">
+                              <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                              </svg>
+                            </div>
+                            <Label className="text-xs text-slate-600">Video ({card.videos?.length || 0}/1)</Label>
+                          </div>
+                          <div className="flex flex-wrap gap-2 p-3 bg-white/40 rounded-lg border border-slate-200/30 min-h-[80px]">
+                            {card.videos?.map((videoUrl, vidIndex) => (
+                              <div key={vidIndex} className="relative group">
+                                <div className="w-32 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-md border-2 border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center overflow-hidden">
+                                  <div className="text-center">
+                                    <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-pink-600 rounded-full flex items-center justify-center mb-1 mx-auto group-hover:scale-110 transition-transform duration-200">
+                                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                                      </svg>
+                                    </div>
+                                    <p className="text-xs text-slate-600">Video</p>
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
+                                  onClick={() => removeContentCardImage(card.id, videoUrl)}
+                                >
+                                  <X className="w-2 h-2" />
+                                </Button>
+                              </div>
+                            ))}
+                            {(!card.videos || card.videos.length === 0) && (
+                              <div className="relative group">
+                                <div className="w-32 h-20 border-2 border-dashed border-slate-300 rounded-md flex items-center justify-center hover:border-purple-400 hover:bg-purple-50/30 transition-all duration-200 cursor-pointer">
+                                  <input
+                                    type="file"
+                                    accept="video/*"
+                                    onChange={(e) => handleContentCardImageUpload(card.id, e)}
+                                    className="hidden"
+                                    id={`content-video-${card.id}`}
+                                  />
+                                  <label
+                                    htmlFor={`content-video-${card.id}`}
+                                    className="cursor-pointer p-3"
+                                  >
+                                    <div className="text-center">
+                                      <Plus className="w-5 h-5 text-slate-400 group-hover:text-purple-500 transition-colors duration-200 mx-auto mb-1" />
+                                      <p className="text-xs text-slate-400 group-hover:text-purple-600 transition-colors duration-200">Add video</p>
+                                    </div>
+                                  </label>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {(!card.images || card.images.length === 0) && (!card.videos || card.videos.length === 0) && (
+                          <div className="text-center py-4 px-3 bg-gradient-to-br from-blue-50/30 to-purple-50/30 rounded-lg border border-blue-200/20">
+                            <p className="text-xs text-slate-600">No media added yet</p>
+                            <p className="text-xs text-slate-400">Add photos and/or a video to enhance this section</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {contentCards.length === 0 && (
+                <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
+                  <p className="text-muted-foreground mb-2">No content sections created yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    Create your first content section above to organize your retreat details
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>
