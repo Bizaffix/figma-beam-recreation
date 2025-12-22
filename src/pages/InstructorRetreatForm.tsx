@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2, Plus, DollarSign, CreditCard, Users } from "lucide-react";
+import { ShareDialog } from "@/components/ShareDialog";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -239,6 +240,8 @@ const InstructorRetreatForm = () => {
   const [uploadingContentCardVideo, setUploadingContentCardVideo] = useState(false);
   const [newContentCardImages, setNewContentCardImages] = useState<string[]>([]);
   const [newContentCardVideos, setNewContentCardVideos] = useState<string[]>([]);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [selectedRetreatForShare, setSelectedRetreatForShare] = useState<Retreat | null>(null);
 
   // Only show this page to instructors
   if (role !== 'instructor') {
@@ -3005,13 +3008,10 @@ const InstructorRetreatForm = () => {
                                 variant="secondary"
                                 size="sm"
                                 className="bg-white/90 hover:bg-white text-foreground shadow-md backdrop-blur-sm"
-                                onClick={() => {
-                                  const retreatLink = `${window.location.origin}/retreat/${retreat.id}${user?.id ? `?ref=${user.id}` : ''}`;
-                                  navigator.clipboard.writeText(retreatLink);
-                                  toast({
-                                    title: "Link Copied!",
-                                    description: "Retreat link copied to clipboard. Share it on social media!",
-                                  });
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedRetreatForShare(retreat);
+                                  setShareDialogOpen(true);
                                 }}
                                 title="Share this retreat"
                               >
@@ -3082,6 +3082,24 @@ const InstructorRetreatForm = () => {
           </>
         )}
       </div>
+
+      {/* Share Dialog */}
+      {selectedRetreatForShare && (
+        <ShareDialog
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          retreat={{
+            id: selectedRetreatForShare.id,
+            title: selectedRetreatForShare.title,
+            description: selectedRetreatForShare.description,
+            image: selectedRetreatForShare.image,
+            price: selectedRetreatForShare.price,
+            location: selectedRetreatForShare.location,
+            date: selectedRetreatForShare.date,
+            url: `${window.location.origin}/retreat/${selectedRetreatForShare.id}${user?.id ? `?ref=${user.id}` : ''}`,
+          }}
+        />
+      )}
 
       <BottomNav />
     </div>

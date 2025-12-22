@@ -62,6 +62,56 @@ const RetreatDetail = () => {
   const [actionType, setActionType] = useState<'save' | 'register'>('register');
   const [showMessagingDialog, setShowMessagingDialog] = useState(false);
 
+  // Update meta tags for social sharing
+  useEffect(() => {
+    if (!retreat) return;
+
+    const retreatUrl = `${window.location.origin}/retreat/${retreat.id}`;
+    const fullImageUrl = retreat.image?.startsWith('http') 
+      ? retreat.image 
+      : `${window.location.origin}${retreat.image}`;
+    
+    // Update or create meta tags
+    const updateMetaTag = (property: string, content: string, isProperty = true) => {
+      const attribute = isProperty ? 'property' : 'name';
+      let meta = document.querySelector(`meta[${attribute}="${property}"]`);
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute(attribute, property);
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute('content', content);
+    };
+
+    // Update title
+    document.title = `${retreat.title} - Quilting Retreats`;
+
+    // Open Graph tags
+    updateMetaTag('og:title', retreat.title);
+    updateMetaTag('og:description', retreat.description || 'Join us for an amazing quilting retreat!');
+    updateMetaTag('og:image', fullImageUrl);
+    updateMetaTag('og:url', retreatUrl);
+    updateMetaTag('og:type', 'website');
+    
+    // Twitter Card tags
+    updateMetaTag('twitter:card', 'summary_large_image', false);
+    updateMetaTag('twitter:title', retreat.title, false);
+    updateMetaTag('twitter:description', retreat.description || 'Join us for an amazing quilting retreat!', false);
+    updateMetaTag('twitter:image', fullImageUrl, false);
+
+    // Additional meta tags
+    updateMetaTag('description', retreat.description || 'Join us for an amazing quilting retreat!', false);
+
+    // Cleanup function to restore default meta tags when component unmounts
+    return () => {
+      document.title = 'Quilting Retreats - Discover, Learn, and Connect';
+      updateMetaTag('og:title', 'Quilting Retreats - Discover, Learn, and Connect');
+      updateMetaTag('og:description', 'Discover amazing quilting retreats. Learn modern techniques, create art quilts, and connect with expert instructors in beautiful locations.');
+      updateMetaTag('og:image', '');
+      updateMetaTag('og:url', window.location.origin);
+    };
+  }, [retreat]);
+
   // Fetch retreat from Supabase
   useEffect(() => {
     const fetchRetreat = async () => {

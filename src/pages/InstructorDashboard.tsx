@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight, Share2, CheckCircle2, MessageSquare, Users } from "lucide-react";
+import { ShareDialog } from "@/components/ShareDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -158,6 +159,8 @@ const InstructorDashboard = () => {
   const [completedRetreats, setCompletedRetreats] = useState<number>(0);
   const [bookedSeats, setBookedSeats] = useState<number>(0);
   const [unreadMessages, setUnreadMessages] = useState<number>(0);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [selectedRetreatForShare, setSelectedRetreatForShare] = useState<Retreat | null>(null);
   
   const [formData, setFormData] = useState<FormData>({
     title: "",
@@ -1749,13 +1752,10 @@ const InstructorDashboard = () => {
                           variant="secondary"
                           size="sm"
                           className="bg-white/90 hover:bg-white text-foreground shadow-md backdrop-blur-sm"
-                          onClick={() => {
-                            const retreatLink = `${window.location.origin}/retreat/${retreat.id}${user?.id ? `?ref=${user.id}` : ''}`;
-                            navigator.clipboard.writeText(retreatLink);
-                            toast({
-                              title: "Link Copied!",
-                              description: "Retreat link copied to clipboard. Share it on social media!",
-                            });
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedRetreatForShare(retreat);
+                            setShareDialogOpen(true);
                           }}
                           title="Share this retreat"
                         >
@@ -1836,6 +1836,24 @@ const InstructorDashboard = () => {
       </Tabs>
         )}
       </div>
+
+      {/* Share Dialog */}
+      {selectedRetreatForShare && (
+        <ShareDialog
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          retreat={{
+            id: selectedRetreatForShare.id,
+            title: selectedRetreatForShare.title,
+            description: selectedRetreatForShare.description,
+            image: selectedRetreatForShare.image,
+            price: selectedRetreatForShare.price,
+            location: selectedRetreatForShare.location,
+            date: selectedRetreatForShare.date,
+            url: `${window.location.origin}/retreat/${selectedRetreatForShare.id}${user?.id ? `?ref=${user.id}` : ''}`,
+          }}
+        />
+      )}
 
       {/* Bottom Navigation */}
       <BottomNav />
