@@ -149,58 +149,110 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Remove URLs from description
     cleanDescription = cleanDescription.replace(/https?:\/\/[^\s]+/g, '').trim();
     
-    // Build description optimized for Facebook (max 200 chars recommended)
-    // Facebook prefers: description first, then key details
-    const descriptionParts: string[] = [];
+    // Build description optimized for Facebook display
+    // Facebook's optimal description length: 155-200 characters (best display rate)
+    // Strategy: Description first (most important), then key details
     
-    // Add retreat description (limit to 120 chars to leave room for details)
+    let description = '';
+    
+    // Start with the retreat description (primary content)
     if (cleanDescription && cleanDescription.length > 0) {
-      const desc = cleanDescription.substring(0, 120).trim();
-      descriptionParts.push(desc + (cleanDescription.length > 120 ? '...' : ''));
+      // Use up to 140 chars for description to leave room for details
+      const desc = cleanDescription.substring(0, 140).trim();
+      description = desc + (cleanDescription.length > 140 ? '...' : '');
     }
     
-    // Add key details in a compact format (Facebook-friendly, no emojis)
+    // Add key details in a clean, readable format
     const details: string[] = [];
     if (retreat.date) {
-      details.push(`Date: ${retreat.date}`);
+      details.push(retreat.date);
     }
     if (cleanLocation && cleanLocation.trim()) {
-      details.push(`Location: ${cleanLocation}`);
+      details.push(cleanLocation);
     }
     if (retreat.price) {
-      details.push(`Price: $${retreat.price}`);
+      details.push(`$${retreat.price}`);
     }
     
-    // Combine description and details
-    let description = '';
-    if (descriptionParts.length > 0) {
-      description = descriptionParts[0];
-      if (details.length > 0) {
-        // Add details on same line with separator (Facebook prefers single line)
-        description += ' • ' + details.join(' • ');
+    // Append details if we have description
+    if (description && details.length > 0) {
+      // Calculate remaining space (target: 155-200 chars total)
+      const remainingSpace = 200 - description.length;
+      if (remainingSpace > 20) {
+        const detailsText = details.join(' • ');
+        if (description.length + detailsText.length + 3 <= 200) {
+          description += ' | ' + detailsText;
+        } else {
+          // Truncate details if needed
+          const availableSpace = remainingSpace - 3; // 3 for " | "
+          if (availableSpace > 10) {
+            description += ' | ' + detailsText.substring(0, availableSpace - 3) + '...';
+          }
+        }
       }
-    } else {
+    } else if (!description && details.length > 0) {
       // Fallback: create description from title and details
-      description = `Join us for ${retreat.title}`;
-      if (details.length > 0) {
-        description += ' • ' + details.join(' • ');
+      description = `Join us for ${retreat.title}. ${details.join(' • ')}`;
+    }
+    
+    // Ensure description is within Facebook's optimal range (155-200 chars)
+    // Facebook can display up to 300 chars, but 155-200 has best display rate
+    if (description.length > 200) {
+      // Try to truncate at a word boundary
+      const truncated = description.substring(0, 197);
+      const lastSpace = truncated.lastIndexOf(' ');
+      if (lastSpace > 150) {
+        description = truncated.substring(0, lastSpace) + '...';
+      } else {
+        description = truncated + '...';
       }
     }
     
-    // Ensure description doesn't exceed Facebook's recommended 200 chars
-    // (Facebook can handle up to 300, but 200 is optimal for display)
-    if (description.length > 200) {
-      description = description.substring(0, 197) + '...';
+    // Ensure minimum length for better display (Facebook prefers 155+ chars)
+    if (description.length < 100 && cleanDescription) {
+      // Try to expand description if we have more content
+      const expanded = cleanDescription.substring(0, 180).trim();
+      if (expanded.length > description.length) {
+        description = expanded + (cleanDescription.length > 180 ? '...' : '');
+        if (details.length > 0 && description.length + details.join(' • ').length + 3 <= 200) {
+          description += ' | ' + details.join(' • ');
+        }
+      }
     }
     
-    // Remove newlines and normalize whitespace
-    description = description.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+    // Remove newlines, normalize whitespace, and clean up
+    description = description
+      .replace(/\n+/g, ' ')           // Remove newlines
+      .replace(/\r+/g, ' ')           // Remove carriage returns
+      .replace(/\s+/g, ' ')            // Normalize whitespace
+      .replace(/[^\x20-\x7E]/g, ' ')  // Remove non-printable characters (keep only ASCII printable)
+      .trim();
     
-    // Final safety check - ensure description is never empty
-    if (!description || description.length === 0) {
-      description = `Join us for ${retreat.title} - An amazing quilting retreat experience`;
+    // Final safety check - ensure description is never empty and meaningful
+    if (!description || description.length < 20) {
+      description = `Join us for ${retreat.title}, an amazing quilting retreat experience`;
       if (details.length > 0) {
-        description += ' • ' + details.join(' • ');
+        const detailsText = details.join(' • ');
+        if (description.length + detailsText.length + 3 <= 200) {
+          description += ' | ' + detailsText;
+        }
+      }
+    }
+    
+    // Final length check - ensure we're in the optimal range
+    if (description.length < 155 && cleanDescription && cleanDescription.length > description.length) {
+      // Try to expand to optimal length
+      const targetLength = 180;
+      const expanded = cleanDescription.substring(0, targetLength).trim();
+      if (expanded.length >= 155) {
+        description = expanded + (cleanDescription.length > targetLength ? '...' : '');
+        if (details.length > 0) {
+          const detailsText = details.join(' • ');
+          const combined = description + ' | ' + detailsText;
+          if (combined.length <= 200) {
+            description = combined;
+          }
+        }
       }
     }
 
@@ -222,7 +274,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${escapeHtml(retreat.title)}" />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:site_name" content="Quilting Retreats" />
+    <meta property="og:locale" content="en_US" />
     ${process.env.FACEBOOK_APP_ID ? `<meta property="fb:app_id" content="${process.env.FACEBOOK_APP_ID}" />` : ''}
     
     <!-- Twitter Card -->
