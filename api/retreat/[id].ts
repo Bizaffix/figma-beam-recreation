@@ -20,15 +20,33 @@ const CRAWLER_USER_AGENTS = [
   'ia_archiver',
 ];
 
-function isCrawler(userAgent: string | undefined): boolean {
+function isCrawler(userAgent: string | undefined | null): boolean {
   if (!userAgent) return false;
   const ua = userAgent.toLowerCase();
-  return CRAWLER_USER_AGENTS.some(crawler => ua.includes(crawler.toLowerCase()));
+  // Check for exact matches and partial matches
+  const isCrawlerBot = CRAWLER_USER_AGENTS.some(crawler => {
+    const crawlerLower = crawler.toLowerCase();
+    return ua.includes(crawlerLower) || ua === crawlerLower;
+  });
+  
+  // Also check for common crawler patterns
+  const crawlerPatterns = ['bot', 'crawler', 'spider', 'scraper'];
+  const hasCrawlerPattern = crawlerPatterns.some(pattern => ua.includes(pattern));
+  
+  return isCrawlerBot || hasCrawlerPattern;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { id } = req.query;
-  const userAgent = req.headers['user-agent'];
+  
+  // Handle user agent - VercelRequest headers can be string or string[]
+  const userAgentHeader = req.headers['user-agent'];
+  const userAgent = Array.isArray(userAgentHeader) 
+    ? userAgentHeader[0] || '' 
+    : userAgentHeader || '';
+
+  // Log for debugging (remove in production if needed)
+  console.log('Request received:', { id, userAgent, isCrawler: isCrawler(userAgent), path: req.url });
 
   // Handle non-crawlers: serve the React app HTML directly
   // This avoids redirect loops - the React app will handle routing client-side
@@ -125,11 +143,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? `https://${process.env.VERCEL_URL}/retreat/${id}`
       : `https://www.bookmyquiltretreat.com/retreat/${id}`;
 
-    const title = retreat.title || 'Quilting Retreat';
-    const description = retreat.description || 'Join us for an amazing quilting retreat!';
-    const instructorName = retreat.instructor?.full_name || 'Expert Instructor';
-    const location = retreat.location || '';
-    const date = retreat.date || '';
+    const title = (retreat.title || 'Quilting Retreat').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const description = (retreat.description || 'Join us for an amazing quilting retreat!')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .substring(0, 200);
+    const instructorName = (retreat.instructor?.full_name || 'Expert Instructor').replace(/"/g, '&quot;');
+    const location = (retreat.location || '').replace(/"/g, '&quot;');
+    const date = (retreat.date || '').replace(/"/g, '&quot;');
     const price = retreat.price ? `$${retreat.price}` : '';
 
     // Generate HTML with proper meta tags
@@ -186,7 +207,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
-    return res.status(200).send(html);
+    res.setHeader('X-Robots-Tag', 'noindex'); // Don't index the API route itself
+    
+    // Ensure we return a proper 200 response
+    return res.status(200).end(html);
 
   } catch (error) {
     console.error('Error fetching retreat:', error);
