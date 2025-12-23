@@ -1,9 +1,17 @@
 {
   "rewrites": [
     {
+      "source": "/retreat/:id",
+      "destination": "/api/retreat-meta?id=:id"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/retreat-meta.ts": {
+      "maxDuration": 10
+    }
+  }
 }
-
