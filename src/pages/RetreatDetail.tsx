@@ -67,9 +67,20 @@ const RetreatDetail = () => {
     if (!retreat) return;
 
     const retreatUrl = `${window.location.origin}/retreat/${retreat.id}`;
-    const fullImageUrl = retreat.image?.startsWith('http') 
-      ? retreat.image 
-      : `${window.location.origin}${retreat.image}`;
+    
+    // Ensure image URL is absolute - Supabase URLs are already absolute, but handle edge cases
+    let fullImageUrl = retreat.image || '';
+    if (fullImageUrl && !fullImageUrl.startsWith('http')) {
+      // If relative URL, make it absolute
+      fullImageUrl = fullImageUrl.startsWith('/') 
+        ? `${window.location.origin}${fullImageUrl}`
+        : `${window.location.origin}/${fullImageUrl}`;
+    }
+    
+    // If no image, use a placeholder or default image
+    if (!fullImageUrl) {
+      fullImageUrl = `${window.location.origin}/placeholder.svg`;
+    }
     
     // Update or create meta tags
     const updateMetaTag = (property: string, content: string, isProperty = true) => {
@@ -86,18 +97,22 @@ const RetreatDetail = () => {
     // Update title
     document.title = `${retreat.title} - Quilting Retreats`;
 
-    // Open Graph tags
+    // Open Graph tags - Facebook requires these for rich previews
     updateMetaTag('og:title', retreat.title);
     updateMetaTag('og:description', retreat.description || 'Join us for an amazing quilting retreat!');
     updateMetaTag('og:image', fullImageUrl);
+    updateMetaTag('og:image:secure_url', fullImageUrl); // HTTPS version
+    updateMetaTag('og:image:type', 'image/jpeg'); // Facebook prefers explicit type
     updateMetaTag('og:url', retreatUrl);
     updateMetaTag('og:type', 'website');
+    updateMetaTag('og:site_name', 'BookMyQuiltRetreat');
     
     // Twitter Card tags
     updateMetaTag('twitter:card', 'summary_large_image', false);
     updateMetaTag('twitter:title', retreat.title, false);
     updateMetaTag('twitter:description', retreat.description || 'Join us for an amazing quilting retreat!', false);
     updateMetaTag('twitter:image', fullImageUrl, false);
+    updateMetaTag('twitter:image:src', fullImageUrl, false); // Alternative for some platforms
 
     // Additional meta tags
     updateMetaTag('description', retreat.description || 'Join us for an amazing quilting retreat!', false);
