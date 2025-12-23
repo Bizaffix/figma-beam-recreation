@@ -141,39 +141,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     
     // Clean description - remove placeholder text and format nicely
-    let cleanDescription = retreat.description || 'Join us for an amazing quilting retreat';
+    let cleanDescription = retreat.description || '';
     // Remove common placeholder text
     if (cleanDescription.toLowerCase().includes('this is an example')) {
-      cleanDescription = cleanDescription.replace(/this is an example\.?\s*/i, '');
+      cleanDescription = cleanDescription.replace(/this is an example\.?\s*/i, '').trim();
     }
     // Remove URLs from description
     cleanDescription = cleanDescription.replace(/https?:\/\/[^\s]+/g, '').trim();
     
-    // Create a clean, formatted description
+    // Build description optimized for Facebook (max 200 chars recommended)
+    // Facebook prefers: description first, then key details
     const descriptionParts: string[] = [];
-    if (cleanDescription) {
-      const desc = cleanDescription.substring(0, 150);
-      descriptionParts.push(desc + (cleanDescription.length > 150 ? '...' : ''));
+    
+    // Add retreat description (limit to 120 chars to leave room for details)
+    if (cleanDescription && cleanDescription.length > 0) {
+      const desc = cleanDescription.substring(0, 120).trim();
+      descriptionParts.push(desc + (cleanDescription.length > 120 ? '...' : ''));
     }
     
-    // Add details in a clean format
+    // Add key details in a compact format (Facebook-friendly, no emojis)
     const details: string[] = [];
-    if (cleanLocation && cleanLocation.trim()) {
-      details.push(`📍 ${cleanLocation}`);
-    }
     if (retreat.date) {
-      details.push(`📅 ${retreat.date}`);
+      details.push(`Date: ${retreat.date}`);
+    }
+    if (cleanLocation && cleanLocation.trim()) {
+      details.push(`Location: ${cleanLocation}`);
     }
     if (retreat.price) {
-      details.push(`💰 $${retreat.price}`);
+      details.push(`Price: $${retreat.price}`);
     }
     
-    let description = descriptionParts.length > 0 
-      ? descriptionParts.join(' ') + (details.length > 0 ? ' | ' + details.join(' • ') : '')
-      : details.join(' • ') || 'Join us for an amazing quilting retreat';
+    // Combine description and details
+    let description = '';
+    if (descriptionParts.length > 0) {
+      description = descriptionParts[0];
+      if (details.length > 0) {
+        // Add details on same line with separator (Facebook prefers single line)
+        description += ' • ' + details.join(' • ');
+      }
+    } else {
+      // Fallback: create description from title and details
+      description = `Join us for ${retreat.title}`;
+      if (details.length > 0) {
+        description += ' • ' + details.join(' • ');
+      }
+    }
     
-    // Remove newlines and extra whitespace for meta tags (Facebook doesn't support newlines)
+    // Ensure description doesn't exceed Facebook's recommended 200 chars
+    // (Facebook can handle up to 300, but 200 is optimal for display)
+    if (description.length > 200) {
+      description = description.substring(0, 197) + '...';
+    }
+    
+    // Remove newlines and normalize whitespace
     description = description.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // Final safety check - ensure description is never empty
+    if (!description || description.length === 0) {
+      description = `Join us for ${retreat.title} - An amazing quilting retreat experience`;
+      if (details.length > 0) {
+        description += ' • ' + details.join(' • ');
+      }
+    }
 
     // Generate HTML with meta tags
     const html = `<!DOCTYPE html>
