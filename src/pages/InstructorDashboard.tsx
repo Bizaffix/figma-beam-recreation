@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 import { ItineraryBuilder, ItineraryBlock } from "@/components/ItineraryBuilder";
 import UserManagement from "@/components/UserManagement";
+import { ShareDialog } from "@/components/ShareDialog";
 
 interface Retreat {
   id: number;
@@ -158,6 +159,7 @@ const InstructorDashboard = () => {
   const [completedRetreats, setCompletedRetreats] = useState<number>(0);
   const [bookedSeats, setBookedSeats] = useState<number>(0);
   const [unreadMessages, setUnreadMessages] = useState<number>(0);
+  const [sharingRetreat, setSharingRetreat] = useState<Retreat | null>(null);
   
   const [formData, setFormData] = useState<FormData>({
     title: "",
@@ -1749,13 +1751,9 @@ const InstructorDashboard = () => {
                           variant="secondary"
                           size="sm"
                           className="bg-white/90 hover:bg-white text-foreground shadow-md backdrop-blur-sm"
-                          onClick={() => {
-                            const retreatLink = `${window.location.origin}/retreat/${retreat.id}${user?.id ? `?ref=${user.id}` : ''}`;
-                            navigator.clipboard.writeText(retreatLink);
-                            toast({
-                              title: "Link Copied!",
-                              description: "Retreat link copied to clipboard. Share it on social media!",
-                            });
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSharingRetreat(retreat);
                           }}
                           title="Share this retreat"
                         >
@@ -1836,6 +1834,24 @@ const InstructorDashboard = () => {
       </Tabs>
         )}
       </div>
+
+      {/* Share Dialog */}
+      {sharingRetreat && (
+        <ShareDialog
+          open={!!sharingRetreat}
+          onOpenChange={(open) => !open && setSharingRetreat(null)}
+          retreat={{
+            id: sharingRetreat.id,
+            title: sharingRetreat.title,
+            description: sharingRetreat.description,
+            image: sharingRetreat.image,
+            price: sharingRetreat.price,
+            location: sharingRetreat.location,
+            date: sharingRetreat.date,
+          }}
+          userId={user?.id}
+        />
+      )}
 
       {/* Bottom Navigation */}
       <BottomNav />

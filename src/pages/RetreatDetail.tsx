@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { Header } from "@/components/Header";
 import { useToast } from "@/hooks/use-toast";
 import MessagingSystem from "@/components/MessagingSystem";
+import { updateMetaTags, resetMetaTags } from "@/lib/meta-tags";
 import {
   Dialog,
   DialogContent,
@@ -133,6 +134,44 @@ const RetreatDetail = () => {
 
     fetchRetreat();
   }, [id, role, user]);
+
+  // Update meta tags when retreat data is loaded
+  useEffect(() => {
+    if (retreat) {
+      const retreatUrl = `${window.location.origin}/retreat/${retreat.id}`;
+      
+      // Ensure image URL is absolute
+      let absoluteImageUrl = `${window.location.origin}/favicon1.png`; // default
+      if (retreat.image) {
+        if (retreat.image.startsWith('http://') || retreat.image.startsWith('https://')) {
+          absoluteImageUrl = retreat.image;
+        } else if (retreat.image.startsWith('/')) {
+          absoluteImageUrl = `${window.location.origin}${retreat.image}`;
+        } else {
+          absoluteImageUrl = `${window.location.origin}/${retreat.image}`;
+        }
+      }
+
+      // Create a rich description with key details
+      const description = `${retreat.description.substring(0, 150)}${retreat.description.length > 150 ? '...' : ''}\n\n📍 ${retreat.location}${retreat.date ? ` | 📅 ${retreat.date}` : ''} | 💰 $${retreat.price}`;
+
+      updateMetaTags({
+        title: `${retreat.title} - Quilting Retreats`,
+        description: description,
+        image: absoluteImageUrl,
+        url: retreatUrl,
+        type: 'website',
+        price: retreat.price,
+        location: retreat.location,
+        date: retreat.date,
+      });
+    }
+
+    // Cleanup: reset meta tags when component unmounts
+    return () => {
+      resetMetaTags();
+    };
+  }, [retreat]);
 
   // Check if retreat is saved
   useEffect(() => {

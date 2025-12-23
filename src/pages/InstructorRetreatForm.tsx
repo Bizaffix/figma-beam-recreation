@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
 import { ItineraryBuilder, ItineraryBlock } from "@/components/ItineraryBuilder";
 import { VenueSelector } from "@/components/VenueSelector";
+import { ShareDialog } from "@/components/ShareDialog";
 
 interface ContentCard {
   id: string;
@@ -236,6 +237,7 @@ const InstructorRetreatForm = () => {
     videos: [] as string[]
   });
   const [uploadingContentCardImage, setUploadingContentCardImage] = useState(false);
+  const [sharingRetreat, setSharingRetreat] = useState<Retreat | null>(null);
   const [uploadingContentCardVideo, setUploadingContentCardVideo] = useState(false);
   const [newContentCardImages, setNewContentCardImages] = useState<string[]>([]);
   const [newContentCardVideos, setNewContentCardVideos] = useState<string[]>([]);
@@ -3005,13 +3007,9 @@ const InstructorRetreatForm = () => {
                                 variant="secondary"
                                 size="sm"
                                 className="bg-white/90 hover:bg-white text-foreground shadow-md backdrop-blur-sm"
-                                onClick={() => {
-                                  const retreatLink = `${window.location.origin}/retreat/${retreat.id}${user?.id ? `?ref=${user.id}` : ''}`;
-                                  navigator.clipboard.writeText(retreatLink);
-                                  toast({
-                                    title: "Link Copied!",
-                                    description: "Retreat link copied to clipboard. Share it on social media!",
-                                  });
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSharingRetreat(retreat);
                                 }}
                                 title="Share this retreat"
                               >
@@ -3082,6 +3080,24 @@ const InstructorRetreatForm = () => {
           </>
         )}
       </div>
+
+      {/* Share Dialog */}
+      {sharingRetreat && (
+        <ShareDialog
+          open={!!sharingRetreat}
+          onOpenChange={(open) => !open && setSharingRetreat(null)}
+          retreat={{
+            id: sharingRetreat.id,
+            title: sharingRetreat.title,
+            description: sharingRetreat.description,
+            image: sharingRetreat.image,
+            price: sharingRetreat.price,
+            location: sharingRetreat.location,
+            date: sharingRetreat.date,
+          }}
+          userId={user?.id}
+        />
+      )}
 
       <BottomNav />
     </div>
