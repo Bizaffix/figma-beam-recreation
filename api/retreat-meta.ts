@@ -127,8 +127,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Create description with key details
-    const description = `${retreat.description?.substring(0, 200) || 'Join us for an amazing quilting retreat'}${retreat.description?.length > 200 ? '...' : ''}\n\n📍 ${retreat.location}${retreat.date ? ` | 📅 ${retreat.date}` : ''} | 💰 $${retreat.price}`;
+    // Clean location - remove URLs and extract just the location name
+    let cleanLocation = retreat.location || '';
+    // If location contains a URL (like Google Maps), omit it from the description
+    const isLocationUrl = cleanLocation.includes('http://') || 
+                         cleanLocation.includes('https://') || 
+                         cleanLocation.includes('maps.app.goo.gl') || 
+                         cleanLocation.includes('goo.gl') ||
+                         cleanLocation.includes('maps.google.com');
+    
+    if (isLocationUrl) {
+      cleanLocation = ''; // Omit URL locations from description
+    }
+    
+    // Clean description - remove placeholder text and format nicely
+    let cleanDescription = retreat.description || 'Join us for an amazing quilting retreat';
+    // Remove common placeholder text
+    if (cleanDescription.toLowerCase().includes('this is an example')) {
+      cleanDescription = cleanDescription.replace(/this is an example\.?\s*/i, '');
+    }
+    // Remove URLs from description
+    cleanDescription = cleanDescription.replace(/https?:\/\/[^\s]+/g, '').trim();
+    
+    // Create a clean, formatted description
+    const descriptionParts: string[] = [];
+    if (cleanDescription) {
+      const desc = cleanDescription.substring(0, 150);
+      descriptionParts.push(desc + (cleanDescription.length > 150 ? '...' : ''));
+    }
+    
+    // Add details in a clean format
+    const details: string[] = [];
+    if (cleanLocation && cleanLocation.trim()) {
+      details.push(`📍 ${cleanLocation}`);
+    }
+    if (retreat.date) {
+      details.push(`📅 ${retreat.date}`);
+    }
+    if (retreat.price) {
+      details.push(`💰 $${retreat.price}`);
+    }
+    
+    let description = descriptionParts.length > 0 
+      ? descriptionParts.join(' ') + (details.length > 0 ? ' | ' + details.join(' • ') : '')
+      : details.join(' • ') || 'Join us for an amazing quilting retreat';
+    
+    // Remove newlines and extra whitespace for meta tags (Facebook doesn't support newlines)
+    description = description.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
 
     // Generate HTML with meta tags
     const html = `<!DOCTYPE html>
@@ -147,7 +192,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     <meta property="og:image" content="${imageUrl}" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="${escapeHtml(retreat.title)}" />
     <meta property="og:site_name" content="Quilting Retreats" />
+    ${process.env.FACEBOOK_APP_ID ? `<meta property="fb:app_id" content="${process.env.FACEBOOK_APP_ID}" />` : ''}
     
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
