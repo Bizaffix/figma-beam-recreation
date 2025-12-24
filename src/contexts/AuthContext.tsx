@@ -7,7 +7,7 @@ interface AuthContextType {
   session: Session | null;
   role: 'instructor' | 'student' | 'admin' | 'location_owner' | null;
   loading: boolean;
-  signUp: (email: string, password: string, role?: 'student' | 'instructor' | 'location_owner', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }, locationOwnerData?: { firstName: string; lastName: string; propertyName?: string }) => Promise<{ error: any; needsConfirmation?: boolean }>;
+  signUp: (email: string, password: string, role?: 'student' | 'instructor' | 'location_owner', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }, locationOwnerData?: { firstName: string; lastName: string; propertyName?: string }) => Promise<{ error: any; needsConfirmation?: boolean; data?: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any; role?: 'instructor' | 'student' | 'admin' | 'location_owner' | undefined; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<{ error: any }>;
@@ -157,7 +157,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // The profile will be created by the database trigger when they confirm
     }
 
-    return { error, needsConfirmation: !error && data.user && !data.session };
+    return { error, needsConfirmation: !error && data.user && !data.session, data };
   };
 
   const signIn = async (email: string, password: string) => {

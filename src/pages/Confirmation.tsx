@@ -1,7 +1,10 @@
 import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import calendar, { createGoogleCalendarUrl } from "@/lib/calendar";
+import { convertReferral, getCurrentAffiliate } from "@/lib/affiliate-tracking";
+import { supabase } from "@/lib/supabase";
 
 const Confirmation = () => {
   const location = useLocation();
@@ -9,6 +12,51 @@ const Confirmation = () => {
 
   const retreat = (location.state as any)?.retreat;
   const booking = (location.state as any)?.booking;
+  const bookingId = (location.state as any)?.bookingId;
+
+  // Convert affiliate referral when booking is confirmed
+  useEffect(() => {
+    const handleAffiliateConversion = async () => {
+      if (!bookingId || !retreat) return;
+
+      const affiliateData = getCurrentAffiliate();
+      if (!affiliateData) return;
+
+      try {
+        // Find the referral for this user
+        const { data: referrals, error: referralError } = await supabase
+          .from('affiliate_referrals')
+          .select('id')
+          .eq('affiliate_id', affiliateData.affiliateId)
+          .eq('campaign_id', affiliateData.campaignId)
+          .eq('referral_type', 'student')
+          .eq('converted', false)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (referralError || !referrals || referrals.length === 0) {
+          return; // No referral found
+        }
+
+        const referralId = referrals[0].id;
+        const transactionAmount = retreat.price || 0;
+        const platformFee = transactionAmount * 0.1; // Assume 10% platform fee
+
+        await convertReferral(
+          referralId,
+          'booking',
+          bookingId,
+          transactionAmount,
+          platformFee
+        );
+      } catch (error) {
+        console.error('Error converting affiliate referral:', error);
+        // Don't show error to user
+      }
+    };
+
+    handleAffiliateConversion();
+  }, [bookingId, retreat]);
 
   const email = booking?.email ?? "";
 

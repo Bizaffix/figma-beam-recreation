@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar, Link as LinkIcon } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1043,6 +1043,24 @@ const AdminDashboard = () => {
             onClick={() => setDraftVenuesDialogOpen(true)}
             tooltip="Tap to view"
           />
+        </div>
+
+        {/* Affiliate Program Manager Card */}
+        <div className="mb-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold mb-1">Affiliate Program Manager</h3>
+                  <p className="text-sm text-muted-foreground">Manage affiliates, campaigns, referrals, and payouts</p>
+                </div>
+                <Button onClick={() => navigate('/admin/affiliates')}>
+                  <LinkIcon className="w-4 h-4 mr-2" />
+                  Open Manager
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Recent Bookings */}

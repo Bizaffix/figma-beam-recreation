@@ -20,6 +20,7 @@ import InstructorBrowse from "./pages/InstructorBrowse";
 import InstructorMessages from "./pages/InstructorMessages";
 import StudentMessages from "./pages/StudentMessages";
 import AdminDashboard from "./pages/AdminDashboard";
+import AffiliateProgramManager from "./pages/AffiliateProgramManager";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import EmailConfirm from "./pages/EmailConfirm";
@@ -29,8 +30,18 @@ import LocationOwnerDashboard from "./pages/LocationOwnerDashboard";
 import VenueOwnerMessages from "./pages/VenueOwnerMessages";
 import VenueRegistration from "./pages/VenueRegistration";
 import { useAuth } from "./contexts/AuthContext";
+import { initializeAffiliateTracking } from "./lib/affiliate-tracking";
+import { useEffect } from "react";
 
 const queryClient = new QueryClient();
+
+// Component to initialize affiliate tracking on app load
+const AffiliateTrackingInit = () => {
+  useEffect(() => {
+    initializeAffiliateTracking();
+  }, []);
+  return null;
+};
 
 // Public Route Component - redirects authenticated users to their role-based home
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
@@ -142,6 +153,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <PermissionsProvider>
+            <AffiliateTrackingInit />
             <Routes>
           {/* Public Landing Page - First page users see */}
           <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
@@ -188,6 +200,7 @@ const App = () => (
           
           {/* Protected Admin Routes */}
           <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/affiliates" element={<AdminRoute><AffiliateProgramManager /></AdminRoute>} />
           
           {/* Catch-all route - redirect to login if not authenticated */}
           <Route path="*" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />

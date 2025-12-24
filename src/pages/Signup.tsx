@@ -16,6 +16,7 @@ import { INSTRUCTOR_AGREEMENT } from "@/content/instructor-agreement";
 import { PRIVACY_POLICY } from "@/content/privacy-policy";
 import { STUDENT_TERMS_AND_CONDITIONS } from "@/content/student-terms-and-conditions";
 import { STUDENT_PRIVACY_POLICY } from "@/content/student-privacy-policy";
+import { createReferral, getCurrentAffiliate } from "@/lib/affiliate-tracking";
 
 const Signup = () => {
   const [email, setEmail] = useState("");
@@ -96,7 +97,8 @@ const Signup = () => {
         ...studentData,
       } : undefined;
       
-      const { error, needsConfirmation } = await signUp(email, password, selectedRole, referralCode, studentData, instructorData, locationOwnerData);
+      const result = await signUp(email, password, selectedRole, referralCode, studentData, instructorData, locationOwnerData);
+      const { error, needsConfirmation, data: signupData } = result as { error: any; needsConfirmation?: boolean; data?: any };
       if (error) {
         toast({
           title: "Error",
@@ -104,6 +106,19 @@ const Signup = () => {
           variant: "destructive",
         });
       } else {
+        // Create affiliate referral if user was referred via affiliate link
+        // Note: This happens after email confirmation, but we track the cookie now
+        const affiliateData = getCurrentAffiliate();
+        if (affiliateData && signupData?.user?.id) {
+          try {
+            const referralType = selectedRole === 'instructor' ? 'organizer' : selectedRole === 'location_owner' ? 'venue' : 'student';
+            await createReferral(referralType, signupData.user.id);
+          } catch (affiliateError) {
+            console.error('Error creating affiliate referral:', affiliateError);
+            // Don't block signup if affiliate tracking fails
+          }
+        }
+
         toast({
           title: "Account Created",
           description: "Please check your email and click the confirmation link to verify your account before signing in.",

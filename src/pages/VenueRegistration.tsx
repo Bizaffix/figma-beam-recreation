@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { ArrowLeft, Upload, Image as ImageIcon, MapPin, Plus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useDropzone } from "react-dropzone";
+import { createReferral, getCurrentAffiliate } from "@/lib/affiliate-tracking";
 
 interface VenueData {
   title: string;
@@ -269,6 +270,21 @@ const VenueRegistration = () => {
       }
 
       if (result.error) throw result.error;
+
+      // Create affiliate referral if venue was published and user was referred
+      if (publish && result.data && result.data.length > 0) {
+        const venueId = result.data[0].id;
+        const affiliateData = getCurrentAffiliate();
+        if (affiliateData) {
+          try {
+            await createReferral('venue', user.id, venueId);
+            // Note: Conversion will happen when venue is verified/activated by admin
+          } catch (affiliateError) {
+            console.error('Error creating affiliate referral:', affiliateError);
+            // Don't block venue creation if affiliate tracking fails
+          }
+        }
+      }
 
       toast({
         title: publish ? "Venue Published!" : "Venue Saved!",
