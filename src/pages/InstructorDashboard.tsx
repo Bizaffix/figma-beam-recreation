@@ -11,7 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight, Share2, CheckCircle2, MessageSquare, Users } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, Copy, ArrowRight, Share2, CheckCircle2, MessageSquare, Users, DollarSign, BookOpen, TrendingUp, FileText } from "lucide-react";
+import { StatCard } from "@/components/StatCard";
+import { PayoutCard } from "@/components/PayoutCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -1664,113 +1666,101 @@ const InstructorDashboard = () => {
       {/* Stats - Only show when not editing */}
       {editingId === null && (
         <div className="px-6 -mt-4 mb-6">
-          {/* Row 1: Total Revenue, Completed Retreats, Students */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <Card>
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-card-foreground">${totalRevenue.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground">Total Revenue</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-card-foreground">{completedRetreats}</p>
-                <p className="text-sm text-muted-foreground">Completed Retreats</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-card-foreground">{studentsServed}</p>
-                <p className="text-sm text-muted-foreground">Students Taught</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Row 2: Expected Revenue, Published Retreats, Booked Seats */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <Card>
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-card-foreground">${expectedRevenue.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground">Expected Revenue</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-card-foreground">{publishedCount}</p>
-                <p className="text-sm text-muted-foreground">Published Retreats</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <p className="text-2xl font-bold text-card-foreground">{bookedSeats}</p>
-                <p className="text-sm text-muted-foreground">Booked Seats</p>
-              </CardContent>
-            </Card>
+          {/* Stats Grid - Responsive: 1 col mobile, 2 col tablet, 3 col desktop */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+            <StatCard
+              icon={DollarSign}
+              value={`$${totalRevenue.toLocaleString()}`}
+              label="Total Revenue"
+              variant="revenue"
+            />
+            <StatCard
+              icon={CheckCircle2}
+              value={completedRetreats}
+              label="Completed Retreats"
+              variant="default"
+            />
+            <StatCard
+              icon={Users}
+              value={studentsServed}
+              label="Students Taught"
+              variant="students"
+            />
+            <StatCard
+              icon={TrendingUp}
+              value={`$${expectedRevenue.toLocaleString()}`}
+              label="Expected Revenue"
+              variant="revenue"
+            />
+            <StatCard
+              icon={BookOpen}
+              value={publishedCount}
+              label="Published Retreats"
+              variant="default"
+            />
+            <StatCard
+              icon={CalendarIcon}
+              value={bookedSeats}
+              label="Booked Seats"
+              variant="bookings"
+            />
           </div>
 
           {/* Payout Statement */}
           {totalRevenue > 0 && (
-            <Card className="mb-4">
-              <CardContent className="p-4 sm:p-6">
-                <h3 className="text-lg font-semibold text-card-foreground mb-4">Payout Statement</h3>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm sm:text-base text-muted-foreground">
-                    <span>Total Revenue</span>
-                    <span>${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm sm:text-base text-muted-foreground">
-                    <span>Service Fee</span>
-                    <span>-${(totalRevenue * 0.1229).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="border-t border-border pt-2 mt-2">
-                    <div className="flex items-center justify-between text-base sm:text-lg font-semibold text-card-foreground">
-                      <span>Your Payout</span>
-                      <span className="text-primary">${(totalRevenue * (1 - 0.1229)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <PayoutCard
+              totalRevenue={totalRevenue}
+              serviceFee={totalRevenue * 0.1229}
+              payout={totalRevenue * (1 - 0.1229)}
+              className="mb-6"
+            />
           )}
 
           {/* Retreat Draft (Left) and Instructor Link (Right) */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Retreat Draft - Left Side */}
-            <Card className="h-full">
-              <CardContent className="p-4 text-center h-full flex flex-col justify-center">
-                <p className="text-2xl font-bold text-card-foreground">{draftCount}</p>
-                <p className="text-sm text-muted-foreground">Retreat Drafts</p>
-              </CardContent>
-            </Card>
+            <StatCard
+              icon={FileText}
+              value={draftCount}
+              label="Retreat Drafts"
+              variant="default"
+            />
 
             {/* Share Instructor Link - Right Side */}
-            <Card className="h-full">
-              <CardContent className="p-4 h-full flex flex-col justify-center">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-card-foreground">Share the Link</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-sm font-semibold text-card-foreground">{invitesCount}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="p-2 h-auto"
-                      onClick={() => {
-                        const instructorLink = `${window.location.origin}/login?ref=${user?.id}`;
-                        navigator.clipboard.writeText(instructorLink);
-                        toast({
-                          title: "Link Copied!",
-                          description: "Instructor referral link copied to clipboard.",
-                        });
-                      }}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
+            <div className="bg-white rounded-[18px] p-6 shadow-[0_1px_3px_0_rgb(0_0_0_/_0.05),0_1px_2px_-1px_rgb(0_0_0_/_0.05)] transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-[0_4px_6px_-1px_rgb(0_0_0_/_0.1),0_2px_4px_-2px_rgb(0_0_0_/_0.1)]">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg border border-[#459394]/20" style={{ color: "#459394" }}>
+                    <Share2 className="w-4 h-4" strokeWidth={2} />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm tracking-wide" style={{ color: "#459394", letterSpacing: "0.025em" }}>
+                  Share the Link
+                </p>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-[36px] font-bold leading-none" style={{ color: "#0F172A" }}>
+                    {invitesCount}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="p-2 h-auto"
+                    onClick={() => {
+                      const instructorLink = `${window.location.origin}/login?ref=${user?.id}`;
+                      navigator.clipboard.writeText(instructorLink);
+                      toast({
+                        title: "Link Copied!",
+                        description: "Instructor referral link copied to clipboard.",
+                      });
+                    }}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

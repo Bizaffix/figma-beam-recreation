@@ -34,6 +34,7 @@ import {
   DollarSign,
   CalendarDays
 } from "lucide-react";
+import { StatCard } from "@/components/StatCard";
 import { format, isWithinInterval, parseISO } from "date-fns";
 
 interface Property {
@@ -320,66 +321,37 @@ const LocationOwnerDashboard = () => {
           </div>
 
           {/* Stats Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Total Views</p>
-                    <p className="text-2xl font-bold text-foreground">{stats.totalViews.toLocaleString()}</p>
-                  </div>
-                  <Eye className="h-8 w-8 text-blue-600" />
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Total Saves</p>
-                    <p className="text-2xl font-bold text-foreground">{stats.totalSaves.toLocaleString()}</p>
-                  </div>
-                  <Heart className="h-8 w-8 text-red-600" />
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Inquiries</p>
-                    <p className="text-2xl font-bold text-foreground">{stats.totalInquiries.toLocaleString()}</p>
-                  </div>
-                  <MessageSquare className="h-8 w-8 text-green-600" />
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Published</p>
-                    <p className="text-2xl font-bold text-foreground">{stats.publishedProperties}</p>
-                  </div>
-                  <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Pending Requests</p>
-                    <p className="text-2xl font-bold text-foreground">{stats.pendingRequests}</p>
-                  </div>
-                  <Clock className="h-8 w-8 text-orange-600" />
-                </div>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <StatCard
+              icon={Eye}
+              value={stats.totalViews.toLocaleString()}
+              label="Total Views"
+              variant="default"
+            />
+            <StatCard
+              icon={Heart}
+              value={stats.totalSaves.toLocaleString()}
+              label="Total Saves"
+              variant="default"
+            />
+            <StatCard
+              icon={MessageSquare}
+              value={stats.totalInquiries.toLocaleString()}
+              label="Inquiries"
+              variant="default"
+            />
+            <StatCard
+              icon={CheckCircle2}
+              value={stats.publishedProperties}
+              label="Published"
+              variant="default"
+            />
+            <StatCard
+              icon={Clock}
+              value={stats.pendingRequests}
+              label="Pending Requests"
+              variant="default"
+            />
           </div>
 
           {/* Venue Feed and Calendar View */}

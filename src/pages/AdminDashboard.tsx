@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar } from "lucide-react";
+import { StatCard } from "@/components/StatCard";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -985,96 +986,63 @@ const AdminDashboard = () => {
 
       {/* Stats */}
       <div className="px-4 sm:px-6 -mt-4 mb-6">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4 sm:p-5 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <DollarSign className="w-5 h-5 text-muted-foreground mr-2" />
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1">
-                ${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Total Revenue</p>
-            </CardContent>
-          </Card>
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4 sm:p-5 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <BookOpen className="w-5 h-5 text-muted-foreground mr-2" />
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1">{totalBookings}</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Total Bookings</p>
-            </CardContent>
-          </Card>
-          <Card 
-            className="group cursor-pointer hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 dark:hover:from-purple-950/20 dark:hover:to-pink-950/20 hover:border-purple-200 dark:hover:border-purple-800 hover:shadow-lg transition-all duration-300 active:scale-[0.98]"
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+          <StatCard
+            icon={DollarSign}
+            value={`$${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            label="Total Revenue"
+            variant="revenue"
+          />
+          <StatCard
+            icon={BookOpen}
+            value={totalBookings}
+            label="Total Bookings"
+            variant="bookings"
+          />
+          <StatCard
+            icon={GraduationCap}
+            value={totalInstructors}
+            label="Organizers"
+            variant="default"
             onClick={handleInstructorsCardClick}
-          >
-            <CardContent className="p-4 sm:p-5 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <GraduationCap className="w-5 h-5 text-muted-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-300 mr-2" />
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors duration-300">{totalInstructors}</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">organizers</p>
-              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
-            </CardContent>
-          </Card>
-          <Card 
-            className="group cursor-pointer hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 dark:hover:from-purple-950/20 dark:hover:to-pink-950/20 hover:border-purple-200 dark:hover:border-purple-800 hover:shadow-lg transition-all duration-300 active:scale-[0.98]"
+            tooltip="Tap to view"
+          />
+          <StatCard
+            icon={Users}
+            value={totalStudents}
+            label="Attendees"
+            variant="students"
             onClick={handleStudentsCardClick}
-          >
-            <CardContent className="p-4 sm:p-5 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <Users className="w-5 h-5 text-muted-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-300 mr-2" />
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors duration-300">{totalStudents}</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">attendees</p>
-              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
-            </CardContent>
-          </Card>
-          <Card 
-            className="group cursor-pointer hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 dark:hover:from-purple-950/20 dark:hover:to-pink-950/20 hover:border-purple-200 dark:hover:border-purple-800 hover:shadow-lg transition-all duration-300 active:scale-[0.98]"
+            tooltip="Tap to view"
+          />
+          <StatCard
+            icon={MapPin}
+            value={totalLocationOwners}
+            label="Venues"
+            variant="default"
             onClick={handleLocationOwnersCardClick}
-          >
-            <CardContent className="p-4 sm:p-5 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <MapPin className="w-5 h-5 text-muted-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-300 mr-2" />
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors duration-300">{totalLocationOwners}</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Venues</p>
-              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
-            </CardContent>
-          </Card>
+            tooltip="Tap to view"
+          />
         </div>
 
         {/* Draft Events and Venues Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
-          <Card 
-            className="group cursor-pointer hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50 dark:hover:from-blue-950/20 dark:hover:to-indigo-950/20 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-lg transition-all duration-300 active:scale-[0.98]"
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <StatCard
+            icon={Calendar}
+            value={draftEvents.length}
+            label="Draft Events"
+            variant="default"
             onClick={() => setDraftEventsDialogOpen(true)}
-          >
-            <CardContent className="p-4 sm:p-5 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <Calendar className="w-5 h-5 text-muted-foreground group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300 mr-2" />
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors duration-300">{draftEvents.length}</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Draft Events</p>
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
-            </CardContent>
-          </Card>
-          <Card 
-            className="group cursor-pointer hover:bg-gradient-to-br hover:from-green-50 hover:to-emerald-50 dark:hover:from-green-950/20 dark:hover:to-emerald-950/20 hover:border-green-200 dark:hover:border-green-800 hover:shadow-lg transition-all duration-300 active:scale-[0.98]"
+            tooltip="Tap to view"
+          />
+          <StatCard
+            icon={MapPin}
+            value={draftVenues.length}
+            label="Draft Venues"
+            variant="default"
             onClick={() => setDraftVenuesDialogOpen(true)}
-          >
-            <CardContent className="p-4 sm:p-5 text-center">
-              <div className="flex items-center justify-center mb-2">
-                <MapPin className="w-5 h-5 text-muted-foreground group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors duration-300 mr-2" />
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-green-700 dark:group-hover:text-green-300 transition-colors duration-300">{draftVenues.length}</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Draft Venues</p>
-              <p className="text-xs text-green-600 dark:text-green-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
-            </CardContent>
-          </Card>
+            tooltip="Tap to view"
+          />
         </div>
 
         {/* Recent Bookings */}

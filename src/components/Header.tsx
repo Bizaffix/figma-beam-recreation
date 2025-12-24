@@ -57,17 +57,12 @@ export const Header = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
-            <Link to="/" className="flex items-center space-x-2">
-              <div className="flex items-center space-x-2">
-                <img 
-                  src="/Final quilt logo-01.png" 
-                  alt="BookMyQuiltRetreat Logo" 
-                  className="w-12 h-12 rounded-lg"
-                />
-                <span className="font-bold text-xl text-foreground hidden sm:inline-block">
-                  BookMyQuiltRetreat
-                </span>
-              </div>
+            <Link to="/" className="flex items-center">
+              <img 
+                src="/Final quilt logo-01.png" 
+                alt="BookMyQuiltRetreat Logo" 
+                className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-lg object-contain"
+              />
             </Link>
 
             {/* Desktop Navigation */}
@@ -219,15 +214,14 @@ export const Header = () => {
               <div className="flex items-center justify-between p-4 border-b">
                 <Link 
                   to="/" 
-                  className="flex items-center space-x-2"
+                  className="flex items-center"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   <img 
                     src="/Final quilt logo-01.png" 
                     alt="BookMyQuiltRetreat Logo" 
-                    className="w-12 h-12 rounded-lg"
+                    className="w-20 h-20 rounded-lg object-contain"
                   />
-                  <span className="font-bold text-lg text-foreground">BookMyQuiltRetreat</span>
                 </Link>
                 <Button
                   variant="ghost"

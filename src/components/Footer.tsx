@@ -10,13 +10,12 @@ export const Footer = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
           {/* Company Info */}
           <div className="space-y-3 sm:space-y-4">
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center">
               <img 
                 src="/Final quilt logo-01.png" 
                 alt="BookMyQuiltRetreat Logo" 
-                className="w-12 h-12 rounded-lg"
+                className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-lg object-contain"
               />
-              <span className="font-bold text-base sm:text-lg text-foreground">BookMyQuiltRetreat</span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
               Connecting passionate quilters with inspiring retreats and workshops. Your next quilting adventure starts here.
