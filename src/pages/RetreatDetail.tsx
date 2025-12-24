@@ -114,10 +114,14 @@ const RetreatDetail = () => {
         }
         // Admins can see all retreats (published or not) - no additional filter needed
 
-        const { data, error } = await query.single();
+        const { data, error } = await query.maybeSingle();
 
         if (error) {
-          console.error('Error fetching retreat:', error);
+          // Only log if it's not a "no rows" error
+          if (error.code !== 'PGRST116' && error.code !== '406') {
+            console.error('Error fetching retreat:', error);
+          }
+          setRetreat(null);
         } else if (data) {
           // Transform data to match component expectations - include all fields
           const transformedRetreat = {
@@ -157,9 +161,13 @@ const RetreatDetail = () => {
             },
           };
           setRetreat(transformedRetreat);
+        } else {
+          // No retreat found
+          setRetreat(null);
         }
       } catch (error) {
         console.error('Unexpected error:', error);
+        setRetreat(null);
       } finally {
         setLoading(false);
       }
@@ -360,11 +368,12 @@ const RetreatDetail = () => {
       {!user && <Header />}
       
       {/* Header Image */}
-      <div className="relative">
+      <div className="relative bg-transparent">
         <img
           src={retreat.image || "/placeholder.svg"}
           alt={retreat.title}
-          className="w-full h-80 object-cover"
+          className="w-full h-auto object-contain"
+          style={{ backgroundColor: 'transparent' }}
         />
         <Button
           variant="secondary"
