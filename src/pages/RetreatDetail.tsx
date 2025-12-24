@@ -91,6 +91,7 @@ const RetreatDetail = () => {
           // Instructors can see their own retreats (published or not)
           query = query.eq('instructor_id', user.id);
         }
+        // Admins can see all retreats (published or not) - no additional filter needed
 
         const { data, error } = await query.single();
 
@@ -300,6 +301,7 @@ const RetreatDetail = () => {
   }
 
   // Public users and students can only view published retreats
+  // Admins can view drafts (view-only)
   if ((role === 'student' || !user) && !retreat.published) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -311,6 +313,9 @@ const RetreatDetail = () => {
       </div>
     );
   }
+
+  // Show draft badge for admins viewing drafts
+  const isDraftView = role === 'admin' && !retreat.published;
 
   return (
     <div className="min-h-screen bg-gradient-hero pb-20">
@@ -353,9 +358,16 @@ const RetreatDetail = () => {
           <CardContent className="p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
               <div className="flex-1">
-                <Badge className="mb-3 bg-amber-100 text-amber-700 hover:bg-amber-100">
-                  {retreat.level}
-                </Badge>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+                    {retreat.level}
+                  </Badge>
+                  {isDraftView && (
+                    <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">
+                      DRAFT - VIEW ONLY
+                    </Badge>
+                  )}
+                </div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-card-foreground mb-2">
                   {retreat.title}
                 </h1>
@@ -541,6 +553,19 @@ const RetreatDetail = () => {
                   }
                 </Button>
               ) : null}
+            </div>
+          </div>
+        )}
+        
+        {/* View-Only Notice for Admin viewing drafts */}
+        {isDraftView && (
+          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-card border-t border-border pb-safe">
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-4 text-center">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  View-Only Mode: This is a draft event. You cannot make changes or bookings.
+                </p>
+              </div>
             </div>
           </div>
         )}

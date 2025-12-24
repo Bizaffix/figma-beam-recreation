@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar } from "lucide-react";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -54,6 +55,24 @@ interface EmailSection {
   images: string[];
 }
 
+interface DraftEvent {
+  id: number;
+  title: string;
+  instructor_id: string;
+  created_at: string;
+  updated_at: string;
+  published: boolean;
+}
+
+interface DraftVenue {
+  id: string;
+  property_name: string;
+  owner_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 const AdminDashboard = () => {
   const { role, user, signOut } = useAuth();
   const { toast } = useToast();
@@ -95,6 +114,14 @@ const AdminDashboard = () => {
   const [loadTemplateDialogOpen, setLoadTemplateDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [draftEvents, setDraftEvents] = useState<DraftEvent[]>([]);
+  const [draftVenues, setDraftVenues] = useState<DraftVenue[]>([]);
+  const [loadingDrafts, setLoadingDrafts] = useState(false);
+  const [draftEventsDialogOpen, setDraftEventsDialogOpen] = useState(false);
+  const [draftVenuesDialogOpen, setDraftVenuesDialogOpen] = useState(false);
+  const [viewVenueDialogOpen, setViewVenueDialogOpen] = useState(false);
+  const [selectedVenue, setSelectedVenue] = useState<any>(null);
+  const [loadingVenueDetails, setLoadingVenueDetails] = useState(false);
 
   useEffect(() => {
     if (role !== 'admin' || !user) return;
@@ -162,6 +189,28 @@ const AdminDashboard = () => {
 
       if (!locationOwnersError && locationOwnersData) {
         setTotalLocationOwners(locationOwnersData.length);
+      }
+
+      // Fetch draft events (retreats with published=false)
+      const { data: draftEventsData, error: draftEventsError } = await supabase
+        .from('retreats')
+        .select('id, title, instructor_id, created_at, updated_at, published')
+        .eq('published', false)
+        .order('updated_at', { ascending: false });
+
+      if (!draftEventsError && draftEventsData) {
+        setDraftEvents(draftEventsData || []);
+      }
+
+      // Fetch draft venues (properties with status='draft')
+      const { data: draftVenuesData, error: draftVenuesError } = await supabase
+        .from('properties')
+        .select('id, property_name, owner_id, status, created_at, updated_at')
+        .eq('status', 'draft')
+        .order('updated_at', { ascending: false });
+
+      if (!draftVenuesError && draftVenuesData) {
+        setDraftVenues(draftVenuesData || []);
       }
 
       // Enrich bookings with retreat info
@@ -994,6 +1043,36 @@ const AdminDashboard = () => {
               <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors duration-300">{totalLocationOwners}</p>
               <p className="text-xs sm:text-sm text-muted-foreground">Venues</p>
               <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Draft Events and Venues Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
+          <Card 
+            className="group cursor-pointer hover:bg-gradient-to-br hover:from-blue-50 hover:to-indigo-50 dark:hover:from-blue-950/20 dark:hover:to-indigo-950/20 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-lg transition-all duration-300 active:scale-[0.98]"
+            onClick={() => setDraftEventsDialogOpen(true)}
+          >
+            <CardContent className="p-4 sm:p-5 text-center">
+              <div className="flex items-center justify-center mb-2">
+                <Calendar className="w-5 h-5 text-muted-foreground group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300 mr-2" />
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors duration-300">{draftEvents.length}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Draft Events</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
+            </CardContent>
+          </Card>
+          <Card 
+            className="group cursor-pointer hover:bg-gradient-to-br hover:from-green-50 hover:to-emerald-50 dark:hover:from-green-950/20 dark:hover:to-emerald-950/20 hover:border-green-200 dark:hover:border-green-800 hover:shadow-lg transition-all duration-300 active:scale-[0.98]"
+            onClick={() => setDraftVenuesDialogOpen(true)}
+          >
+            <CardContent className="p-4 sm:p-5 text-center">
+              <div className="flex items-center justify-center mb-2">
+                <MapPin className="w-5 h-5 text-muted-foreground group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors duration-300 mr-2" />
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-card-foreground mb-1 group-hover:text-green-700 dark:group-hover:text-green-300 transition-colors duration-300">{draftVenues.length}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Draft Venues</p>
+              <p className="text-xs text-green-600 dark:text-green-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-medium">Tap to view</p>
             </CardContent>
           </Card>
         </div>
@@ -1889,6 +1968,267 @@ const AdminDashboard = () => {
           </div>
           <div className="flex justify-end pt-4 border-t">
             <Button variant="outline" onClick={() => setLoadTemplateDialogOpen(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Draft Events Dialog */}
+      <Dialog open={draftEventsDialogOpen} onOpenChange={setDraftEventsDialogOpen}>
+        <DialogContent className="max-w-4xl h-[90vh] sm:h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              Draft Events ({draftEvents.length})
+            </DialogTitle>
+            <DialogDescription>
+              View-only access to draft events. Click on an event to view its details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {loadingDrafts ? (
+              <div className="flex flex-col items-center justify-center p-8 space-y-3">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Loading draft events...</p>
+              </div>
+            ) : draftEvents.length === 0 ? (
+              <div className="text-center p-8">
+                <Calendar className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                <p className="text-muted-foreground">No draft events found</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {draftEvents.map((event) => (
+                  <Card key={event.id} className="border hover:shadow-md transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium truncate">{event.title}</h4>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Event ID: {event.id}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Last updated: {new Date(event.updated_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            navigate(`/retreat/${event.id}`);
+                            setDraftEventsDialogOpen(false);
+                          }}
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          View
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Draft Venues Dialog */}
+      <Dialog open={draftVenuesDialogOpen} onOpenChange={setDraftVenuesDialogOpen}>
+        <DialogContent className="max-w-4xl h-[90vh] sm:h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="w-5 h-5" />
+              Draft Venues ({draftVenues.length})
+            </DialogTitle>
+            <DialogDescription>
+              View-only access to draft venues. Click on a venue to view its details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {loadingDrafts ? (
+              <div className="flex flex-col items-center justify-center p-8 space-y-3">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Loading draft venues...</p>
+              </div>
+            ) : draftVenues.length === 0 ? (
+              <div className="text-center p-8">
+                <MapPin className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                <p className="text-muted-foreground">No draft venues found</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {draftVenues.map((venue) => (
+                  <Card key={venue.id} className="border hover:shadow-md transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium truncate">{venue.property_name}</h4>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Venue ID: {venue.id}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Last updated: {new Date(venue.updated_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            setLoadingVenueDetails(true);
+                            try {
+                              const { data, error } = await supabase
+                                .from('properties')
+                                .select('*')
+                                .eq('id', venue.id)
+                                .single();
+                              
+                              if (error) throw error;
+                              
+                              setSelectedVenue(data);
+                              setViewVenueDialogOpen(true);
+                            } catch (error) {
+                              console.error('Error fetching venue details:', error);
+                              toast({
+                                title: "Error",
+                                description: "Failed to load venue details",
+                                variant: "destructive",
+                              });
+                            } finally {
+                              setLoadingVenueDetails(false);
+                            }
+                          }}
+                          disabled={loadingVenueDetails}
+                        >
+                          {loadingVenueDetails ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Eye className="w-4 h-4 mr-2" />
+                          )}
+                          View
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Venue Details Dialog */}
+      <Dialog open={viewVenueDialogOpen} onOpenChange={setViewVenueDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="w-5 h-5" />
+              {selectedVenue?.property_name || 'Venue Details'}
+            </DialogTitle>
+            <DialogDescription>
+              View-only access to draft venue details
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {selectedVenue ? (
+              <div className="space-y-4">
+                {/* Basic Info */}
+                <div>
+                  <h3 className="font-semibold mb-2">Basic Information</h3>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="font-medium">Name:</span> {selectedVenue.property_name}
+                    </div>
+                    <div>
+                      <span className="font-medium">Location:</span> {selectedVenue.location || 'N/A'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Status:</span> 
+                      <Badge className="ml-2">{selectedVenue.status}</Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description */}
+                {selectedVenue.description && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Description</h3>
+                    <p className="text-sm text-muted-foreground">{selectedVenue.description}</p>
+                  </div>
+                )}
+
+                {/* Photos */}
+                {selectedVenue.photos && selectedVenue.photos.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Photos ({selectedVenue.photos.length})</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {selectedVenue.photos.map((photo: string, index: number) => (
+                        <div key={index} className="relative aspect-square rounded-lg overflow-hidden border">
+                          <img 
+                            src={photo} 
+                            alt={`Venue photo ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Capacity */}
+                <div>
+                  <h3 className="font-semibold mb-2">Capacity</h3>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="font-medium">Sleeps:</span> {selectedVenue.sleeps || 'N/A'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Max Quilters:</span> {selectedVenue.max_quilters || 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sewing Room Details */}
+                {selectedVenue.dedicated_sewing_room && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Sewing Room</h3>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="font-medium">Dedicated Sewing Room:</span> Yes
+                      </div>
+                      {selectedVenue.max_sewing_stations && (
+                        <div>
+                          <span className="font-medium">Max Sewing Stations:</span> {selectedVenue.max_sewing_stations}
+                        </div>
+                      )}
+                      {selectedVenue.cutting_stations && (
+                        <div>
+                          <span className="font-medium">Cutting Stations:</span> {selectedVenue.cutting_stations}
+                        </div>
+                      )}
+                      {selectedVenue.pressing_stations && (
+                        <div>
+                          <span className="font-medium">Pressing Stations:</span> {selectedVenue.pressing_stations}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Dates */}
+                <div className="text-xs text-muted-foreground pt-2 border-t">
+                  <div>Created: {new Date(selectedVenue.created_at).toLocaleString()}</div>
+                  <div>Last Updated: {new Date(selectedVenue.updated_at).toLocaleString()}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 p-6 border-t shrink-0">
+            <Button variant="outline" onClick={() => setViewVenueDialogOpen(false)}>
               Close
             </Button>
           </div>
