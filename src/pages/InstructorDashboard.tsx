@@ -1735,6 +1735,7 @@ const InstructorDashboard = () => {
                   {/* Note: Form creation moved to /instructor/retreats/new - use the + button in bottom nav */}
 
                   {/* All Retreats (Published and Drafts) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {allRetreats.map((retreat) => {
 
               return (
@@ -1818,6 +1819,7 @@ const InstructorDashboard = () => {
                 </Card>
               );
             })}
+                  </div>
 
             {allRetreats.length === 0 && editingId === null && (
               <div className="text-center py-8">

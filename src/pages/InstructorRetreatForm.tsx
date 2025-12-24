@@ -2992,7 +2992,7 @@ const InstructorRetreatForm = () => {
                     </CardContent>
                   </Card>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {draftRetreats.map((retreat) => (
                       <Card key={retreat.id} className="overflow-hidden">
                         <div className="relative">

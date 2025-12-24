@@ -143,31 +143,33 @@ const InstructorBrowse = () => {
       </div>
 
       {/* Retreat Cards */}
-      <div className="px-6 space-y-6 max-w-4xl mx-auto">
+      <div className="px-6 max-w-7xl mx-auto">
         {loading ? (
           <div className="text-center py-8">
             <p className="text-muted-foreground text-lg">Loading retreats...</p>
           </div>
         ) : filteredRetreats.length > 0 ? (
-          filteredRetreats.map((retreat) => (
-            <RetreatCard
-              key={retreat.id}
-              id={retreat.id}
-              image={retreat.image || "/placeholder.svg"}
-              level={retreat.level}
-              title={retreat.title}
-              instructor={{
-                name: retreat.instructor.name,
-                avatar: retreat.instructor.avatar,
-              }}
-              location={retreat.location}
-              date={retreat.date}
-              duration={retreat.duration}
-              spotsAvailable={retreat.spots_available}
-              totalSpots={retreat.total_spots}
-              price={retreat.price}
-            />
-          ))
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredRetreats.map((retreat) => (
+              <RetreatCard
+                key={retreat.id}
+                id={retreat.id}
+                image={retreat.image || "/placeholder.svg"}
+                level={retreat.level}
+                title={retreat.title}
+                instructor={{
+                  name: retreat.instructor.name,
+                  avatar: retreat.instructor.avatar,
+                }}
+                location={retreat.location}
+                date={retreat.date}
+                duration={retreat.duration}
+                spotsAvailable={retreat.spots_available}
+                totalSpots={retreat.total_spots}
+                price={retreat.price}
+              />
+            ))}
+          </div>
         ) : (
           <div className="text-center py-8">
             <p className="text-muted-foreground text-lg">

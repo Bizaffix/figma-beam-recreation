@@ -356,7 +356,7 @@ const Index = () => {
       </div>
 
       {/* Retreat Cards */}
-      <div className="px-6 space-y-6 max-w-4xl mx-auto">
+      <div className="px-6 max-w-7xl mx-auto">
         {loading ? (
           <div className="text-center py-16">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
@@ -366,25 +366,27 @@ const Index = () => {
             <p className="text-muted-foreground text-sm mt-2">Please wait a moment</p>
           </div>
         ) : filteredAndSortedRetreats.length > 0 ? (
-          filteredAndSortedRetreats.map((retreat) => (
-            <RetreatCard
-              key={retreat.id}
-              id={retreat.id}
-              image={retreat.image || "/placeholder.svg"}
-              level={retreat.level}
-              title={retreat.title}
-              instructor={{
-                name: retreat.instructor.name,
-                avatar: retreat.instructor.avatar,
-              }}
-              location={retreat.location}
-              date={retreat.date}
-              duration={retreat.duration}
-              spotsAvailable={retreat.spots_available}
-              totalSpots={retreat.total_spots}
-              price={retreat.price}
-            />
-          ))
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredAndSortedRetreats.map((retreat) => (
+              <RetreatCard
+                key={retreat.id}
+                id={retreat.id}
+                image={retreat.image || "/placeholder.svg"}
+                level={retreat.level}
+                title={retreat.title}
+                instructor={{
+                  name: retreat.instructor.name,
+                  avatar: retreat.instructor.avatar,
+                }}
+                location={retreat.location}
+                date={retreat.date}
+                duration={retreat.duration}
+                spotsAvailable={retreat.spots_available}
+                totalSpots={retreat.total_spots}
+                price={retreat.price}
+              />
+            ))}
+          </div>
         ) : (
           <div className="text-center py-16 px-4">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-6">
