@@ -17,59 +17,45 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    /* Logo Colors - Book My Quilt Retreat - Exact Brand Palette */
-    /* Dark Teal: #387C7F, Teal: #459394, Golden Yellow: #FAB130, Light Coral: #FD8865, Coral: #EF684B */
-    
-    /* Primary Brand Colors */
-    --color-dark-teal: 182 39% 36%; /* #387C7F - Dark Teal */
-    --color-teal: 181 36% 43%; /* #459394 - Teal */
-    --color-golden-yellow: 38 96% 58%; /* #FAB130 - Golden Yellow */
-    --color-light-coral: 16 97% 69%; /* #FD8865 - Light Coral */
-    --color-coral: 12 84% 62%; /* #EF684B - Coral */
-    
-    --primary: 182 39% 36%; /* Dark Teal #387C7F - Main brand color */
+    --primary: 250 70% 60%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 181 20% 96%; /* Soft teal tint for subtle backgrounds */
-    --secondary-foreground: 182 50% 20%; /* Darker teal for better contrast */
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 182 15% 97%; /* Very light teal for subtle areas */
-    --muted-foreground: 182 25% 45%; /* Medium teal for readable text */
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
 
-    --accent: 12 84% 62%; /* Coral #EF684B - Vibrant accent */
+    --accent: 262 83% 58%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 58%; /* Refined red for errors */
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 182 20% 88%; /* Soft teal border */
-    --input: 182 20% 88%; /* Matching input borders */
-    --ring: 182 45% 40%; /* Slightly brighter teal for focus rings */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 250 70% 60%;
 
-    --radius: 0.75rem;
-    
-    /* Enhanced gradients using exact logo colors */
-    --gradient-primary: linear-gradient(135deg, hsl(182, 39%, 36%) 0%, hsl(181, 36%, 43%) 50%, hsl(12, 84%, 62%) 100%);
-    --gradient-hero: linear-gradient(180deg, hsl(182, 39%, 36%) 0%, hsl(181, 36%, 43%) 30%, hsl(12, 84%, 62%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(12, 84%, 62%) 0%, hsl(16, 97%, 69%) 100%);
-    --gradient-warm: linear-gradient(135deg, hsl(38, 96%, 58%) 0%, hsl(16, 97%, 69%) 100%);
-    --gradient-teal: linear-gradient(135deg, hsl(182, 39%, 36%) 0%, hsl(181, 36%, 43%) 100%);
+    --radius: 1rem;
 
-    --sidebar-background: 0 0% 99%; /* Slightly off-white for depth */
+    --gradient-primary: linear-gradient(135deg, hsl(250, 70%, 60%), hsl(262, 83%, 58%));
+    --gradient-hero: linear-gradient(180deg, hsl(250, 70%, 60%) 0%, hsl(262, 83%, 58%) 100%);
 
-    --sidebar-foreground: 182 50% 20%; /* Rich dark teal for text */
+    --sidebar-background: 0 0% 98%;
 
-    --sidebar-primary: 182 39% 36%; /* Dark Teal #387C7F */
+    --sidebar-foreground: 240 5.3% 26.1%;
 
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: 240 5.9% 10%;
 
-    --sidebar-accent: 182 25% 94%; /* Very light teal for hover states */
+    --sidebar-primary-foreground: 0 0% 98%;
 
-    --sidebar-accent-foreground: 182 50% 20%;
+    --sidebar-accent: 240 4.8% 95.9%;
 
-    --sidebar-border: 182 20% 88%; /* Consistent with main borders */
+    --sidebar-accent-foreground: 240 5.9% 10%;
 
-    --sidebar-ring: 182 45% 40%; /* Matching focus ring */
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
@@ -82,40 +68,36 @@ All colors MUST be HSL.
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
 
-    /* Dark mode - using exact logo colors with adjusted brightness */
-    --primary: 181 36% 43%; /* Teal #459394 - Slightly brighter for dark mode visibility */
+    --primary: 250 70% 60%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 182 35% 22%; /* Darker teal for dark mode backgrounds */
-    --secondary-foreground: 182 20% 92%; /* Light text for contrast */
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 182 30% 18%; /* Dark muted background */
-    --muted-foreground: 182 15% 75%; /* Readable muted text */
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 12 88% 65%; /* Slightly brighter coral for dark mode */
-    --accent-foreground: 0 0% 100%;
+    --accent: 262 83% 58%;
+    --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 70% 55%; /* Adjusted red for dark mode */
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 182 25% 28%; /* Subtle borders in dark mode */
-    --input: 182 25% 28%;
-    --ring: 181 45% 48%; /* Brighter focus ring for dark mode */
-    
-    /* Enhanced gradients for dark mode using exact logo colors */
-    --gradient-primary: linear-gradient(135deg, hsl(181, 36%, 43%) 0%, hsl(181, 40%, 50%) 50%, hsl(12, 88%, 65%) 100%);
-    --gradient-hero: linear-gradient(180deg, hsl(181, 36%, 43%) 0%, hsl(181, 40%, 50%) 30%, hsl(12, 88%, 65%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(12, 88%, 65%) 0%, hsl(16, 97%, 72%) 100%);
-    --gradient-warm: linear-gradient(135deg, hsl(38, 96%, 58%) 0%, hsl(16, 97%, 72%) 100%);
-    --gradient-teal: linear-gradient(135deg, hsl(182, 39%, 36%) 0%, hsl(181, 36%, 43%) 100%);
-    --sidebar-background: 182 40% 12%; /* Dark teal background */
-    --sidebar-foreground: 182 20% 92%; /* Light text */
-    --sidebar-primary: 181 36% 43%; /* Teal #459394 for visibility */
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 250 70% 60%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(250, 70%, 60%), hsl(262, 83%, 58%));
+    --gradient-hero: linear-gradient(180deg, hsl(250, 70%, 60%) 0%, hsl(262, 83%, 58%) 100%);
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 182 35% 22%; /* Hover state */
-    --sidebar-accent-foreground: 182 20% 92%;
-    --sidebar-border: 182 25% 28%; /* Consistent borders */
-    --sidebar-ring: 181 45% 48%; /* Matching focus ring */
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
 
