@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, MapPin, Calendar, Users, Clock, Heart, MessageSquare } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, Users, Clock, Heart, MessageSquare, CreditCard } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Header } from "@/components/Header";
@@ -18,6 +18,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+interface ContentCard {
+  id: string;
+  title: string;
+  description: string;
+  images: string[];
+  videos: string[];
+  order: number;
+}
+
+interface ItineraryBlock {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  day?: string;
+  order?: number;
+}
 
 interface RetreatData {
   id: number;
@@ -48,6 +66,9 @@ interface RetreatData {
   discount_coupon?: string | null;
   price_variants?: { id: string; name: string; price: number; description?: string }[] | null;
   add_ons?: { id: string; name: string; price: number; description?: string; required?: boolean }[] | null;
+  content_cards?: ContentCard[] | null;
+  itinerary_blocks?: ItineraryBlock[] | null;
+  location_images?: string[] | null;
 }
 
 const RetreatDetail = () => {
@@ -98,7 +119,7 @@ const RetreatDetail = () => {
         if (error) {
           console.error('Error fetching retreat:', error);
         } else if (data) {
-          // Transform data to match component expectations
+          // Transform data to match component expectations - include all fields
           const transformedRetreat = {
             id: data.id,
             title: data.title,
@@ -115,6 +136,17 @@ const RetreatDetail = () => {
             schedule: data.schedule || [],
             published: data.published,
             instructor_id: data.instructor_id,
+            deposit_amount: data.deposit_amount,
+            deposit_refundable: data.deposit_refundable,
+            deposit_refund_days_before: data.deposit_refund_days_before,
+            payment_days_before_event: data.payment_days_before_event,
+            full_payment_non_refundable: data.full_payment_non_refundable,
+            discount_coupon: data.discount_coupon,
+            price_variants: data.price_variants,
+            add_ons: data.add_ons,
+            content_cards: data.content_cards,
+            itinerary_blocks: data.itinerary_blocks,
+            location_images: data.location_images,
             instructor: {
               name: data.instructor?.full_name || 'Instructor',
               avatar: data.instructor?.avatar_url || '',
@@ -188,15 +220,20 @@ const RetreatDetail = () => {
           .select('id')
           .eq('user_id', user.id)
           .eq('retreat_id', Number(id))
-          .single();
+          .maybeSingle(); // Use maybeSingle() instead of single() to handle no rows gracefully
 
-        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-          console.error('Error checking saved status:', error);
+        if (error) {
+          // Only log if it's not a "no rows" error
+          if (error.code !== 'PGRST116' && error.code !== '406') {
+            console.error('Error checking saved status:', error);
+          }
+          setIsSaved(false);
         } else {
           setIsSaved(!!data);
         }
       } catch (error) {
         console.error('Unexpected error checking saved status:', error);
+        setIsSaved(false);
       }
     };
 
@@ -467,34 +504,191 @@ const RetreatDetail = () => {
         </Card>
 
         {/* What's Included */}
-        <Card>
-          <CardContent className="p-4 sm:p-6">
-            <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">What's Included</h2>
-            <ul className="space-y-2">
-              {retreat.includes.map((item, idx) => (
-                <li key={idx} className="flex items-start gap-2 text-sm sm:text-base text-muted-foreground">
-                  <span className="text-primary mt-1">✓</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        {retreat.includes && retreat.includes.length > 0 && retreat.includes.some(item => item && item.trim()) && (
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">What's Included</h2>
+              <ul className="space-y-2">
+                {retreat.includes
+                  .filter(item => item && item.trim())
+                  .map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-sm sm:text-base text-muted-foreground">
+                      <span className="text-primary mt-1">✓</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Schedule */}
-        <Card>
-          <CardContent className="p-4 sm:p-6">
-            <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">Schedule</h2>
-            <div className="space-y-3">
-              {retreat.schedule.map((item, idx) => (
-                <div key={idx} className="pb-3 border-b border-border last:border-0 last:pb-0">
-                  <p className="font-semibold text-sm sm:text-base text-card-foreground mb-1">{item.day}</p>
-                  <p className="text-xs sm:text-sm text-muted-foreground">{item.activities}</p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        {retreat.schedule && retreat.schedule.length > 0 && retreat.schedule.some(item => (item.day && item.day.trim()) || (item.activities && item.activities.trim())) && (
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">Schedule</h2>
+              <div className="space-y-3">
+                {retreat.schedule
+                  .filter(item => (item.day && item.day.trim()) || (item.activities && item.activities.trim()))
+                  .map((item, idx) => (
+                    <div key={idx} className="pb-3 border-b border-border last:border-0 last:pb-0">
+                      {item.day && item.day.trim() && (
+                        <p className="font-semibold text-sm sm:text-base text-card-foreground mb-1">{item.day}</p>
+                      )}
+                      {item.activities && item.activities.trim() && (
+                        <p className="text-xs sm:text-sm text-muted-foreground">{item.activities}</p>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Itinerary Blocks */}
+        {retreat.itinerary_blocks && retreat.itinerary_blocks.length > 0 && retreat.itinerary_blocks.some(block => (block.day && block.day.trim()) || (block.title && block.title.trim()) || (block.description && block.description.trim())) && (
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">Itinerary</h2>
+              <div className="space-y-3">
+                {retreat.itinerary_blocks
+                  .filter(block => (block.day && block.day.trim()) || (block.title && block.title.trim()) || (block.description && block.description.trim()))
+                  .sort((a, b) => (a.order || 0) - (b.order || 0))
+                  .map((block) => (
+                    <div key={block.id} className="pb-3 border-b border-border last:border-0 last:pb-0">
+                      {(block.day && block.day.trim()) || (block.title && block.title.trim()) ? (
+                        <p className="font-semibold text-sm sm:text-base text-card-foreground mb-1">
+                          {block.day && block.day.trim() ? block.day : block.title}
+                        </p>
+                      ) : null}
+                      {block.description && block.description.trim() && (
+                        <p className="text-xs sm:text-sm text-muted-foreground">{block.description}</p>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Content Cards */}
+        {retreat.content_cards && retreat.content_cards.length > 0 && (
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-4">Event Details</h2>
+              <div className="space-y-6">
+                {retreat.content_cards
+                  .sort((a, b) => (a.order || 0) - (b.order || 0))
+                  .map((card) => (
+                    <div key={card.id} className="border rounded-lg p-4 sm:p-6 bg-card">
+                      <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3">{card.title}</h3>
+                      {card.description && (
+                        <p className="text-sm sm:text-base text-muted-foreground leading-relaxed mb-4">{card.description}</p>
+                      )}
+                      {/* Images */}
+                      {card.images && card.images.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                          {card.images.map((img, idx) => (
+                            <img
+                              key={idx}
+                              src={img}
+                              alt={`${card.title} ${idx + 1}`}
+                              className="w-full h-32 sm:h-40 object-cover rounded-md"
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {/* Videos */}
+                      {card.videos && card.videos.length > 0 && (
+                        <div className="space-y-3">
+                          {card.videos.map((video, idx) => (
+                            <div key={idx} className="relative w-full aspect-video bg-muted rounded-md overflow-hidden">
+                              <video
+                                src={video}
+                                controls
+                                className="w-full h-full object-contain"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Location Images */}
+        {retreat.location_images && retreat.location_images.length > 0 && (
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">Location Photos</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {retreat.location_images.map((img, idx) => (
+                  <img
+                    key={idx}
+                    src={img}
+                    alt={`Location ${idx + 1}`}
+                    className="w-full h-40 sm:h-48 object-cover rounded-md"
+                  />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Payment Terms */}
+        {(retreat.deposit_amount || retreat.payment_days_before_event !== null || retreat.deposit_refundable !== null) && (
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-4 flex items-center gap-2">
+                <CreditCard className="w-5 h-5" />
+                Payment Terms
+              </h2>
+              <div className="space-y-3 text-sm sm:text-base">
+                {retreat.deposit_amount && (
+                  <div className="flex items-center justify-between pb-2 border-b border-border">
+                    <span className="text-muted-foreground">Deposit Amount</span>
+                    <span className="font-medium text-card-foreground">${retreat.deposit_amount.toFixed(2)}</span>
+                  </div>
+                )}
+                {retreat.deposit_refundable !== null && (
+                  <div className="flex items-center justify-between pb-2 border-b border-border">
+                    <span className="text-muted-foreground">Deposit Refundable</span>
+                    <span className="font-medium text-card-foreground">
+                      {retreat.deposit_refundable ? 'Yes' : 'No'}
+                    </span>
+                  </div>
+                )}
+                {retreat.deposit_refund_days_before && (
+                  <div className="flex items-center justify-between pb-2 border-b border-border">
+                    <span className="text-muted-foreground">Refund Deadline</span>
+                    <span className="font-medium text-card-foreground">
+                      {retreat.deposit_refund_days_before} days before event
+                    </span>
+                  </div>
+                )}
+                {retreat.payment_days_before_event !== null && (
+                  <div className="flex items-center justify-between pb-2 border-b border-border">
+                    <span className="text-muted-foreground">Full Payment Due</span>
+                    <span className="font-medium text-card-foreground">
+                      {retreat.payment_days_before_event} days before event
+                    </span>
+                  </div>
+                )}
+                {retreat.full_payment_non_refundable !== null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Full Payment Refundable</span>
+                    <span className="font-medium text-card-foreground">
+                      {retreat.full_payment_non_refundable ? 'No' : 'Yes'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* About Instructor */}
         <Card>
