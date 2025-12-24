@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { BottomNav } from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2, Plus, DollarSign, CreditCard, Users } from "lucide-react";
+import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2, Plus, DollarSign, CreditCard, Users, Copy } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -170,6 +170,7 @@ const convertItineraryToSchedule = (blocks: ItineraryBlock[]): { day: string; ac
 const InstructorRetreatForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const location = useLocation();
   const { role, user } = useAuth();
   const { toast } = useToast();
   
@@ -274,6 +275,77 @@ const InstructorRetreatForm = () => {
 
     fetchDrafts();
   }, [user]);
+
+  // Handle duplicate data from navigation state
+  useEffect(() => {
+    if (editingId === 'new' && location.state?.duplicateFrom && user) {
+      const duplicateData = location.state.duplicateFrom;
+      
+      setFormData({
+        title: duplicateData.title || "Copy of Retreat",
+        level: duplicateData.level || "Beginner",
+        location: duplicateData.location || "",
+        date: duplicateData.date || "",
+        duration: duplicateData.duration || "",
+        totalSpots: duplicateData.totalSpots || 0,
+        price: duplicateData.price || 0,
+        deposit_amount: duplicateData.deposit_amount || null,
+        deposit_refundable: duplicateData.deposit_refundable || false,
+        deposit_refund_days_before: duplicateData.deposit_refund_days_before || 7,
+        payment_days_before_event: duplicateData.payment_days_before_event || null,
+        full_payment_non_refundable: duplicateData.full_payment_non_refundable || false,
+        description: duplicateData.description || "",
+        image: duplicateData.image || "",
+        includes: duplicateData.includes || [],
+        schedule: duplicateData.schedule || [],
+        published: false, // Always create duplicates as draft
+        discount_coupon: duplicateData.discount_coupon || null,
+        price_variants: duplicateData.price_variants || [],
+        add_ons: duplicateData.add_ons || [],
+        content_cards: duplicateData.content_cards || [],
+      });
+
+      if (duplicateData.date) {
+        setDateRange(parseDateString(duplicateData.date));
+      }
+      if (duplicateData.image) {
+        setImagePreview(duplicateData.image);
+      }
+      if (duplicateData.venue_fees !== null && duplicateData.venue_fees !== undefined) {
+        setVenueFees(Number(duplicateData.venue_fees));
+      } else {
+        setVenueFees(0);
+      }
+      if (duplicateData.food_budget !== null && duplicateData.food_budget !== undefined) {
+        setFoodBudget(Number(duplicateData.food_budget));
+      } else {
+        setFoodBudget(0);
+      }
+      if (duplicateData.location_images && Array.isArray(duplicateData.location_images)) {
+        setLocationImages(duplicateData.location_images);
+      } else {
+        setLocationImages([]);
+      }
+      if (duplicateData.content_cards && Array.isArray(duplicateData.content_cards)) {
+        setContentCards(duplicateData.content_cards);
+      } else {
+        setContentCards([]);
+      }
+      if (duplicateData.itinerary_blocks && Array.isArray(duplicateData.itinerary_blocks)) {
+        setItineraryBlocks(duplicateData.itinerary_blocks);
+      } else if (duplicateData.schedule && Array.isArray(duplicateData.schedule) && duplicateData.schedule.length > 0) {
+        const converted = convertScheduleToItinerary(duplicateData.schedule);
+        if (converted.length > 0) {
+          setItineraryBlocks(converted);
+        }
+      } else {
+        setItineraryBlocks([]);
+      }
+
+      // Clear the state to prevent re-applying on re-renders
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [editingId, location.state, user, navigate, location.pathname]);
 
   // Fetch retreat data when editing
   useEffect(() => {
@@ -1130,6 +1202,94 @@ const InstructorRetreatForm = () => {
     }
   };
 
+  const handleDuplicate = async (retreat: Retreat) => {
+    if (!user) return;
+
+    try {
+      // Copy all retreat data and modify title
+      const duplicatedData = {
+        title: `Copy of ${retreat.title}`,
+        level: retreat.level,
+        location: retreat.location,
+        date: retreat.date, // User can change this
+        duration: retreat.duration,
+        totalSpots: retreat.total_spots,
+        price: retreat.price,
+        deposit_amount: retreat.deposit_amount,
+        deposit_refundable: retreat.deposit_refundable || false,
+        deposit_refund_days_before: retreat.deposit_refund_days_before || 7,
+        payment_days_before_event: retreat.payment_days_before_event,
+        full_payment_non_refundable: retreat.full_payment_non_refundable || false,
+        description: retreat.description,
+        image: retreat.image,
+        includes: retreat.includes || [],
+        schedule: retreat.schedule || [],
+        published: false, // Always create as draft
+        discount_coupon: retreat.discount_coupon,
+        price_variants: retreat.price_variants || [],
+        add_ons: retreat.add_ons || [],
+        content_cards: retreat.content_cards || [],
+      };
+
+      // Set form data to the duplicated data
+      setFormData(duplicatedData);
+      setDateRange(parseDateString(retreat.date));
+      setImagePreview("");
+      
+      // Set additional fields
+      if (retreat.venue_fees !== null && retreat.venue_fees !== undefined) {
+        setVenueFees(Number(retreat.venue_fees));
+      } else {
+        setVenueFees(0);
+      }
+      if (retreat.food_budget !== null && retreat.food_budget !== undefined) {
+        setFoodBudget(Number(retreat.food_budget));
+      } else {
+        setFoodBudget(0);
+      }
+      if (retreat.location_images && Array.isArray(retreat.location_images)) {
+        setLocationImages(retreat.location_images);
+      } else {
+        setLocationImages([]);
+      }
+      if (retreat.content_cards && Array.isArray(retreat.content_cards)) {
+        setContentCards(retreat.content_cards);
+      } else {
+        setContentCards([]);
+      }
+      if (retreat.schedule && Array.isArray(retreat.schedule) && retreat.schedule.length > 0) {
+        if (retreat.itinerary_blocks && Array.isArray(retreat.itinerary_blocks)) {
+          setItineraryBlocks(retreat.itinerary_blocks);
+        } else {
+          const converted = convertScheduleToItinerary(retreat.schedule);
+          if (converted.length > 0) {
+            setItineraryBlocks(converted);
+          }
+        }
+      } else {
+        setItineraryBlocks([]);
+      }
+
+      // Open in edit mode as new retreat
+      setEditingId('new');
+      setAutoSaveDraftId(null);
+      setLastSaved(null);
+      setSelectedVenue(null);
+
+      toast({
+        title: "Retreat Duplicated",
+        description: "All fields have been copied. You can now modify the title, dates, and other details.",
+      });
+    } catch (error: any) {
+      console.error('Error duplicating retreat:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to duplicate retreat. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDelete = async (retreatId: number) => {
     if (!window.confirm('Are you sure you want to delete this retreat?')) {
       return;
@@ -1570,7 +1730,9 @@ const InstructorRetreatForm = () => {
                         "core": { title: "Core Event Description", description: "Describe the main event, what participants will experience, and what makes this retreat special.", images: [], videos: [] },
                         "lodging": { title: "Lodging, Rooms, Amenities", description: "Details about accommodation options, room types, and available amenities.", images: [], videos: [] },
                         "volunteer": { title: "Volunteer Opportunities", description: "Information about ways participants can contribute and get involved.", images: [], videos: [] },
-                        "food": { title: "Food, Dietary Needs", description: "Meal plans, dietary accommodations, and food-related information.", images: [], videos: [] }
+                        "food": { title: "Food, Dietary Needs", description: "Meal plans, dietary accommodations, and food-related information.", images: [], videos: [] },
+                        "medical": { title: "Medical", description: "Medical information, health requirements, emergency contacts, and any medical considerations for participants.", images: [], videos: [] },
+                        "accessibility": { title: "Accessibility", description: "Information about accessibility features, accommodations for disabilities, and how to request additional support.", images: [], videos: [] }
                       };
                       if (templates[value as keyof typeof templates]) {
                         setNewContentCard(templates[value as keyof typeof templates]);
@@ -1584,6 +1746,8 @@ const InstructorRetreatForm = () => {
                         <SelectItem value="lodging">Lodging, Rooms, Amenities</SelectItem>
                         <SelectItem value="volunteer">Volunteer Opportunities</SelectItem>
                         <SelectItem value="food">Food, Dietary Needs</SelectItem>
+                        <SelectItem value="medical">Medical</SelectItem>
+                        <SelectItem value="accessibility">Accessibility</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -3026,33 +3190,44 @@ const InstructorRetreatForm = () => {
                         <CardContent className="p-5 relative">
                           <h3 className="text-xl font-semibold text-card-foreground mb-4">{retreat.title}</h3>
                           
-                          <div className="flex gap-2 mb-4">
+                          <div className="flex flex-col gap-2 mb-4">
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => startEditing(retreat)}
+                                className="flex-1"
+                              >
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant={retreat.published ? "outline" : "default"}
+                                size="sm"
+                                onClick={() => handleTogglePublish(retreat.id)}
+                                className="flex-1"
+                              >
+                                {retreat.published ? (
+                                  <>
+                                    <EyeOff className="w-4 h-4 mr-2" />
+                                    Unpublish
+                                  </>
+                                ) : (
+                                  <>
+                                    <Eye className="w-4 h-4 mr-2" />
+                                    Publish
+                                  </>
+                                )}
+                              </Button>
+                            </div>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => startEditing(retreat)}
-                              className="flex-1"
+                              onClick={() => handleDuplicate(retreat)}
+                              className="w-full"
                             >
-                              <Edit className="w-4 h-4 mr-2" />
-                              Edit
-                            </Button>
-                            <Button
-                              variant={retreat.published ? "outline" : "default"}
-                              size="sm"
-                              onClick={() => handleTogglePublish(retreat.id)}
-                              className="flex-1"
-                            >
-                              {retreat.published ? (
-                                <>
-                                  <EyeOff className="w-4 h-4 mr-2" />
-                                  Unpublish
-                                </>
-                              ) : (
-                                <>
-                                  <Eye className="w-4 h-4 mr-2" />
-                                  Publish
-                                </>
-                              )}
+                              <Copy className="w-4 h-4 mr-2" />
+                              Duplicate
                             </Button>
                           </div>
 

@@ -1088,6 +1088,51 @@ const InstructorDashboard = () => {
     }
   };
 
+  const handleDuplicate = async (retreat: Retreat) => {
+    if (!user) return;
+
+    try {
+      // Navigate to the new retreat form with duplicated data in state
+      navigate('/instructor/retreats/new', {
+        state: {
+          duplicateFrom: {
+            title: `Copy of ${retreat.title}`,
+            level: retreat.level,
+            location: retreat.location,
+            date: retreat.date,
+            duration: retreat.duration,
+            totalSpots: retreat.total_spots,
+            price: retreat.price,
+            description: retreat.description,
+            image: retreat.image,
+            includes: retreat.includes || [],
+            schedule: retreat.schedule || [],
+            venue_fees: retreat.venue_fees,
+            food_budget: retreat.food_budget,
+            itinerary_blocks: retreat.itinerary_blocks,
+            location_images: retreat.location_images,
+            discount_coupon: retreat.discount_coupon,
+            price_variants: retreat.price_variants,
+            add_ons: retreat.add_ons,
+            content_cards: retreat.content_cards,
+          }
+        }
+      });
+
+      toast({
+        title: "Duplicating Retreat",
+        description: "Opening retreat form with all fields copied. You can now modify the details.",
+      });
+    } catch (error: any) {
+      console.error('Error duplicating retreat:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to duplicate retreat. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDelete = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this retreat?')) {
       return;
@@ -1771,33 +1816,44 @@ const InstructorDashboard = () => {
                   <CardContent className="p-5 relative">
                     <h3 className="text-xl font-semibold text-card-foreground mb-4">{retreat.title}</h3>
                     
-                    <div className="flex gap-2 mb-4">
+                    <div className="flex flex-col gap-2 mb-4">
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate(`/instructor/retreats/${retreat.id}/edit`)}
+                          className="flex-1"
+                        >
+                          <Edit className="w-4 h-4 mr-2" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant={retreat.published ? "outline" : "default"}
+                          size="sm"
+                          onClick={() => handleTogglePublish(retreat.id)}
+                          className="flex-1"
+                        >
+                          {retreat.published ? (
+                            <>
+                              <EyeOff className="w-4 h-4 mr-2" />
+                              Unpublish
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-4 h-4 mr-2" />
+                              Publish
+                            </>
+                          )}
+                        </Button>
+                      </div>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => navigate(`/instructor/retreats/${retreat.id}/edit`)}
-                        className="flex-1"
+                        onClick={() => handleDuplicate(retreat)}
+                        className="w-full"
                       >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant={retreat.published ? "outline" : "default"}
-                        size="sm"
-                        onClick={() => handleTogglePublish(retreat.id)}
-                        className="flex-1"
-                      >
-                        {retreat.published ? (
-                          <>
-                            <EyeOff className="w-4 h-4 mr-2" />
-                            Unpublish
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="w-4 h-4 mr-2" />
-                            Publish
-                          </>
-                        )}
+                        <Copy className="w-4 h-4 mr-2" />
+                        Duplicate
                       </Button>
                     </div>
 
