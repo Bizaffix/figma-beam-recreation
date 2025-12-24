@@ -368,12 +368,11 @@ const RetreatDetail = () => {
       {!user && <Header />}
       
       {/* Header Image */}
-      <div className="relative bg-transparent">
+      <div className="relative bg-white">
         <img
           src={retreat.image || "/placeholder.svg"}
           alt={retreat.title}
           className="w-full h-auto object-contain"
-          style={{ backgroundColor: 'transparent' }}
         />
         <Button
           variant="secondary"
