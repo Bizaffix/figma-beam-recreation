@@ -23,6 +23,15 @@ import { ItineraryBuilder, ItineraryBlock } from "@/components/ItineraryBuilder"
 import UserManagement from "@/components/UserManagement";
 import { ShareDialog } from "@/components/ShareDialog";
 
+interface ContentCard {
+  id: string;
+  title: string;
+  description: string;
+  images: string[];
+  videos: string[];
+  order: number;
+}
+
 interface Retreat {
   id: number;
   title: string;
@@ -30,7 +39,7 @@ interface Retreat {
   location: string;
   date: string;
   duration: string;
-  level: "Beginner" | "Intermediate" | "Advanced";
+  level: "Beginner" | "Intermediate" | "Advanced" | "Any";
   price: number;
   total_spots: number;
   spots_available: number;
@@ -41,12 +50,23 @@ interface Retreat {
   instructor_id: string;
   venue_fees?: number | null;
   food_budget?: number | null;
-  itinerary_blocks?: any[] | null;
+  itinerary_blocks?: ItineraryBlock[] | null;
+  location_images?: string[] | null;
+  discount_coupon?: {
+    code: string;
+    type: 'percentage' | 'fixed';
+    value: number;
+    max_uses?: number;
+    expires_at?: string;
+  } | null;
+  price_variants?: { id: string; name: string; price: number; description?: string }[] | null;
+  add_ons?: { id: string; name: string; price: number; description?: string; required?: boolean }[] | null;
+  content_cards?: ContentCard[] | null;
 }
 
 interface FormData {
   title: string;
-  level: "Beginner" | "Intermediate" | "Advanced";
+  level: "Beginner" | "Intermediate" | "Advanced" | "Any";
   location: string;
   date: string;
   duration: string;
