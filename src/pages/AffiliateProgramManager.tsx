@@ -856,19 +856,20 @@ const AffiliateProgramManager = () => {
                         <TableHead>Type</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Payout Method</TableHead>
+                        <TableHead>Links</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {loadingAffiliates ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8">
+                          <TableCell colSpan={7} className="text-center py-8">
                             <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                           </TableCell>
                         </TableRow>
                       ) : affiliates.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                             No affiliates found
                           </TableCell>
                         </TableRow>
@@ -893,25 +894,48 @@ const AffiliateProgramManager = () => {
                             </TableCell>
                             <TableCell>{affiliate.payout_method || 'N/A'}</TableCell>
                             <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingAffiliate(affiliate);
-                                  setAffiliateForm({
-                                    name: affiliate.name,
-                                    email: affiliate.email,
-                                    affiliate_type: affiliate.affiliate_type,
-                                    payout_method: affiliate.payout_method || 'stripe_connect',
-                                    country: affiliate.country || '',
-                                    status: affiliate.status,
-                                    notes: affiliate.notes || '',
-                                  });
-                                  setAffiliateDialogOpen(true);
-                                }}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
+                              <Badge variant="outline">
+                                {links.filter(l => l.affiliate_id === affiliate.id).length} links
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditingAffiliate(affiliate);
+                                    setAffiliateForm({
+                                      name: affiliate.name,
+                                      email: affiliate.email,
+                                      affiliate_type: affiliate.affiliate_type,
+                                      payout_method: affiliate.payout_method || 'stripe_connect',
+                                      country: affiliate.country || '',
+                                      status: affiliate.status,
+                                      notes: affiliate.notes || '',
+                                    });
+                                    setAffiliateDialogOpen(true);
+                                  }}
+                                  title="Edit Affiliate"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setLinkForm({ 
+                                      affiliate_id: affiliate.id, 
+                                      campaign_id: '', 
+                                      coupon_code: '' 
+                                    });
+                                    setLinkDialogOpen(true);
+                                  }}
+                                  title="Generate Link"
+                                >
+                                  <LinkIcon className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))
@@ -974,6 +998,53 @@ const AffiliateProgramManager = () => {
                           <div className="text-sm">
                             <p><span className="text-muted-foreground">Payout:</span> {affiliate.payout_method || 'N/A'}</p>
                           </div>
+                          <div className="flex gap-2 pt-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => {
+                                setLinkForm({ 
+                                  affiliate_id: affiliate.id, 
+                                  campaign_id: '', 
+                                  coupon_code: '' 
+                                });
+                                setLinkDialogOpen(true);
+                              }}
+                            >
+                              <LinkIcon className="w-4 h-4 mr-2" />
+                              Generate Link
+                            </Button>
+                          </div>
+                          {/* Show affiliate's links */}
+                          {links.filter(l => l.affiliate_id === affiliate.id).length > 0 && (
+                            <div className="mt-3 pt-3 border-t">
+                              <p className="text-xs font-medium text-muted-foreground mb-2">Links ({links.filter(l => l.affiliate_id === affiliate.id).length})</p>
+                              <div className="space-y-2">
+                                {links.filter(l => l.affiliate_id === affiliate.id).slice(0, 2).map((link) => (
+                                  <div key={link.id} className="flex items-center gap-2 p-2 bg-muted rounded text-xs">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium truncate">{link.campaign?.name || 'Unknown'}</p>
+                                      <p className="text-muted-foreground truncate">{link.full_url}</p>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 w-6 p-0"
+                                      onClick={() => copyToClipboard(link.full_url)}
+                                    >
+                                      <Copy className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                ))}
+                                {links.filter(l => l.affiliate_id === affiliate.id).length > 2 && (
+                                  <p className="text-xs text-muted-foreground">
+                                    +{links.filter(l => l.affiliate_id === affiliate.id).length - 2} more
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </Card>
                     ))
@@ -1569,9 +1640,12 @@ const AffiliateProgramManager = () => {
 
       {/* Generate Link Dialog */}
       <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-        <DialogContent>
+        <DialogContent className="p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Generate Affiliate Link</DialogTitle>
+            <DialogDescription>
+              Create a unique tracking link for an affiliate and campaign
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -1579,6 +1653,7 @@ const AffiliateProgramManager = () => {
               <Select
                 value={linkForm.affiliate_id}
                 onValueChange={(value) => setLinkForm({ ...linkForm, affiliate_id: value })}
+                disabled={!!linkForm.affiliate_id}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select affiliate" />
@@ -1591,6 +1666,11 @@ const AffiliateProgramManager = () => {
                   ))}
                 </SelectContent>
               </Select>
+              {linkForm.affiliate_id && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Affiliate pre-selected from affiliate list
+                </p>
+              )}
             </div>
             <div>
               <Label>Campaign</Label>

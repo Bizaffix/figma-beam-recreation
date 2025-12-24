@@ -3,6 +3,8 @@
  * Handles URL parameter tracking, cookie management, and attribution
  */
 
+import { supabase } from './supabase';
+
 const AFFILIATE_COOKIE_NAME = 'affiliate_ref';
 const AFFILIATE_COOKIE_EXPIRY_DAYS = 30;
 
@@ -81,8 +83,6 @@ export const clearAffiliateCookie = (): void => {
  */
 export const trackAffiliateClick = async (linkCode: string): Promise<void> => {
   try {
-    const { supabase } = await import('./supabase');
-    
     // Get affiliate link ID from code
     const { data: link, error: linkError } = await supabase
       .from('affiliate_links')
@@ -126,8 +126,6 @@ export const initializeAffiliateTracking = async (): Promise<void> => {
   }
   
   try {
-    const { supabase } = await import('./supabase');
-    
     // Look up affiliate link
     const { data: link, error } = await supabase
       .from('affiliate_links')
@@ -194,8 +192,6 @@ export const createReferral = async (
   }
   
   try {
-    const { supabase } = await import('./supabase');
-    
     // Get affiliate link
     const { data: link, error: linkError } = await supabase
       .from('affiliate_links')
@@ -247,8 +243,6 @@ export const convertReferral = async (
   platformFee: number = 0
 ): Promise<string | null> => {
   try {
-    const { supabase } = await import('./supabase');
-    
     // Get referral details
     const { data: referral, error: referralError } = await supabase
       .from('affiliate_referrals')
