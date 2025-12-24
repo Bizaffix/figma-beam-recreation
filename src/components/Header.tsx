@@ -61,7 +61,7 @@ export const Header = () => {
               <img 
                 src="/Final quilt logo-01.png" 
                 alt="BookMyQuiltRetreat Logo" 
-                className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-lg object-contain"
+                className="w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-lg object-contain"
               />
             </Link>
 
@@ -220,7 +220,7 @@ export const Header = () => {
                   <img 
                     src="/Final quilt logo-01.png" 
                     alt="BookMyQuiltRetreat Logo" 
-                    className="w-24 h-24 rounded-lg object-contain"
+                    className="w-32 h-32 rounded-lg object-contain"
                   />
                 </Link>
                 <Button

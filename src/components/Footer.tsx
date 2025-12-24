@@ -6,15 +6,15 @@ export const Footer = () => {
 
   return (
     <footer className="bg-muted/50 border-t">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 md:py-12">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-7 md:py-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
           {/* Company Info */}
           <div className="space-y-3 sm:space-y-4">
-            <div className="flex items-center">
+            <div className="flex items-center max-w-full">
               <img 
                 src="/Final quilt logo-01.png" 
                 alt="BookMyQuiltRetreat Logo" 
-                className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-lg object-contain"
+                className="w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-lg object-contain max-w-full"
               />
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
@@ -181,7 +181,7 @@ export const Footer = () => {
         </div>
 
         {/* Bottom Bar */}
-        <div className="mt-8 sm:mt-10 md:mt-12 pt-6 sm:pt-8 border-t flex flex-col md:flex-row justify-between items-center gap-3 sm:gap-4">
+        <div className="mt-6 sm:mt-7 md:mt-8 pt-4 sm:pt-5 border-t flex flex-col md:flex-row justify-between items-center gap-3 sm:gap-4">
           <p className="text-xs sm:text-sm text-muted-foreground text-center md:text-left">
             © {currentYear} BookMyQuiltRetreat.com. All rights reserved.
           </p>
