@@ -12,6 +12,7 @@ interface StatCardProps {
   tooltip?: string;
   onClick?: () => void;
   className?: string;
+  thumbnails?: string[]; // Array of image URLs to display as thumbnails
 }
 
 const variantConfig = {
@@ -41,6 +42,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   tooltip,
   onClick,
   className,
+  thumbnails = [],
 }) => {
   const config = variantConfig[variant];
   const hasDot = config.dotColor !== undefined;
@@ -96,14 +98,41 @@ export const StatCard: React.FC<StatCardProps> = ({
         </div>
       </div>
 
-      {/* Main Value */}
-      <div className="mb-2">
+      {/* Main Value and Thumbnails Row */}
+      <div className="mb-2 flex items-center gap-3">
         <p
-          className="text-[36px] font-bold leading-none"
+          className="text-[36px] font-bold leading-none flex-shrink-0"
           style={{ color: "#0F172A" }}
         >
           {formatValue(value)}
         </p>
+
+        {/* Thumbnails */}
+        {thumbnails && thumbnails.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide flex-1 min-w-0">
+            {thumbnails.slice(0, 4).map((thumbnail, index) => (
+              <div
+                key={index}
+                className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-gray-200"
+              >
+                <img
+                  src={thumbnail}
+                  alt={`${label} thumbnail ${index + 1}`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Hide broken images
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            ))}
+            {thumbnails.length > 4 && (
+              <div className="flex-shrink-0 w-16 h-16 rounded-lg border border-gray-200 bg-gray-100 flex items-center justify-center">
+                <span className="text-xs text-gray-500 font-medium">+{thumbnails.length - 4}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Label Text */}

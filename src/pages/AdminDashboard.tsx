@@ -63,6 +63,7 @@ interface DraftEvent {
   created_at: string;
   updated_at: string;
   published: boolean;
+  image?: string;
 }
 
 interface DraftVenue {
@@ -72,6 +73,7 @@ interface DraftVenue {
   status: string;
   created_at: string;
   updated_at: string;
+  photos?: string[];
 }
 
 const AdminDashboard = () => {
@@ -85,6 +87,11 @@ const AdminDashboard = () => {
   const [totalStudents, setTotalStudents] = useState<number>(0);
   const [totalLocationOwners, setTotalLocationOwners] = useState<number>(0);
   const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
+  const [recentInstructors, setRecentInstructors] = useState<any[]>([]);
+  const [recentStudents, setRecentStudents] = useState<any[]>([]);
+  const [recentVenues, setRecentVenues] = useState<any[]>([]);
+  const [recentDraftEvents, setRecentDraftEvents] = useState<DraftEvent[]>([]);
+  const [recentDraftVenues, setRecentDraftVenues] = useState<DraftVenue[]>([]);
   const [studentsDialogOpen, setStudentsDialogOpen] = useState(false);
   const [instructorsDialogOpen, setInstructorsDialogOpen] = useState(false);
   const [locationOwnersDialogOpen, setLocationOwnersDialogOpen] = useState(false);
@@ -192,26 +199,64 @@ const AdminDashboard = () => {
         setTotalLocationOwners(locationOwnersData.length);
       }
 
+      // Fetch recent instructors with avatars for thumbnails
+      const { data: recentInstructorsData } = await supabase
+        .from('profiles')
+        .select('id, avatar_url, full_name')
+        .eq('role', 'instructor')
+        .order('created_at', { ascending: false })
+        .limit(4);
+
+      if (recentInstructorsData) {
+        setRecentInstructors(recentInstructorsData);
+      }
+
+      // Fetch recent students with avatars for thumbnails
+      const { data: recentStudentsData } = await supabase
+        .from('profiles')
+        .select('id, avatar_url, full_name')
+        .eq('role', 'student')
+        .order('created_at', { ascending: false })
+        .limit(4);
+
+      if (recentStudentsData) {
+        setRecentStudents(recentStudentsData);
+      }
+
+      // Fetch recent venues with photos for thumbnails
+      const { data: recentVenuesData } = await supabase
+        .from('properties')
+        .select('id, photos, property_name, status')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(4);
+
+      if (recentVenuesData) {
+        setRecentVenues(recentVenuesData);
+      }
+
       // Fetch draft events (retreats with published=false)
       const { data: draftEventsData, error: draftEventsError } = await supabase
         .from('retreats')
-        .select('id, title, instructor_id, created_at, updated_at, published')
+        .select('id, title, instructor_id, created_at, updated_at, published, image')
         .eq('published', false)
         .order('updated_at', { ascending: false });
 
       if (!draftEventsError && draftEventsData) {
         setDraftEvents(draftEventsData || []);
+        setRecentDraftEvents(draftEventsData.slice(0, 4));
       }
 
       // Fetch draft venues (properties with status='draft')
       const { data: draftVenuesData, error: draftVenuesError } = await supabase
         .from('properties')
-        .select('id, property_name, owner_id, status, created_at, updated_at')
+        .select('id, property_name, owner_id, status, created_at, updated_at, photos')
         .eq('status', 'draft')
         .order('updated_at', { ascending: false });
 
       if (!draftVenuesError && draftVenuesData) {
         setDraftVenues(draftVenuesData || []);
+        setRecentDraftVenues(draftVenuesData.slice(0, 4));
       }
 
       // Enrich bookings with retreat info
@@ -1006,6 +1051,10 @@ const AdminDashboard = () => {
             variant="default"
             onClick={handleInstructorsCardClick}
             tooltip="Tap to view"
+            thumbnails={recentInstructors
+              .filter(i => i.avatar_url)
+              .map(i => i.avatar_url)
+              .slice(0, 4)}
           />
           <StatCard
             icon={Users}
@@ -1014,6 +1063,10 @@ const AdminDashboard = () => {
             variant="students"
             onClick={handleStudentsCardClick}
             tooltip="Tap to view"
+            thumbnails={recentStudents
+              .filter(s => s.avatar_url)
+              .map(s => s.avatar_url)
+              .slice(0, 4)}
           />
           <StatCard
             icon={MapPin}
@@ -1022,6 +1075,10 @@ const AdminDashboard = () => {
             variant="default"
             onClick={handleLocationOwnersCardClick}
             tooltip="Tap to view"
+            thumbnails={recentVenues
+              .filter(v => v.photos && v.photos.length > 0)
+              .map(v => v.photos[0])
+              .slice(0, 4)}
           />
         </div>
 
@@ -1034,6 +1091,10 @@ const AdminDashboard = () => {
             variant="default"
             onClick={() => setDraftEventsDialogOpen(true)}
             tooltip="Tap to view"
+            thumbnails={recentDraftEvents
+              .filter(e => e.image)
+              .map(e => e.image!)
+              .slice(0, 4)}
           />
           <StatCard
             icon={MapPin}
@@ -1042,6 +1103,10 @@ const AdminDashboard = () => {
             variant="default"
             onClick={() => setDraftVenuesDialogOpen(true)}
             tooltip="Tap to view"
+            thumbnails={recentDraftVenues
+              .filter(v => v.photos && v.photos.length > 0)
+              .map(v => v.photos[0])
+              .slice(0, 4)}
           />
         </div>
 
