@@ -894,9 +894,18 @@ const AffiliateProgramManager = () => {
                             </TableCell>
                             <TableCell>{affiliate.payout_method || 'N/A'}</TableCell>
                             <TableCell>
-                              <Badge variant="outline">
-                                {links.filter(l => l.affiliate_id === affiliate.id).length} links
-                              </Badge>
+                              <div className="space-y-1">
+                                <Badge variant="outline">
+                                  {(() => {
+                                    const affiliateLinks = links.filter(l => l.affiliate_id === affiliate.id);
+                                    const uniqueCampaigns = new Set(affiliateLinks.map(l => l.campaign_id));
+                                    return `${uniqueCampaigns.size} campaigns`;
+                                  })()}
+                                </Badge>
+                                <Badge variant="secondary" className="block">
+                                  {links.filter(l => l.affiliate_id === affiliate.id).length} links
+                                </Badge>
+                              </div>
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
@@ -998,51 +1007,99 @@ const AffiliateProgramManager = () => {
                           <div className="text-sm">
                             <p><span className="text-muted-foreground">Payout:</span> {affiliate.payout_method || 'N/A'}</p>
                           </div>
-                          <div className="flex gap-2 pt-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="flex-1"
-                              onClick={() => {
-                                setLinkForm({ 
-                                  affiliate_id: affiliate.id, 
-                                  campaign_id: '', 
-                                  coupon_code: '' 
-                                });
-                                setLinkDialogOpen(true);
-                              }}
-                            >
-                              <LinkIcon className="w-4 h-4 mr-2" />
-                              Generate Link
-                            </Button>
-                          </div>
+                          
+                          {/* Show affiliate's campaigns */}
+                          {(() => {
+                            const affiliateLinks = links.filter(l => l.affiliate_id === affiliate.id);
+                            const affiliateCampaigns = Array.from(new Set(affiliateLinks.map(l => l.campaign_id)))
+                              .map(campaignId => campaigns.find(c => c.id === campaignId))
+                              .filter(Boolean);
+                            
+                            return affiliateCampaigns.length > 0 && (
+                              <div className="mt-3 pt-3 border-t">
+                                <p className="text-xs font-medium text-muted-foreground mb-2">Campaigns ({affiliateCampaigns.length})</p>
+                                <div className="space-y-2">
+                                  {affiliateCampaigns.map((campaign) => (
+                                    <div key={campaign!.id} className="p-2 bg-muted rounded">
+                                      <p className="font-medium text-sm">{campaign!.name}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {campaign!.target_type} • {
+                                          campaign!.active_commission_type === 'percentage' 
+                                            ? `${campaign!.active_commission_value}%`
+                                            : campaign!.active_commission_type === 'fixed'
+                                            ? `$${campaign!.active_commission_value}`
+                                            : 'No commission'}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                           {/* Show affiliate's links */}
                           {links.filter(l => l.affiliate_id === affiliate.id).length > 0 && (
                             <div className="mt-3 pt-3 border-t">
-                              <p className="text-xs font-medium text-muted-foreground mb-2">Links ({links.filter(l => l.affiliate_id === affiliate.id).length})</p>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-medium text-muted-foreground">Links ({links.filter(l => l.affiliate_id === affiliate.id).length})</p>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs"
+                                  onClick={() => {
+                                    setLinkForm({ 
+                                      affiliate_id: affiliate.id, 
+                                      campaign_id: '', 
+                                      coupon_code: '' 
+                                    });
+                                    setLinkDialogOpen(true);
+                                  }}
+                                >
+                                  <LinkIcon className="w-3 h-3 mr-1" />
+                                  Generate
+                                </Button>
+                              </div>
                               <div className="space-y-2">
-                                {links.filter(l => l.affiliate_id === affiliate.id).slice(0, 2).map((link) => (
+                                {links.filter(l => l.affiliate_id === affiliate.id).map((link) => (
                                   <div key={link.id} className="flex items-center gap-2 p-2 bg-muted rounded text-xs">
                                     <div className="flex-1 min-w-0">
-                                      <p className="font-medium truncate">{link.campaign?.name || 'Unknown'}</p>
+                                      <p className="font-medium truncate">{link.campaign?.name || 'Unknown Campaign'}</p>
                                       <p className="text-muted-foreground truncate">{link.full_url}</p>
+                                      <p className="text-muted-foreground text-[10px] mt-0.5">{link.clicks} clicks</p>
                                     </div>
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="h-6 w-6 p-0"
+                                      className="h-6 w-6 p-0 flex-shrink-0"
                                       onClick={() => copyToClipboard(link.full_url)}
                                     >
                                       <Copy className="w-3 h-3" />
                                     </Button>
                                   </div>
                                 ))}
-                                {links.filter(l => l.affiliate_id === affiliate.id).length > 2 && (
-                                  <p className="text-xs text-muted-foreground">
-                                    +{links.filter(l => l.affiliate_id === affiliate.id).length - 2} more
-                                  </p>
-                                )}
                               </div>
+                            </div>
+                          )}
+                          
+                          {/* Generate Link Button if no links */}
+                          {links.filter(l => l.affiliate_id === affiliate.id).length === 0 && (
+                            <div className="mt-3 pt-3 border-t">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => {
+                                  setLinkForm({ 
+                                    affiliate_id: affiliate.id, 
+                                    campaign_id: '', 
+                                    coupon_code: '' 
+                                  });
+                                  setLinkDialogOpen(true);
+                                }}
+                              >
+                                <LinkIcon className="w-4 h-4 mr-2" />
+                                Generate Link
+                              </Button>
                             </div>
                           )}
                         </div>
@@ -1057,144 +1114,103 @@ const AffiliateProgramManager = () => {
           {/* Campaigns Tab */}
           <TabsContent value="campaigns" className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <h2 className="text-xl font-semibold">Campaigns & Links</h2>
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <Button variant="outline" className="w-full sm:w-auto" onClick={() => {
-                  setEditingCampaign(null);
-                  setCampaignForm({
-                    name: '',
-                    description: '',
-                    target_type: 'student',
-                    conversion_event: 'completed_booking',
-                    active_commission_type: 'percentage',
-                    active_commission_value: 20,
-                    active_commission_base: 'platform_fee',
-                    passive_commission_enabled: false,
-                    passive_commission_rate: 0,
-                    passive_commission_duration_months: 12,
-                    cookie_window_days: 30,
-                    attribution_model: 'last_click',
-                    is_active: true,
-                  });
-                  setCampaignDialogOpen(true);
-                }}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Campaign
-                </Button>
-                <Button className="w-full sm:w-auto" onClick={() => {
-                  setLinkForm({ affiliate_id: '', campaign_id: '', coupon_code: '' });
-                  setLinkDialogOpen(true);
-                }}>
-                  <LinkIcon className="w-4 h-4 mr-2" />
-                  Generate Link
-                </Button>
-              </div>
+              <h2 className="text-xl font-semibold">Campaigns</h2>
+              <Button variant="outline" className="w-full sm:w-auto" onClick={() => {
+                setEditingCampaign(null);
+                setCampaignForm({
+                  name: '',
+                  description: '',
+                  target_type: 'student',
+                  conversion_event: 'completed_booking',
+                  active_commission_type: 'percentage',
+                  active_commission_value: 20,
+                  active_commission_base: 'platform_fee',
+                  passive_commission_enabled: false,
+                  passive_commission_rate: 0,
+                  passive_commission_duration_months: 12,
+                  cookie_window_days: 30,
+                  attribution_model: 'last_click',
+                  is_active: true,
+                });
+                setCampaignDialogOpen(true);
+              }}>
+                <Plus className="w-4 h-4 mr-2" />
+                New Campaign
+              </Button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Campaigns List */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Campaigns</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {loadingCampaigns ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>All Campaigns</CardTitle>
+                <CardDescription>Manage referral campaigns and commission rules</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {loadingCampaigns ? (
+                    <div className="text-center py-8">
                       <Loader2 className="w-6 h-6 animate-spin mx-auto" />
-                    ) : campaigns.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-4">No campaigns found</p>
-                    ) : (
-                      campaigns.map((campaign) => (
-                        <div key={campaign.id} className="p-3 border rounded-lg">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-medium">{campaign.name}</h4>
-                              <p className="text-sm text-muted-foreground">{campaign.target_type}</p>
-                              <p className="text-xs text-muted-foreground mt-1">
+                    </div>
+                  ) : campaigns.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No campaigns found</p>
+                  ) : (
+                    campaigns.map((campaign) => (
+                      <Card key={campaign.id} className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-lg">{campaign.name}</h4>
+                            <p className="text-sm text-muted-foreground mt-1">{campaign.description || 'No description'}</p>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              <Badge variant="outline">{campaign.target_type}</Badge>
+                              <Badge variant="secondary">
                                 {campaign.active_commission_type === 'percentage' 
                                   ? `${campaign.active_commission_value}%`
                                   : campaign.active_commission_type === 'fixed'
                                   ? `$${campaign.active_commission_value}`
                                   : 'No commission'}
-                              </p>
+                              </Badge>
+                              {campaign.is_active ? (
+                                <Badge variant="default">Active</Badge>
+                              ) : (
+                                <Badge variant="outline">Inactive</Badge>
+                              )}
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditingCampaign(campaign);
-                                setCampaignForm({
-                                  name: campaign.name,
-                                  description: campaign.description || '',
-                                  target_type: campaign.target_type,
-                                  conversion_event: campaign.conversion_event,
-                                  active_commission_type: campaign.active_commission_type || 'percentage',
-                                  active_commission_value: campaign.active_commission_value || 0,
-                                  active_commission_base: campaign.active_commission_base || 'platform_fee',
-                                  passive_commission_enabled: campaign.passive_commission_enabled,
-                                  passive_commission_rate: campaign.passive_commission_rate || 0,
-                                  passive_commission_duration_months: campaign.passive_commission_duration_months || 12,
-                                  cookie_window_days: campaign.cookie_window_days,
-                                  attribution_model: campaign.attribution_model,
-                                  is_active: campaign.is_active,
-                                });
-                                setCampaignDialogOpen(true);
-                              }}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Links List */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Affiliate Links</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {loadingLinks ? (
-                      <Loader2 className="w-6 h-6 animate-spin mx-auto" />
-                    ) : links.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-4">No links found</p>
-                    ) : (
-                      links.map((link) => (
-                        <div key={link.id} className="p-3 border rounded-lg">
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{link.affiliate?.name || 'Unknown'}</p>
-                              <p className="text-sm text-muted-foreground">{link.campaign?.name || 'Unknown Campaign'}</p>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {link.clicks} clicks
-                              </p>
+                            <div className="mt-2 text-xs text-muted-foreground">
+                              <p>Conversion: {campaign.conversion_event}</p>
+                              <p>Cookie Window: {campaign.cookie_window_days} days</p>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => copyToClipboard(link.full_url)}
-                            >
-                              <Copy className="w-4 h-4" />
-                            </Button>
                           </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <Input
-                              value={link.full_url}
-                              readOnly
-                              className="text-xs flex-1 min-w-0"
-                            />
-                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingCampaign(campaign);
+                              setCampaignForm({
+                                name: campaign.name,
+                                description: campaign.description || '',
+                                target_type: campaign.target_type,
+                                conversion_event: campaign.conversion_event,
+                                active_commission_type: campaign.active_commission_type || 'percentage',
+                                active_commission_value: campaign.active_commission_value || 0,
+                                active_commission_base: campaign.active_commission_base || 'platform_fee',
+                                passive_commission_enabled: campaign.passive_commission_enabled,
+                                passive_commission_rate: campaign.passive_commission_rate || 0,
+                                passive_commission_duration_months: campaign.passive_commission_duration_months || 12,
+                                cookie_window_days: campaign.cookie_window_days,
+                                attribution_model: campaign.attribution_model,
+                                is_active: campaign.is_active,
+                              });
+                              setCampaignDialogOpen(true);
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Ledger Tab */}
