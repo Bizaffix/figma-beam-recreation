@@ -11,10 +11,11 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar, Link as LinkIcon } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar, Link as LinkIcon, Percent, Tag } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Booking {
   id: string;
@@ -36,6 +37,10 @@ interface UserProfile {
   full_name: string | null;
   email: string;
   created_at: string;
+  discount?: {
+    type: 'percentage' | 'fixed';
+    value: number;
+  } | null;
 }
 
 interface EmailTemplate {
@@ -130,6 +135,11 @@ const AdminDashboard = () => {
   const [viewVenueDialogOpen, setViewVenueDialogOpen] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState<any>(null);
   const [loadingVenueDetails, setLoadingVenueDetails] = useState(false);
+  const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
+  const [discountRecipientType, setDiscountRecipientType] = useState<'instructors' | 'location_owners'>('instructors');
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
+  const [discountValue, setDiscountValue] = useState<string>('');
+  const [assigningDiscount, setAssigningDiscount] = useState(false);
 
   useEffect(() => {
     if (role !== 'admin' || !user) return;
@@ -327,7 +337,7 @@ const AdminDashboard = () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email, created_at')
+        .select('id, full_name, email, created_at, discount')
         .eq('role', 'instructor')
         .order('created_at', { ascending: false });
 
@@ -358,7 +368,7 @@ const AdminDashboard = () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email, created_at')
+        .select('id, full_name, email, created_at, discount')
         .eq('role', 'location_owner')
         .order('created_at', { ascending: false });
 
@@ -480,6 +490,127 @@ const AdminDashboard = () => {
       setSelectedLocationOwners(new Set());
     } else {
       setSelectedLocationOwners(new Set(locationOwnersList.map(l => l.id)));
+    }
+  };
+
+  const handleAssignDiscount = (recipientType: 'instructors' | 'location_owners') => {
+    const selected = recipientType === 'instructors' ? selectedInstructors : selectedLocationOwners;
+    if (selected.size === 0) {
+      toast({
+        title: "No recipients selected",
+        description: `Please select at least one ${recipientType === 'instructors' ? 'organizer' : 'venue'} to assign discount`,
+        variant: "destructive",
+      });
+      return;
+    }
+    setDiscountRecipientType(recipientType);
+    setDiscountType('percentage');
+    setDiscountValue('');
+    setDiscountDialogOpen(true);
+  };
+
+  const handleSaveDiscount = async () => {
+    if (!discountValue.trim() || isNaN(Number(discountValue)) || Number(discountValue) <= 0) {
+      toast({
+        title: "Invalid discount value",
+        description: "Please enter a valid discount value",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (discountType === 'percentage' && Number(discountValue) > 100) {
+      toast({
+        title: "Invalid discount",
+        description: "Percentage discount cannot exceed 100%",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const selected = discountRecipientType === 'instructors' ? selectedInstructors : selectedLocationOwners;
+    if (selected.size === 0) {
+      toast({
+        title: "No recipients selected",
+        description: "Please select at least one recipient",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAssigningDiscount(true);
+    try {
+      const discountData = {
+        type: discountType,
+        value: Number(discountValue),
+      };
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ discount: discountData })
+        .in('id', Array.from(selected));
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Success",
+        description: `Discount assigned to ${selected.size} ${discountRecipientType === 'instructors' ? 'organizer(s)' : 'venue(s)'}`,
+      });
+
+      // Refresh the lists
+      if (discountRecipientType === 'instructors') {
+        fetchInstructorsList();
+        setSelectedInstructors(new Set());
+      } else {
+        fetchLocationOwnersList();
+        setSelectedLocationOwners(new Set());
+      }
+
+      setDiscountDialogOpen(false);
+      setDiscountValue('');
+    } catch (error: any) {
+      console.error('Error assigning discount:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to assign discount",
+        variant: "destructive",
+      });
+    } finally {
+      setAssigningDiscount(false);
+    }
+  };
+
+  const handleRemoveDiscount = async (userId: string, recipientType: 'instructors' | 'location_owners') => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ discount: null })
+        .eq('id', userId);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Success",
+        description: "Discount removed successfully",
+      });
+
+      // Refresh the lists
+      if (recipientType === 'instructors') {
+        fetchInstructorsList();
+      } else {
+        fetchLocationOwnersList();
+      }
+    } catch (error: any) {
+      console.error('Error removing discount:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove discount",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1407,6 +1538,16 @@ const AdminDashboard = () => {
                   {selectedInstructors.size === instructorsList.length && instructorsList.length > 0 ? 'Deselect All' : 'Select All'}
                 </Button>
                 <Button
+                  onClick={() => handleAssignDiscount('instructors')}
+                  size="sm"
+                  variant="outline"
+                  className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2"
+                  disabled={selectedInstructors.size === 0}
+                >
+                  <Percent className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Discount</span>
+                </Button>
+                <Button
                   onClick={() => handleNotificationClick('instructors')}
                   size="sm"
                   className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2"
@@ -1454,6 +1595,7 @@ const AdminDashboard = () => {
                         </th>
                         <th className="text-left p-3 font-semibold">Name</th>
                         <th className="text-left p-3 font-semibold">Email</th>
+                        <th className="text-left p-3 font-semibold">Discount</th>
                         <th className="text-left p-3 font-semibold">Signed Up</th>
                       </tr>
                     </thead>
@@ -1468,6 +1610,27 @@ const AdminDashboard = () => {
                           </td>
                           <td className="p-3 font-medium">{instructor.full_name || 'N/A'}</td>
                           <td className="p-3 text-muted-foreground">{instructor.email}</td>
+                          <td className="p-3">
+                            {instructor.discount ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="text-xs">
+                                  {instructor.discount.type === 'percentage' 
+                                    ? `${instructor.discount.value}%` 
+                                    : `$${instructor.discount.value}`}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => handleRemoveDiscount(instructor.id, 'instructors')}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">None</span>
+                            )}
+                          </td>
                           <td className="p-3 text-muted-foreground">
                             {new Date(instructor.created_at).toLocaleDateString()}
                           </td>
@@ -1493,7 +1656,29 @@ const AdminDashboard = () => {
                           <p className="text-xs text-muted-foreground mt-0.5 break-all">{instructor.email}</p>
                           </div>
                         </div>
-                        <div className="pt-2 border-t">
+                        <div className="pt-2 border-t space-y-2">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">Discount:</span>
+                            {instructor.discount ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="text-xs">
+                                  {instructor.discount.type === 'percentage' 
+                                    ? `${instructor.discount.value}%` 
+                                    : `$${instructor.discount.value}`}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 w-5 p-0"
+                                  onClick={() => handleRemoveDiscount(instructor.id, 'instructors')}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">None</span>
+                            )}
+                          </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-muted-foreground">Signed Up:</span>
                             <span>{new Date(instructor.created_at).toLocaleDateString()}</span>
@@ -1541,6 +1726,16 @@ const AdminDashboard = () => {
                 >
                   {selectedLocationOwners.size === locationOwnersList.length && locationOwnersList.length > 0 ? 'Deselect All' : 'Select All'}
                 </Button>
+                <Button
+                  onClick={() => handleAssignDiscount('location_owners')}
+                  size="sm"
+                  variant="outline"
+                  className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2"
+                  disabled={selectedLocationOwners.size === 0}
+                >
+                  <Percent className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Discount</span>
+                </Button>
                 <DialogClose asChild>
                   <Button
                     variant="ghost"
@@ -1580,6 +1775,7 @@ const AdminDashboard = () => {
                         </th>
                         <th className="text-left p-3 font-semibold">Name</th>
                         <th className="text-left p-3 font-semibold">Email</th>
+                        <th className="text-left p-3 font-semibold">Discount</th>
                         <th className="text-left p-3 font-semibold">Signed Up</th>
                       </tr>
                     </thead>
@@ -1594,6 +1790,27 @@ const AdminDashboard = () => {
                           </td>
                           <td className="p-3 font-medium">{locationOwner.full_name || 'N/A'}</td>
                           <td className="p-3 text-muted-foreground">{locationOwner.email}</td>
+                          <td className="p-3">
+                            {locationOwner.discount ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="text-xs">
+                                  {locationOwner.discount.type === 'percentage' 
+                                    ? `${locationOwner.discount.value}%` 
+                                    : `$${locationOwner.discount.value}`}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => handleRemoveDiscount(locationOwner.id, 'location_owners')}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">None</span>
+                            )}
+                          </td>
                           <td className="p-3 text-muted-foreground">
                             {new Date(locationOwner.created_at).toLocaleDateString()}
                           </td>
@@ -1619,7 +1836,29 @@ const AdminDashboard = () => {
                           <p className="text-xs text-muted-foreground mt-0.5 break-all">{locationOwner.email}</p>
                           </div>
                         </div>
-                        <div className="pt-2 border-t">
+                        <div className="pt-2 border-t space-y-2">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">Discount:</span>
+                            {locationOwner.discount ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="text-xs">
+                                  {locationOwner.discount.type === 'percentage' 
+                                    ? `${locationOwner.discount.value}%` 
+                                    : `$${locationOwner.discount.value}`}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 w-5 p-0"
+                                  onClick={() => handleRemoveDiscount(locationOwner.id, 'location_owners')}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">None</span>
+                            )}
+                          </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-muted-foreground">Signed Up:</span>
                             <span>{new Date(locationOwner.created_at).toLocaleDateString()}</span>
@@ -2281,6 +2520,86 @@ const AdminDashboard = () => {
           <div className="flex justify-end gap-2 p-6 border-t shrink-0">
             <Button variant="outline" onClick={() => setViewVenueDialogOpen(false)}>
               Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discount Assignment Dialog */}
+      <Dialog open={discountDialogOpen} onOpenChange={setDiscountDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="w-5 h-5" />
+              Assign Discount to {discountRecipientType === 'instructors' ? 'Organizers' : 'Venues'}
+            </DialogTitle>
+            <DialogDescription>
+              Assign a discount to {discountRecipientType === 'instructors' 
+                ? selectedInstructors.size 
+                : selectedLocationOwners.size} selected {discountRecipientType === 'instructors' ? 'organizer(s)' : 'venue(s)'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="discount-type">Discount Type</Label>
+              <Select value={discountType} onValueChange={(value: 'percentage' | 'fixed') => setDiscountType(value)}>
+                <SelectTrigger id="discount-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="percentage">Percentage (%)</SelectItem>
+                  <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="discount-value">
+                Discount Value {discountType === 'percentage' ? '(0-100)' : '($)'}
+              </Label>
+              <Input
+                id="discount-value"
+                type="number"
+                step={discountType === 'percentage' ? '0.01' : '0.01'}
+                min="0"
+                max={discountType === 'percentage' ? '100' : undefined}
+                placeholder={discountType === 'percentage' ? '10' : '50'}
+                value={discountValue}
+                onChange={(e) => setDiscountValue(e.target.value)}
+                disabled={assigningDiscount}
+              />
+              <p className="text-xs text-muted-foreground">
+                {discountType === 'percentage' 
+                  ? 'Enter a percentage (e.g., 10 for 10% off)' 
+                  : 'Enter a fixed dollar amount (e.g., 50 for $50 off)'}
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDiscountDialogOpen(false);
+                setDiscountValue('');
+              }}
+              disabled={assigningDiscount}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveDiscount}
+              disabled={assigningDiscount || !discountValue.trim() || isNaN(Number(discountValue)) || Number(discountValue) <= 0}
+            >
+              {assigningDiscount ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Assigning...
+                </>
+              ) : (
+                <>
+                  <Tag className="w-4 h-4 mr-2" />
+                  Assign Discount
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>

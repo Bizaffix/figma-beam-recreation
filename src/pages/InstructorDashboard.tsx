@@ -208,6 +208,10 @@ const InstructorDashboard = () => {
   const [itineraryBlocks, setItineraryBlocks] = useState<ItineraryBlock[]>([]);
   const [locationImages, setLocationImages] = useState<string[]>([]);
   const [uploadingLocationImage, setUploadingLocationImage] = useState(false);
+  const [instructorDiscount, setInstructorDiscount] = useState<{
+    type: 'percentage' | 'fixed';
+    value: number;
+  } | null>(null);
   
   // Auto-save state
   const [autoSaving, setAutoSaving] = useState(false);
@@ -1515,12 +1519,43 @@ const InstructorDashboard = () => {
                   <h3 className="text-sm font-semibold text-card-foreground mb-3">Costs</h3>
                 </div>
                 
-                <div className="flex items-center justify-between py-2 border-b">
-                  <span className="text-sm font-medium">-12.4% Platform Fee</span>
-                  <span className="text-sm font-semibold text-destructive">
-                    -${(((formData.price || 0) * (formData.totalSpots || 0)) * 0.124).toFixed(2)}
-                  </span>
-                </div>
+                {(() => {
+                  const revenue = (formData.price || 0) * (formData.totalSpots || 0);
+                  const basePlatformFee = revenue * 0.124; // 12.4% base fee
+                  
+                  // Calculate platform fee with discount
+                  let platformFee = basePlatformFee;
+                  if (instructorDiscount?.type === 'percentage') {
+                    const discountValue = instructorDiscount.value;
+                    if (discountValue >= 100) {
+                      platformFee = 0; // 100% discount = no platform fee
+                    } else if (discountValue > 0) {
+                      // Apply discount: reduce platform fee by discount percentage
+                      platformFee = basePlatformFee * (1 - (discountValue / 100));
+                    }
+                  }
+                  
+                  const hasDiscount = platformFee < basePlatformFee;
+                  const discountPercent = hasDiscount ? ((1 - (platformFee / basePlatformFee)) * 100).toFixed(1) : '0';
+                  
+                  return (
+                    <div className="flex items-center justify-between py-2 border-b">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">
+                          {hasDiscount ? `Platform Fee (${discountPercent}% Discount Applied)` : '-12.4% Platform Fee'}
+                        </span>
+                        {hasDiscount && instructorDiscount && (
+                          <span className="text-xs text-muted-foreground mt-0.5">
+                            Organizer: {instructorDiscount.value}% discount
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-sm font-semibold text-destructive">
+                        -${platformFee.toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })()}
                 
                 <div className="space-y-2">
                   <Label>Location/Venue Fees ($)</Label>
@@ -1576,17 +1611,23 @@ const InstructorDashboard = () => {
                   </div>
                 )}
                 
-                <div className="flex items-center justify-between py-3 pt-4 border-t-2 border-primary">
-                  <span className="text-base font-bold">Total Revenue Payout</span>
-                  <span className="text-lg font-bold text-primary">
-                    ${(
-                      ((formData.price || 0) * (formData.totalSpots || 0)) -
-                      (((formData.price || 0) * (formData.totalSpots || 0)) * 0.124) -
-                      venueFees -
-                      foodBudget
-                    ).toFixed(2)}
-                  </span>
-                </div>
+                {(() => {
+                  const revenue = (formData.price || 0) * (formData.totalSpots || 0);
+                  const basePlatformFee = revenue * 0.124; // 12.4% base fee
+                  const platformFee = (instructorDiscount?.type === 'percentage' && instructorDiscount.value >= 100) 
+                    ? 0 
+                    : basePlatformFee;
+                  const totalPayout = revenue - platformFee - venueFees - foodBudget;
+                  
+                  return (
+                    <div className="flex items-center justify-between py-3 pt-4 border-t-2 border-primary">
+                      <span className="text-base font-bold">Total Revenue Payout</span>
+                      <span className="text-lg font-bold text-primary">
+                        ${totalPayout.toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}

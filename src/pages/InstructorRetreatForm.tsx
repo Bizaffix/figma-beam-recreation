@@ -247,6 +247,14 @@ const InstructorRetreatForm = () => {
     name: string;
     avatar: string;
     bio: string;
+    discount?: {
+      type: 'percentage' | 'fixed';
+      value: number;
+    } | null;
+  } | null>(null);
+  const [venueOwnerDiscount, setVenueOwnerDiscount] = useState<{
+    type: 'percentage' | 'fixed';
+    value: number;
   } | null>(null);
 
   // Only show this page to instructors
@@ -282,15 +290,15 @@ const InstructorRetreatForm = () => {
     fetchDrafts();
   }, [user]);
 
-  // Fetch instructor profile for preview
+  // Fetch instructor profile for preview and discount
   useEffect(() => {
     const fetchInstructorProfile = async () => {
-      if (!user || !isPreviewMode) return;
+      if (!user) return;
 
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('full_name, avatar_url, bio')
+          .select('full_name, avatar_url, bio, discount')
           .eq('id', user.id)
           .single();
 
@@ -300,12 +308,14 @@ const InstructorRetreatForm = () => {
             name: user.email?.split('@')[0] || 'Instructor',
             avatar: '',
             bio: '',
+            discount: null,
           });
         } else {
           setInstructorProfile({
             name: data.full_name || user.email?.split('@')[0] || 'Instructor',
             avatar: data.avatar_url || '',
             bio: data.bio || '',
+            discount: data.discount || null,
           });
         }
       } catch (error) {
@@ -314,12 +324,43 @@ const InstructorRetreatForm = () => {
           name: user.email?.split('@')[0] || 'Instructor',
           avatar: '',
           bio: '',
+          discount: null,
         });
       }
     };
 
     fetchInstructorProfile();
-  }, [user, isPreviewMode]);
+  }, [user]);
+
+  // Fetch venue owner discount when venue is selected
+  useEffect(() => {
+    const fetchVenueOwnerDiscount = async () => {
+      if (!selectedVenue?.owner_id) {
+        setVenueOwnerDiscount(null);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('discount')
+          .eq('id', selectedVenue.owner_id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching venue owner discount:', error);
+          setVenueOwnerDiscount(null);
+        } else {
+          setVenueOwnerDiscount(data.discount || null);
+        }
+      } catch (error) {
+        console.error('Unexpected error fetching venue owner discount:', error);
+        setVenueOwnerDiscount(null);
+      }
+    };
+
+    fetchVenueOwnerDiscount();
+  }, [selectedVenue]);
 
   // Handle duplicate data from navigation state
   useEffect(() => {
@@ -987,6 +1028,40 @@ const InstructorRetreatForm = () => {
   const handleLocationChange = (location: string, venueData?: any) => {
     setFormData(prev => ({ ...prev, location }));
     setSelectedVenue(venueData || null);
+  };
+
+  // Calculate platform fee based on discounts
+  const calculatePlatformFee = (revenue: number): number => {
+    const basePlatformFee = revenue * 0.124; // 12.4% base fee
+    let discountMultiplier = 1; // Start with no discount
+    
+    // Check if organizer has percentage discount
+    if (instructorProfile?.discount && instructorProfile.discount.type === 'percentage') {
+      const orgDiscountValue = instructorProfile.discount.value;
+      if (orgDiscountValue >= 100) {
+        return 0; // 100% discount = no platform fee
+      } else if (orgDiscountValue > 0) {
+        // Apply discount: reduce platform fee by discount percentage
+        discountMultiplier = 1 - (orgDiscountValue / 100);
+      }
+    }
+    
+    // Check if venue owner has percentage discount (takes precedence if higher)
+    if (venueOwnerDiscount && venueOwnerDiscount.type === 'percentage') {
+      const venueDiscountValue = venueOwnerDiscount.value;
+      if (venueDiscountValue >= 100) {
+        return 0; // 100% discount = no platform fee
+      } else if (venueDiscountValue > 0) {
+        // Use the higher discount if venue owner has a better discount
+        const venueMultiplier = 1 - (venueDiscountValue / 100);
+        if (venueMultiplier < discountMultiplier) {
+          discountMultiplier = venueMultiplier;
+        }
+      }
+    }
+    
+    // Apply discount to platform fee
+    return basePlatformFee * discountMultiplier;
   };
 
   const handleSave = async (published?: boolean) => {
@@ -3340,12 +3415,40 @@ const InstructorRetreatForm = () => {
                   <h3 className="text-sm font-semibold text-card-foreground mb-3">Costs</h3>
                 </div>
                 
-                <div className="flex items-center justify-between py-2 border-b">
-                  <span className="text-sm font-medium">-12.4% Platform Fee</span>
-                  <span className="text-sm font-semibold text-destructive">
-                    -${(((formData.price || 0) * (formData.totalSpots || 0)) * 0.124).toFixed(2)}
-                  </span>
-                </div>
+                {(() => {
+                  const revenue = (formData.price || 0) * (formData.totalSpots || 0);
+                  const basePlatformFee = revenue * 0.124;
+                  const platformFee = calculatePlatformFee(revenue);
+                  
+                  // Determine discount info for display
+                  let discountInfo = '';
+                  if (instructorProfile?.discount && instructorProfile.discount.type === 'percentage') {
+                    discountInfo = `Organizer: ${instructorProfile.discount.value}% discount`;
+                  }
+                  if (venueOwnerDiscount && venueOwnerDiscount.type === 'percentage') {
+                    if (discountInfo) discountInfo += ' | ';
+                    discountInfo += `Venue: ${venueOwnerDiscount.value}% discount`;
+                  }
+                  
+                  const hasDiscount = platformFee < basePlatformFee;
+                  const discountPercent = hasDiscount ? ((1 - (platformFee / basePlatformFee)) * 100).toFixed(1) : '0';
+                  
+                  return (
+                    <div className="flex items-center justify-between py-2 border-b">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">
+                          {hasDiscount ? `Platform Fee (${discountPercent}% Discount Applied)` : '-12.4% Platform Fee'}
+                        </span>
+                        {hasDiscount && discountInfo && (
+                          <span className="text-xs text-muted-foreground mt-0.5">{discountInfo}</span>
+                        )}
+                      </div>
+                      <span className="text-sm font-semibold text-destructive">
+                        -${platformFee.toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })()}
                 
                 <div className="space-y-2">
                   <Label>Location/Venue Fees ($)</Label>
@@ -3401,17 +3504,20 @@ const InstructorRetreatForm = () => {
                   </div>
                 )}
                 
-                <div className="flex items-center justify-between py-3 pt-4 border-t-2 border-primary">
-                  <span className="text-base font-bold">Total Revenue Payout</span>
-                  <span className="text-lg font-bold text-primary">
-                    ${(
-                      ((formData.price || 0) * (formData.totalSpots || 0)) -
-                      (((formData.price || 0) * (formData.totalSpots || 0)) * 0.124) -
-                      venueFees -
-                      foodBudget
-                    ).toFixed(2)}
-                  </span>
-                </div>
+                {(() => {
+                  const revenue = (formData.price || 0) * (formData.totalSpots || 0);
+                  const platformFee = calculatePlatformFee(revenue);
+                  const totalPayout = revenue - platformFee - venueFees - foodBudget;
+                  
+                  return (
+                    <div className="flex items-center justify-between py-3 pt-4 border-t-2 border-primary">
+                      <span className="text-base font-bold">Total Revenue Payout</span>
+                      <span className="text-lg font-bold text-primary">
+                        ${totalPayout.toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
