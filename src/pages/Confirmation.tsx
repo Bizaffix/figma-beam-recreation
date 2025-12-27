@@ -2,6 +2,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, Clock } from "lucide-react";
 import calendar, { createGoogleCalendarUrl } from "@/lib/calendar";
 import { convertReferral, getCurrentAffiliate } from "@/lib/affiliate-tracking";
 import { supabase } from "@/lib/supabase";
@@ -13,6 +15,7 @@ const Confirmation = () => {
   const retreat = (location.state as any)?.retreat;
   const booking = (location.state as any)?.booking;
   const bookingId = (location.state as any)?.bookingId;
+  const paymentMethod = (location.state as any)?.paymentMethod; // 'manual' or 'stripe'
 
   // Convert affiliate referral when booking is confirmed
   useEffect(() => {
@@ -86,9 +89,34 @@ const Confirmation = () => {
       <div className="w-full max-w-2xl px-6">
         <div className="text-center mb-6">
           <div className="mx-auto w-24 h-24 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-white text-3xl">✓</div>
-          <h1 className="text-2xl font-bold mt-6">You're All Set!</h1>
-          <p className="text-muted-foreground mt-2">Your spot has been reserved for {retreat?.title}</p>
+          <h1 className="text-2xl font-bold mt-6">
+            {paymentMethod === 'manual' ? 'Registration Submitted!' : "You're All Set!"}
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            {paymentMethod === 'manual' 
+              ? 'Your registration is pending organizer approval'
+              : `Your spot has been reserved for ${retreat?.title}`}
+          </p>
         </div>
+
+        {/* 48-Hour Warning for Manual Payments */}
+        {paymentMethod === 'manual' && (
+          <Alert className="mb-6 border-orange-200 bg-orange-50">
+            <AlertCircle className="h-5 w-5 text-orange-600" />
+            <AlertTitle className="text-orange-800 font-semibold">Payment Required Within 48 Hours</AlertTitle>
+            <AlertDescription className="text-orange-700 mt-2">
+              <p className="mb-2">
+                Your registration has been submitted and is pending organizer approval.
+              </p>
+              <p className="mb-2">
+                <strong>⚠️ IMPORTANT:</strong> You must submit your payment to the organizer within <strong>48 hours</strong>, or your registration will be automatically cancelled.
+              </p>
+              <p className="mb-3">
+                Please contact the organizer directly to arrange payment. Once the organizer receives your payment and approves your registration, you will receive a confirmation email.
+              </p>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Card>
           <CardContent className="p-4">

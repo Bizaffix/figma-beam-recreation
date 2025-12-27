@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { Users, DollarSign, CreditCard, AlertCircle, CheckCircle, Clock, RefreshCw, Mail, Phone, Calendar, Search, Filter, Download, UserCheck, UserX, TrendingUp, Activity, Send, MessageSquare, Bell } from "lucide-react";
+import { sendCustomEmail } from "@/lib/email-notifications";
+import { Users, DollarSign, CreditCard, AlertCircle, CheckCircle, Clock, RefreshCw, Mail, Phone, Calendar, Search, Filter, Download, UserCheck, UserX, TrendingUp, Activity, Send, MessageSquare, Bell, X } from "lucide-react";
 
 interface Booking {
   id: string;
@@ -20,11 +21,13 @@ interface Booking {
   full_name: string;
   email: string;
   skill_level: string;
-  payment_status: "deposit_paid" | "fully_paid" | "refunded" | "cancelled";
+  payment_status: "deposit_paid" | "fully_paid" | "paid_manual" | "refunded" | "cancelled";
+  manual_payment_status?: "pending_approval" | "approved";
   deposit_amount?: number;
   full_amount?: number;
   payment_intent_id?: string;
   booking_date: string;
+  created_at?: string;
   refund_id?: string;
   refund_reason?: string;
   refund_date?: string;
@@ -57,15 +60,25 @@ const UserManagement = () => {
   const [notifyDialog, setNotifyDialog] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
   const [notifyMessage, setNotifyMessage] = useState("");
   const [sendingNotification, setSendingNotification] = useState<string | null>(null);
+  const [processingApproval, setProcessingApproval] = useState<string | null>(null);
 
   // Calculate statistics
   const stats = {
     totalBookings: bookings.length,
-    fullyPaid: bookings.filter(b => b.payment_status === 'fully_paid').length,
+    fullyPaid: bookings.filter(b => 
+      b.payment_status === 'fully_paid' || 
+      (b.payment_status === 'paid_manual' && b.manual_payment_status === 'approved')
+    ).length,
     depositPaid: bookings.filter(b => b.payment_status === 'deposit_paid').length,
     refunded: bookings.filter(b => b.payment_status === 'refunded').length,
+    pendingApproval: bookings.filter(b => 
+      b.payment_status === 'paid_manual' && b.manual_payment_status === 'pending_approval'
+    ).length,
     totalRevenue: bookings
-      .filter(b => b.payment_status === 'fully_paid')
+      .filter(b => 
+        b.payment_status === 'fully_paid' || 
+        (b.payment_status === 'paid_manual' && b.manual_payment_status === 'approved')
+      )
       .reduce((sum, b) => sum + (b.full_amount || 0), 0),
   };
 
@@ -105,6 +118,7 @@ const UserManagement = () => {
           .from('bookings')
           .select('*')
           .in('retreat_id', retreats.map(r => r.id))
+          .neq('payment_status', 'cancelled') // Exclude cancelled bookings
           .order('booking_date', { ascending: false });
 
         if (error) {
@@ -126,10 +140,23 @@ const UserManagement = () => {
 
     if (retreats.length > 0) {
       fetchBookings();
+      // Check for expired pending approvals on load
+      checkExpiredPendingApprovals();
     } else {
       setLoading(false);
     }
   }, [user, retreats, toast]);
+
+  // Check for expired pending approvals every 5 minutes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (retreats.length > 0) {
+        checkExpiredPendingApprovals();
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [retreats]);
 
   // Filter bookings based on selected retreat and search term
   const filteredBookings = bookings.filter((booking) => {
@@ -201,6 +228,336 @@ const UserManagement = () => {
     }
   };
 
+  // Approve manual payment - payment received, registration complete
+  const approveManualPayment = async (booking: Booking) => {
+    setProcessingApproval(booking.id);
+
+    try {
+      // Update booking to approved status (payment received, registration complete)
+      const { data: updatedBooking, error: updateError } = await supabase
+        .from('bookings')
+        .update({
+          manual_payment_status: 'approved',
+          payment_status: 'paid_manual',
+          status: 'confirmed', // Ensure status is confirmed
+        })
+        .eq('id', booking.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Error updating booking:', updateError);
+        throw updateError;
+      }
+
+      if (!updatedBooking) {
+        throw new Error('Booking update returned no data - booking may not exist or update failed');
+      }
+
+      console.log('Booking approved successfully:', updatedBooking);
+
+      // Send confirmation email to user
+      const retreat = getRetreatDetails(booking.retreat_id);
+      const confirmationEmailSubject = `Registration Confirmed: ${retreat?.title || 'Your Retreat Registration'}`;
+      const confirmationEmailMessage = `
+Hello ${booking.full_name},
+
+Great news! Your manual payment for "${retreat?.title || 'the retreat'}" has been received and approved by the organizer.
+
+✅ Your registration is now confirmed!
+
+Retreat Details:
+- Event: ${retreat?.title || 'Your Retreat'}
+- Date: ${retreat?.date || 'TBD'}
+- Location: ${retreat?.location || 'TBD'}
+- Amount Paid: $${(booking.full_amount || booking.amount || 0).toFixed(2)}
+
+We look forward to seeing you at the retreat!
+
+If you have any questions, please contact the organizer directly.
+
+Thank you,
+BookMyQuiltRetreat Team
+      `.trim();
+
+      // Send confirmation email
+      const { error: emailError } = await sendCustomEmail({
+        emails: [booking.email],
+        subject: confirmationEmailSubject,
+        message: confirmationEmailMessage,
+        recipientType: 'students',
+      });
+
+      if (emailError) {
+        console.error('Error sending confirmation email:', emailError);
+        // Don't throw - booking is already approved
+      }
+
+      // Also save to messages table for in-app notifications (optional)
+      try {
+        await supabase
+          .from('messages')
+          .insert({
+            message_type: 'attendee_communication',
+            related_id: booking.id,
+            sender_id: user?.id,
+            sender_name: user?.user_metadata?.full_name || 'Instructor',
+            sender_role: 'instructor',
+            receiver_email: booking.email,
+            content: `Your manual payment has been approved and your registration for "${retreat?.title || 'the retreat'}" is now confirmed.`,
+            read: false,
+          });
+      } catch (error) {
+        console.warn('Could not save confirmation message to database (this is optional):', error);
+        // Continue - email notification was successful
+      }
+
+      // Update local state
+      setBookings(prev => prev.map(b => 
+        b.id === booking.id 
+          ? { ...b, manual_payment_status: 'approved', payment_status: 'paid_manual', status: 'confirmed' }
+          : b
+      ));
+
+      toast({
+        title: "Payment Approved & Registration Confirmed",
+        description: `Payment received and registration confirmed for ${booking.full_name}. Confirmation email sent.`,
+      });
+    } catch (error: any) {
+      console.error('Error approving payment:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to approve payment",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessingApproval(null);
+    }
+  };
+
+
+  // Reject manual payment - immediately cancel the registration (only within 48 hours of booking)
+  const rejectManualPayment = async (booking: Booking) => {
+    setProcessingApproval(booking.id);
+
+    try {
+      // Check if booking is within 48 hours
+      const bookingDate = booking.booking_date || booking.created_at || new Date().toISOString();
+      const bookingTimestamp = new Date(bookingDate).getTime();
+      const fortyEightHoursAgoTimestamp = Date.now() - (48 * 60 * 60 * 1000);
+      
+      if (bookingTimestamp < fortyEightHoursAgoTimestamp) {
+        toast({
+          title: "Cannot Reject",
+          description: "This booking is older than 48 hours. It will be automatically cancelled if not approved.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Immediately cancel the booking (same as auto-cancellation)
+      const { data: updatedBooking, error: updateError } = await supabase
+        .from('bookings')
+        .update({
+          payment_status: 'cancelled',
+          status: 'cancelled',
+          manual_payment_status: null,
+        })
+        .eq('id', booking.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Error updating booking:', updateError);
+        throw updateError;
+      }
+
+      if (!updatedBooking) {
+        throw new Error('Booking update returned no data - booking may not exist or update failed');
+      }
+
+      console.log('Booking updated successfully:', updatedBooking);
+
+      // Restore spot (increment spots available)
+      const { error: spotsError } = await supabase.rpc('increment_spots', { retreat_id: booking.retreat_id });
+      
+      if (spotsError) {
+        console.error('Error incrementing spots:', spotsError);
+        // Don't throw - booking is already cancelled, spots can be fixed manually
+      }
+
+      // Send cancellation notification via email and message
+      const retreat = getRetreatDetails(booking.retreat_id);
+      const cancellationEmailSubject = `Registration Cancelled: ${retreat?.title || 'Your Retreat Registration'}`;
+      const cancellationEmailMessage = `
+Hello ${booking.full_name},
+
+Your registration for "${retreat?.title || 'the retreat'}" has been cancelled because your manual payment claim was rejected by the organizer.
+
+Your spot has been released and is now available for other participants.
+
+If you believe this is an error or would like to re-register, please contact the organizer or visit our website to book again.
+
+Thank you,
+BookMyQuiltRetreat Team
+      `.trim();
+
+      // Send email notification
+      const { error: emailError } = await sendCustomEmail({
+        emails: [booking.email],
+        subject: cancellationEmailSubject,
+        message: cancellationEmailMessage,
+        recipientType: 'students',
+      });
+
+      if (emailError) {
+        console.error('Error sending cancellation email:', emailError);
+      }
+
+      // Also save to messages table for in-app notifications (optional - email already sent)
+      try {
+        await supabase
+          .from('messages')
+          .insert({
+            message_type: 'booking_cancelled',
+            related_id: booking.id,
+            sender_id: user?.id,
+            sender_name: user?.user_metadata?.full_name || 'Instructor',
+            sender_role: 'instructor',
+            receiver_email: booking.email,
+            content: `Your booking has been cancelled because your manual payment claim was rejected by the organizer. Your spot has been released.`,
+            read: false,
+          });
+      } catch (error) {
+        console.warn('Could not save cancellation message to database (this is optional):', error);
+        // Continue - email notification was successful
+      }
+
+      // Remove from local state (cancelled bookings are excluded from the query)
+      setBookings(prev => prev.filter(b => b.id !== booking.id));
+
+      toast({
+        title: "Registration Cancelled",
+        description: `Registration for ${booking.full_name} has been cancelled and spot restored.`,
+      });
+    } catch (error: any) {
+      console.error('Error rejecting payment:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reject payment",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessingApproval(null);
+    }
+  };
+
+  // Check and cancel expired pending approvals (called on component mount and periodically)
+  const checkExpiredPendingApprovals = async () => {
+    try {
+      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      
+      // Find bookings that are still pending approval and were created more than 48 hours ago
+      const { data: expiredPendingBookings, error: fetchPendingError } = await supabase
+        .from('bookings')
+        .select('id, retreat_id, full_name, email, booking_date, created_at')
+        .eq('payment_status', 'paid_manual')
+        .eq('manual_payment_status', 'pending_approval')
+        .lt('booking_date', fortyEightHoursAgo);
+
+      if (fetchPendingError) {
+        console.error('Error fetching expired pending bookings:', fetchPendingError);
+        return;
+      }
+
+      const expiredBookings = expiredPendingBookings || [];
+
+      if (!expiredBookings || expiredBookings.length === 0) {
+        return;
+      }
+
+      // Cancel expired pending approvals and restore spots
+      for (const booking of expiredBookings) {
+        // Check if booking is actually older than 48 hours
+        const bookingDate = booking.booking_date || booking.created_at || new Date().toISOString();
+        const bookingTimestamp = new Date(bookingDate).getTime();
+        const fortyEightHoursAgoTimestamp = Date.now() - (48 * 60 * 60 * 1000);
+        
+        if (bookingTimestamp > fortyEightHoursAgoTimestamp) {
+          continue; // Skip if not actually expired
+        }
+
+        // Update booking status
+        await supabase
+          .from('bookings')
+          .update({
+            payment_status: 'cancelled',
+            status: 'cancelled',
+            manual_payment_status: null,
+          })
+          .eq('id', booking.id);
+
+        // Restore spot (increment spots available)
+        await supabase.rpc('increment_spots', { retreat_id: booking.retreat_id });
+
+        // Send cancellation notification via email and message
+        const retreat = getRetreatDetails(booking.retreat_id);
+        const cancellationEmailSubject = `Registration Cancelled: ${retreat?.title || 'Your Retreat Registration'}`;
+        const cancellationEmailMessage = `
+Hello ${booking.full_name},
+
+Your registration for "${retreat?.title || 'the retreat'}" has been automatically cancelled because payment was not completed within the 48-hour deadline.
+
+Your spot has been released and is now available for other participants.
+
+If you believe this is an error or would like to re-register, please contact the organizer or visit our website to book again.
+
+Thank you,
+BookMyQuiltRetreat Team
+        `.trim();
+
+        // Send email notification
+        const { error: emailError } = await sendCustomEmail({
+          emails: [booking.email],
+          subject: cancellationEmailSubject,
+          message: cancellationEmailMessage,
+          recipientType: 'students',
+        });
+
+        if (emailError) {
+          console.error('Error sending cancellation email:', emailError);
+        }
+
+        // Also save to messages table for in-app notifications (optional - email already sent)
+        try {
+          await supabase
+            .from('messages')
+            .insert({
+              message_type: 'booking_cancelled',
+              related_id: booking.id,
+              sender_id: null, // System messages don't have a sender_id
+              sender_name: 'System',
+              sender_role: 'system',
+              receiver_email: booking.email,
+              content: `Your booking has been cancelled because payment was not completed within 48 hours. Your spot has been released.`,
+              read: false,
+            });
+        } catch (error) {
+          console.warn('Could not save cancellation message to database (this is optional):', error);
+          // Continue - email notification was successful
+        }
+      }
+
+      // Remove cancelled bookings from local state (they're excluded from query)
+      if (expiredBookings.length > 0) {
+        const cancelledIds = expiredBookings.map(b => b.id);
+        setBookings(prev => prev.filter(b => !cancelledIds.includes(b.id)));
+      }
+    } catch (error) {
+      console.error('Error checking expired rejections:', error);
+    }
+  };
+
   // Send notification to user
   const sendNotification = async (booking: Booking) => {
     if (!notifyMessage.trim()) {
@@ -257,12 +614,37 @@ const UserManagement = () => {
   };
 
   // Get payment status badge
-  const getPaymentStatusBadge = (status: string) => {
+  const getPaymentStatusBadge = (booking: Booking) => {
+    const status = booking.payment_status;
+    const manualStatus = booking.manual_payment_status;
+    
+    // Show pending approval for manual payments with countdown
+    if (status === 'paid_manual' && manualStatus === 'pending_approval') {
+      const bookingDate = booking.booking_date ? new Date(booking.booking_date) : new Date(booking.created_at || Date.now());
+      const hoursElapsed = Math.floor((Date.now() - bookingDate.getTime()) / (1000 * 60 * 60));
+      const hoursRemaining = Math.max(0, 48 - hoursElapsed);
+      
+      return (
+        <div className="flex flex-col gap-1">
+          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Pending Approval</Badge>
+          {hoursRemaining > 0 && (
+            <span className="text-xs text-yellow-600">{hoursRemaining}h remaining</span>
+          )}
+          {hoursRemaining === 0 && (
+            <span className="text-xs text-red-600">Expired - Will cancel soon</span>
+          )}
+        </div>
+      );
+    }
+    
+    
     switch (status) {
       case 'deposit_paid':
         return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Deposit Paid</Badge>;
       case 'fully_paid':
-        return <Badge className="bg-green-100 text-green-800 border-green-200">Fully Paid</Badge>;
+        return <Badge className="bg-green-100 text-green-800 border-green-200">Paid</Badge>;
+      case 'paid_manual':
+        return <Badge className="bg-purple-100 text-purple-800 border-purple-200">Paid Manual</Badge>;
       case 'refunded':
         return <Badge className="bg-red-100 text-red-800 border-red-200">Refunded</Badge>;
       case 'cancelled':
@@ -273,12 +655,19 @@ const UserManagement = () => {
   };
 
   // Get payment status icon
-  const getPaymentStatusIcon = (status: string) => {
+  const getPaymentStatusIcon = (status: string, manualStatus?: string) => {
+    // Show pending icon for manual payments awaiting approval
+    if (status === 'paid_manual' && manualStatus === 'pending_approval') {
+      return <Clock className="w-4 h-4 text-yellow-600" />;
+    }
+    
     switch (status) {
       case 'deposit_paid':
         return <CreditCard className="w-4 h-4 text-blue-600" />;
       case 'fully_paid':
         return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'paid_manual':
+        return <CheckCircle className="w-4 h-4 text-purple-600" />;
       case 'refunded':
         return <RefreshCw className="w-4 h-4 text-red-600" />;
       case 'cancelled':
@@ -286,6 +675,14 @@ const UserManagement = () => {
       default:
         return <Clock className="w-4 h-4 text-gray-600" />;
     }
+  };
+
+  // Check if booking is within 48 hours (for showing reject button)
+  const isWithin48Hours = (booking: Booking): boolean => {
+    const bookingDate = booking.booking_date || booking.created_at || new Date().toISOString();
+    const bookingTimestamp = new Date(bookingDate).getTime();
+    const fortyEightHoursAgoTimestamp = Date.now() - (48 * 60 * 60 * 1000);
+    return bookingTimestamp > fortyEightHoursAgoTimestamp;
   };
 
   if (loading) {
@@ -318,7 +715,7 @@ const UserManagement = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className={`grid grid-cols-2 sm:grid-cols-3 ${stats.pendingApproval > 0 ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-3 sm:gap-4`}>
         <Card className="p-4 border-2 hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-blue-100 rounded-xl">
@@ -374,6 +771,19 @@ const UserManagement = () => {
             </div>
           </div>
         </Card>
+        {stats.pendingApproval > 0 && (
+          <Card className="p-4 border-2 hover:shadow-md transition-shadow border-yellow-200 bg-yellow-50/50">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-yellow-100 rounded-xl">
+                <Clock className="w-6 h-6 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-2xl sm:text-3xl font-bold text-card-foreground">{stats.pendingApproval}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Pending Approval</p>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Filters */}
@@ -488,9 +898,9 @@ const UserManagement = () => {
                             </TableCell>
                             <TableCell className="px-6 py-4">
                               <div className="flex items-center gap-3">
-                                {getPaymentStatusIcon(booking.payment_status)}
+                                {getPaymentStatusIcon(booking.payment_status, booking.manual_payment_status)}
                                 <div>
-                                  {getPaymentStatusBadge(booking.payment_status)}
+                                  {getPaymentStatusBadge(booking)}
                                 </div>
                               </div>
                             </TableCell>
@@ -517,6 +927,20 @@ const UserManagement = () => {
                             </TableCell>
                             <TableCell className="px-6 py-4">
                               <div className="flex justify-center gap-2">
+                                {/* Approve button for pending manual payments */}
+                                {booking.payment_status === 'paid_manual' && booking.manual_payment_status === 'pending_approval' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200 transition-colors"
+                                    onClick={() => approveManualPayment(booking)}
+                                    disabled={processingApproval === booking.id}
+                                  >
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    {processingApproval === booking.id ? "Processing..." : "Approve Payment"}
+                                  </Button>
+                                )}
+                                
                                 {/* Notify Button */}
                                 <Dialog
                                   open={notifyDialog.open && notifyDialog.booking?.id === booking.id}
@@ -573,7 +997,7 @@ const UserManagement = () => {
                                 </Dialog>
                                 
                                 {/* Refund Button */}
-                                {booking.payment_status === 'fully_paid' && (
+                                {(booking.payment_status === 'fully_paid' || booking.payment_status === 'paid_manual') && (
                                   <Dialog
                                     open={refundDialog.open && refundDialog.booking?.id === booking.id}
                                     onOpenChange={(open) => setRefundDialog({ open, booking: open ? booking : null })}
@@ -656,8 +1080,8 @@ const UserManagement = () => {
                               </p>
                             </div>
                             <div className="flex flex-col items-end gap-2 ml-4">
-                              {getPaymentStatusIcon(booking.payment_status)}
-                              {getPaymentStatusBadge(booking.payment_status)}
+                              {getPaymentStatusIcon(booking.payment_status, booking.manual_payment_status)}
+                              {getPaymentStatusBadge(booking)}
                             </div>
                           </div>
                           
@@ -714,6 +1138,34 @@ const UserManagement = () => {
                           
                           {/* Actions */}
                           <div className="pt-3 border-t space-y-2">
+                            {/* Approve/Reject buttons for pending manual payments (only within 48 hours) */}
+                            {booking.payment_status === 'paid_manual' && booking.manual_payment_status === 'pending_approval' && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200 transition-colors py-3"
+                                  onClick={() => approveManualPayment(booking)}
+                                  disabled={processingApproval === booking.id}
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  {processingApproval === booking.id ? "Processing..." : "Approve"}
+                                </Button>
+                                {isWithin48Hours(booking) && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 transition-colors py-3"
+                                    onClick={() => rejectManualPayment(booking)}
+                                    disabled={processingApproval === booking.id}
+                                  >
+                                    <X className="w-4 h-4 mr-2" />
+                                    {processingApproval === booking.id ? "Processing..." : "Reject"}
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                            
                             {/* Notify Button */}
                             <Dialog
                               open={notifyDialog.open && notifyDialog.booking?.id === booking.id}
@@ -770,7 +1222,7 @@ const UserManagement = () => {
                             </Dialog>
                             
                             {/* Refund Button */}
-                            {booking.payment_status === 'fully_paid' && (
+                            {(booking.payment_status === 'fully_paid' || booking.payment_status === 'paid_manual') && (
                               <Dialog
                                 open={refundDialog.open && refundDialog.booking?.id === booking.id}
                                 onOpenChange={(open) => setRefundDialog({ open, booking: open ? booking : null })}

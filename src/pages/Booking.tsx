@@ -6,9 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { MapPin, Calendar, Clock, Users, Info, DollarSign, CreditCard } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { sendCustomEmail } from "@/lib/email-notifications";
 
 interface ContentCard {
   id: string;
@@ -69,8 +72,10 @@ const Booking = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [retreat, setRetreat] = useState<RetreatData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [processingManualPayment, setProcessingManualPayment] = useState(false);
   
   // Form state - must be declared before any conditional returns
   const [fullName, setFullName] = useState("");
@@ -78,6 +83,7 @@ const Booking = () => {
   const [skillLevel, setSkillLevel] = useState<"Any" | "Beginner" | "Intermediate" | "Advanced" | "">("");
   const [selectedPriceVariant, setSelectedPriceVariant] = useState("");
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
+  const [paidManually, setPaidManually] = useState(false);
   
   // Form validation errors
   const [errors, setErrors] = useState({
@@ -206,9 +212,124 @@ const Booking = () => {
     setErrors(newErrors);
   };
   
+  // Handle manual payment booking creation
+  const handleManualPayment = async () => {
+    if (!validateForm() || !retreat || !user) {
+      return;
+    }
+
+    setProcessingManualPayment(true);
+
+    try {
+      const totalPrice = calculateTotalPrice();
+      
+      // Create booking with manual payment status (pending approval)
+      const { data: booking, error } = await supabase
+        .from('bookings')
+        .insert({
+          retreat_id: retreat.id,
+          user_id: user.id,
+          payment_intent_id: `manual_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`, // Unique ID for manual payments
+          full_name: fullName.trim(),
+          email: email.trim(),
+          skill_level: skillLevel,
+          amount: totalPrice,
+          status: 'confirmed', // Set status for database consistency
+          payment_status: 'paid_manual',
+          manual_payment_status: 'pending_approval', // Requires organizer approval
+          full_amount: totalPrice,
+          price_variant: selectedPriceVariant || null,
+          add_ons: selectedAddOns.length > 0 ? selectedAddOns : null,
+          booking_date: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      // Update retreat spots available
+      await supabase.rpc('decrement_spots', { retreat_id: retreat.id });
+
+      // Send initial email notification about manual payment submission
+      const emailSubject = `Registration Submitted: ${retreat.title}`;
+      const emailMessage = `
+Hello ${fullName.trim()},
+
+Thank you for registering for "${retreat.title}"!
+
+Your manual payment registration has been submitted and is currently pending organizer approval.
+
+⚠️ IMPORTANT: You must submit your payment to the organizer within 48 hours, or your registration will be automatically cancelled.
+
+Please contact the organizer directly to arrange payment. Once the organizer receives your payment and approves your registration, you will receive a confirmation email.
+
+Retreat Details:
+- Event: ${retreat.title}
+- Date: ${retreat.date}
+- Location: ${retreat.location}
+- Amount: $${totalPrice.toFixed(2)}
+
+If you have any questions, please contact the organizer directly.
+
+Thank you,
+BookMyQuiltRetreat Team
+      `.trim();
+
+      // Send email notification (don't block on error)
+      sendCustomEmail({
+        emails: [email.trim()],
+        subject: emailSubject,
+        message: emailMessage,
+        recipientType: 'students',
+      }).catch(error => {
+        console.error('Error sending initial email notification:', error);
+        // Don't show error to user - registration succeeded
+      });
+
+      toast({
+        title: "Registration Submitted",
+        description: "Your manual payment registration has been submitted and is pending organizer approval.",
+      });
+
+      // Navigate to confirmation page
+      navigate(`/retreat/${id}/confirmed`, {
+        state: {
+          retreat,
+          booking: { 
+            fullName: fullName.trim(), 
+            email: email.trim(), 
+            skillLevel: skillLevel,
+            price_variant: selectedPriceVariant,
+            selected_add_ons: selectedAddOns
+          },
+          bookingId: booking.id,
+          paymentMethod: 'manual',
+        },
+      });
+    } catch (error: any) {
+      console.error('Error creating manual payment booking:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create booking. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessingManualPayment(false);
+    }
+  };
+
   // Handle form submission
   const handleContinue = () => {
     if (validateForm()) {
+      // If manual payment is selected, create booking directly
+      if (paidManually) {
+        handleManualPayment();
+        return;
+      }
+
+      // Otherwise, proceed to payment page
       navigate(`/retreat/${id}/payment`, {
         state: {
           retreat,
@@ -879,6 +1000,33 @@ const Booking = () => {
           </CardContent>
         </Card>
 
+        {/* Manual Payment Checkbox */}
+        <Card>
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-start space-x-3">
+              <Checkbox
+                id="paidManually"
+                checked={paidManually}
+                onCheckedChange={(checked) => setPaidManually(checked === true)}
+                className="mt-1"
+              />
+              <div className="flex-1">
+                <Label
+                  htmlFor="paidManually"
+                  className="text-sm sm:text-base font-normal cursor-pointer"
+                >
+                  I've paid manually via check, Venmo or other method
+                </Label>
+                {paidManually && (
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-2">
+                    Your registration will be confirmed immediately after submitting.
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
       </div>
 
       <div className="fixed bottom-4 left-0 right-0 px-4 sm:px-6 pb-safe">
@@ -886,8 +1034,13 @@ const Booking = () => {
           <Button
             className="w-full h-12 text-base sm:text-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white"
             onClick={handleContinue}
+            disabled={processingManualPayment}
           >
-            Continue to Payment
+            {processingManualPayment 
+              ? "Processing..." 
+              : paidManually 
+                ? "Complete Registration" 
+                : "Continue to Payment"}
           </Button>
           {(errors.fullName || errors.email || errors.skillLevel) && (
             <p className="text-xs sm:text-sm text-destructive text-center mt-2">
