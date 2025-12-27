@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2, Plus, DollarSign, CreditCard, Users, Copy } from "lucide-react";
+import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2, Plus, DollarSign, CreditCard, Users, Copy, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -242,6 +242,12 @@ const InstructorRetreatForm = () => {
   const [uploadingContentCardVideo, setUploadingContentCardVideo] = useState(false);
   const [newContentCardImages, setNewContentCardImages] = useState<string[]>([]);
   const [newContentCardVideos, setNewContentCardVideos] = useState<string[]>([]);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [instructorProfile, setInstructorProfile] = useState<{
+    name: string;
+    avatar: string;
+    bio: string;
+  } | null>(null);
 
   // Only show this page to instructors
   if (role !== 'instructor') {
@@ -275,6 +281,45 @@ const InstructorRetreatForm = () => {
 
     fetchDrafts();
   }, [user]);
+
+  // Fetch instructor profile for preview
+  useEffect(() => {
+    const fetchInstructorProfile = async () => {
+      if (!user || !isPreviewMode) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('full_name, avatar_url, bio')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching instructor profile:', error);
+          setInstructorProfile({
+            name: user.email?.split('@')[0] || 'Instructor',
+            avatar: '',
+            bio: '',
+          });
+        } else {
+          setInstructorProfile({
+            name: data.full_name || user.email?.split('@')[0] || 'Instructor',
+            avatar: data.avatar_url || '',
+            bio: data.bio || '',
+          });
+        }
+      } catch (error) {
+        console.error('Unexpected error fetching profile:', error);
+        setInstructorProfile({
+          name: user.email?.split('@')[0] || 'Instructor',
+          avatar: '',
+          bio: '',
+        });
+      }
+    };
+
+    fetchInstructorProfile();
+  }, [user, isPreviewMode]);
 
   // Handle duplicate data from navigation state
   useEffect(() => {
@@ -1655,6 +1700,359 @@ const InstructorRetreatForm = () => {
         images: card.images.filter(img => img !== imageUrl)
       });
     }
+  };
+
+  const renderPreview = () => {
+    const scheduleData = itineraryBlocks.length > 0
+      ? convertItineraryToSchedule(itineraryBlocks)
+      : formData.schedule || [];
+
+    return (
+      <div className="min-h-screen bg-gradient-hero pb-20">
+        {/* Header Image */}
+        <div className="relative bg-white">
+          <img
+            src={formData.image || "/placeholder.svg"}
+            alt={formData.title || "Retreat Preview"}
+            className="w-full h-auto object-contain"
+          />
+          <Button
+            variant="secondary"
+            size="icon"
+            className="absolute top-4 left-4 rounded-full"
+            onClick={() => setIsPreviewMode(false)}
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <Badge className="absolute top-4 right-4 bg-amber-500 text-white font-semibold">
+            PREVIEW MODE
+          </Badge>
+        </div>
+
+        {/* Content */}
+        <div className="px-4 sm:px-6 -mt-4 max-w-4xl mx-auto space-y-4 sm:space-y-6 pt-4 pb-24 sm:pb-20">
+          {/* Main Info Card */}
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+                <div className="flex-1">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+                      {formData.level}
+                    </Badge>
+                  </div>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-card-foreground mb-2">
+                    {formData.title || "Retreat Title"}
+                  </h1>
+                </div>
+                <div className="text-left sm:text-right">
+                  {formData.price_variants && formData.price_variants.length > 0 ? (
+                    <div>
+                      <p className="text-xs sm:text-sm text-muted-foreground mb-1">Starting from</p>
+                      <p className="text-2xl sm:text-3xl font-bold text-primary">
+                        ${Math.min(...formData.price_variants.map(v => v.price)).toFixed(2)}
+                      </p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">
+                        {formData.price_variants.length} option{formData.price_variants.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-2xl sm:text-3xl font-bold text-primary">${formData.price || 0}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">per person</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Instructor */}
+              {instructorProfile && (
+                <div className="py-4 sm:py-6 border-y border-border">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={instructorProfile.avatar || "/placeholder.svg"}
+                      alt={instructorProfile.name}
+                      className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-card-foreground truncate">{instructorProfile.name}</p>
+                      <p className="text-sm text-muted-foreground">Instructor</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <div className="flex items-start gap-2 text-muted-foreground">
+                  <MapPin className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground mb-1">Location</p>
+                    <p className="text-sm font-medium text-card-foreground break-words break-all">{formData.location || "Location"}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-2 text-muted-foreground">
+                  <CalendarIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground mb-1">Dates</p>
+                    <p className="text-sm font-medium text-card-foreground break-words">{formData.date || "Date"}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-2 text-muted-foreground">
+                  <Clock className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground mb-1">Duration</p>
+                    <p className="text-sm font-medium text-card-foreground">{formData.duration || "Duration"}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-2 text-muted-foreground">
+                  <Users className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground mb-1">Availability</p>
+                    <p className="text-sm font-medium text-card-foreground">
+                      {formData.totalSpots || 0} spots
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* About */}
+          {formData.description && (
+            <Card>
+              <CardContent className="p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">About This Retreat</h2>
+                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">{formData.description}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* What's Included */}
+          {formData.includes && formData.includes.length > 0 && formData.includes.some(item => item && item.trim()) && (
+            <Card>
+              <CardContent className="p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">What's Included</h2>
+                <ul className="space-y-2">
+                  {formData.includes
+                    .filter(item => item && item.trim())
+                    .map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-sm sm:text-base text-muted-foreground">
+                        <span className="text-primary mt-1">✓</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Schedule */}
+          {scheduleData && scheduleData.length > 0 && scheduleData.some(item => (item.day && item.day.trim()) || (item.activities && item.activities.trim())) && (
+            <Card>
+              <CardContent className="p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">Schedule</h2>
+                <div className="space-y-3">
+                  {scheduleData
+                    .filter(item => (item.day && item.day.trim()) || (item.activities && item.activities.trim()))
+                    .map((item, idx) => (
+                      <div key={idx} className="pb-3 border-b border-border last:border-0 last:pb-0">
+                        {item.day && item.day.trim() && (
+                          <p className="font-semibold text-sm sm:text-base text-card-foreground mb-1">{item.day}</p>
+                        )}
+                        {item.activities && item.activities.trim() && (
+                          <p className="text-xs sm:text-sm text-muted-foreground">{item.activities}</p>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Itinerary Blocks */}
+          {itineraryBlocks && itineraryBlocks.length > 0 && itineraryBlocks.some(block => (block.day && block.day.trim()) || (block.title && block.title.trim()) || (block.description && block.description.trim())) && (
+            <Card>
+              <CardContent className="p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">Itinerary</h2>
+                <div className="space-y-3">
+                  {itineraryBlocks
+                    .filter(block => (block.day && block.day.trim()) || (block.title && block.title.trim()) || (block.description && block.description.trim()))
+                    .sort((a, b) => ((a as any).order || 0) - ((b as any).order || 0))
+                    .map((block) => (
+                      <div key={block.id} className="pb-3 border-b border-border last:border-0 last:pb-0">
+                        {(block.day && block.day.trim()) || (block.title && block.title.trim()) ? (
+                          <p className="font-semibold text-sm sm:text-base text-card-foreground mb-1">
+                            {block.day && block.day.trim() ? block.day : block.title}
+                          </p>
+                        ) : null}
+                        {block.description && block.description.trim() && (
+                          <p className="text-xs sm:text-sm text-muted-foreground">{block.description}</p>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Content Cards */}
+          {contentCards && contentCards.length > 0 && (
+            <Card>
+              <CardContent className="p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-4">Event Details</h2>
+                <div className="space-y-6">
+                  {contentCards
+                    .sort((a, b) => (a.order || 0) - (b.order || 0))
+                    .map((card) => (
+                      <div key={card.id} className="border rounded-lg p-4 sm:p-6 bg-card">
+                        <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3">{card.title}</h3>
+                        {card.description && (
+                          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed mb-4">{card.description}</p>
+                        )}
+                        {/* Images */}
+                        {card.images && card.images.length > 0 && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                            {card.images.map((img, idx) => (
+                              <img
+                                key={idx}
+                                src={img}
+                                alt={`${card.title} ${idx + 1}`}
+                                className="w-full h-32 sm:h-40 object-cover rounded-md"
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {/* Videos */}
+                        {card.videos && card.videos.length > 0 && (
+                          <div className="space-y-3">
+                            {card.videos.map((video, idx) => (
+                              <div key={idx} className="relative w-full aspect-video bg-muted rounded-md overflow-hidden">
+                                <video
+                                  src={video}
+                                  controls
+                                  className="w-full h-full object-contain"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Location Images */}
+          {locationImages && locationImages.length > 0 && (
+            <Card>
+              <CardContent className="p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">Location Photos</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {locationImages.map((img, idx) => (
+                    <img
+                      key={idx}
+                      src={img}
+                      alt={`Location ${idx + 1}`}
+                      className="w-full h-40 sm:h-48 object-cover rounded-md"
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Payment Terms */}
+          {(formData.deposit_amount || formData.payment_days_before_event !== null || formData.deposit_refundable !== null) && (
+            <Card>
+              <CardContent className="p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-4 flex items-center gap-2">
+                  <CreditCard className="w-5 h-5" />
+                  Payment Terms
+                </h2>
+                <div className="space-y-3 text-sm sm:text-base">
+                  {formData.deposit_amount && (
+                    <div className="flex items-center justify-between pb-2 border-b border-border">
+                      <span className="text-muted-foreground">Deposit Amount</span>
+                      <span className="font-medium text-card-foreground">${formData.deposit_amount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {formData.deposit_refundable !== null && (
+                    <div className="flex items-center justify-between pb-2 border-b border-border">
+                      <span className="text-muted-foreground">Deposit Refundable</span>
+                      <span className="font-medium text-card-foreground">
+                        {formData.deposit_refundable ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                  )}
+                  {formData.deposit_refund_days_before && (
+                    <div className="flex items-center justify-between pb-2 border-b border-border">
+                      <span className="text-muted-foreground">Refund Deadline</span>
+                      <span className="font-medium text-card-foreground">
+                        {formData.deposit_refund_days_before} days before event
+                      </span>
+                    </div>
+                  )}
+                  {formData.payment_days_before_event !== null && (
+                    <div className="flex items-center justify-between pb-2 border-b border-border">
+                      <span className="text-muted-foreground">Full Payment Due</span>
+                      <span className="font-medium text-card-foreground">
+                        {formData.payment_days_before_event} days before event
+                      </span>
+                    </div>
+                  )}
+                  {formData.full_payment_non_refundable !== null && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Full Payment Refundable</span>
+                      <span className="font-medium text-card-foreground">
+                        {formData.full_payment_non_refundable ? 'No' : 'Yes'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* About Instructor */}
+          {instructorProfile && (
+            <Card>
+              <CardContent className="p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-4">About the Instructor</h2>
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <img
+                    src={instructorProfile.avatar || "/placeholder.svg"}
+                    alt={instructorProfile.name}
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover flex-shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm sm:text-base text-card-foreground mb-1">{instructorProfile.name}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">{instructorProfile.bio || "Experienced quilting instructor"}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Back to Edit Button */}
+        <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-card border-t border-border pb-safe">
+          <div className="max-w-4xl mx-auto">
+            <Button
+              className="w-full h-12 text-base sm:text-lg"
+              onClick={() => setIsPreviewMode(false)}
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Edit
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderForm = () => {
@@ -3089,6 +3487,15 @@ const InstructorRetreatForm = () => {
               type="button"
               variant="outline"
               className="flex-1"
+              onClick={() => setIsPreviewMode(true)}
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              Preview
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
               onClick={() => handleSave(false)}
               disabled={saving}
             >
@@ -3108,6 +3515,11 @@ const InstructorRetreatForm = () => {
       </Card>
     );
   };
+
+  // Show preview if in preview mode
+  if (isPreviewMode && editingId !== null) {
+    return renderPreview();
+  }
 
   return (
     <div className="min-h-screen bg-gradient-hero pb-20">
