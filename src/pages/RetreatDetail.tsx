@@ -83,6 +83,17 @@ const RetreatDetail = () => {
   const [showSignupDialog, setShowSignupDialog] = useState(false);
   const [actionType, setActionType] = useState<'save' | 'register'>('register');
   const [showMessagingDialog, setShowMessagingDialog] = useState(false);
+  const [selectedPriceVariant, setSelectedPriceVariant] = useState<string | null>(null);
+
+  // Auto-select first price variant if available and none selected
+  useEffect(() => {
+    if (retreat?.price_variants && retreat.price_variants.length > 0 && !selectedPriceVariant) {
+      const firstVariant = retreat.price_variants.find(v => v.id && v.name && v.name.trim());
+      if (firstVariant) {
+        setSelectedPriceVariant(firstVariant.id);
+      }
+    }
+  }, [retreat?.price_variants, selectedPriceVariant]);
 
   // Fetch retreat from Supabase
   useEffect(() => {
@@ -318,10 +329,23 @@ const RetreatDetail = () => {
             ...retreat,
             spotsAvailable: retreat?.spots_available,
             totalSpots: retreat?.total_spots,
-          }
+          },
+          selectedPriceVariant: selectedPriceVariant
         } 
       });
     }
+  };
+
+  // Calculate displayed price based on selected variant
+  const getDisplayPrice = () => {
+    if (retreat?.price_variants && retreat.price_variants.length > 0) {
+      if (selectedPriceVariant) {
+        const variant = retreat.price_variants.find(v => v.id === selectedPriceVariant);
+        return variant ? variant.price : Math.min(...retreat.price_variants.map(v => v.price));
+      }
+      return Math.min(...retreat.price_variants.map(v => v.price));
+    }
+    return retreat?.price || 0;
   };
 
   if (loading) {
@@ -420,9 +444,11 @@ const RetreatDetail = () => {
               <div className="text-left sm:text-right">
                 {retreat.price_variants && retreat.price_variants.length > 0 ? (
                   <div>
-                    <p className="text-xs sm:text-sm text-muted-foreground mb-1">Starting from</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground mb-1">
+                      {selectedPriceVariant ? 'Selected' : 'Starting from'}
+                    </p>
                     <p className="text-2xl sm:text-3xl font-bold text-primary">
-                      ${Math.min(...retreat.price_variants.map(v => v.price)).toFixed(2)}
+                      ${getDisplayPrice().toFixed(2)}
                     </p>
                     <p className="text-xs sm:text-sm text-muted-foreground">
                       {retreat.price_variants.length} option{retreat.price_variants.length !== 1 ? 's' : ''}
@@ -436,6 +462,53 @@ const RetreatDetail = () => {
                 )}
               </div>
             </div>
+
+            {/* Price Variants Selection */}
+            {retreat.price_variants && retreat.price_variants.length > 0 && (
+              <div className="mt-4 space-y-3">
+                <p className="text-sm font-medium text-card-foreground">Select Pricing Option</p>
+                <div className="space-y-2">
+                  {retreat.price_variants
+                    .filter(variant => variant.id && variant.name && variant.name.trim())
+                    .map((variant) => (
+                      <div
+                        key={variant.id}
+                        onClick={() => setSelectedPriceVariant(variant.id)}
+                        className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                          selectedPriceVariant === variant.id
+                            ? 'border-primary bg-primary/5 shadow-sm'
+                            : 'border-border hover:border-primary/50 hover:bg-muted/30'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                selectedPriceVariant === variant.id
+                                  ? 'border-primary bg-primary'
+                                  : 'border-muted-foreground'
+                              }`}>
+                                {selectedPriceVariant === variant.id && (
+                                  <div className="w-2 h-2 rounded-full bg-white" />
+                                )}
+                              </div>
+                              <div className="font-medium text-card-foreground">{variant.name}</div>
+                            </div>
+                            {variant.description && (
+                              <div className="text-sm text-muted-foreground mt-1 ml-6">
+                                {variant.description}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-lg font-bold text-primary ml-4">
+                            ${variant.price.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
 
             {/* Instructor */}
             <div className="py-4 sm:py-6 border-y border-border">
@@ -739,7 +812,7 @@ const RetreatDetail = () => {
                     onClick={handleRegisterClick}
                   >
                     {retreat.price_variants && retreat.price_variants.length > 0 
-                      ? `Book Now - Starting from $${Math.min(...retreat.price_variants.map(v => v.price)).toFixed(2)}`
+                      ? `Book Now - $${getDisplayPrice().toFixed(2)}`
                       : `Book Now - $${retreat.price}`
                     }
                   </Button>
@@ -750,7 +823,7 @@ const RetreatDetail = () => {
                   onClick={handleRegisterClick}
                 >
                   {retreat.price_variants && retreat.price_variants.length > 0 
-                    ? `Register for This Retreat - Starting from $${Math.min(...retreat.price_variants.map(v => v.price)).toFixed(2)}`
+                    ? `Register for This Retreat - $${getDisplayPrice().toFixed(2)}`
                     : `Register for This Retreat - $${retreat.price}`
                   }
                 </Button>
@@ -853,3 +926,4 @@ const RetreatDetail = () => {
 };
 
 export default RetreatDetail;
+

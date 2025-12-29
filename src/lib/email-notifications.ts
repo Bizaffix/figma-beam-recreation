@@ -75,7 +75,7 @@ interface CustomEmailData {
   emails: string[];
   subject: string;
   message: string;
-  recipientType: 'students' | 'instructors';
+  recipientType: 'students' | 'organizers';
   images?: string[]; // Optional array of image URLs to include in the email
   headerImage?: string; // Optional header/logo image URL
   sections?: EmailSection[]; // Optional sections with message and images

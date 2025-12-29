@@ -55,7 +55,7 @@ const Index = () => {
   useEffect(() => {
     const fetchRetreats = async () => {
       try {
-        // Fetch published retreats with instructor info
+        // Fetch published retreats with organizer info
         const { data, error } = await supabase
           .from('retreats')
           .select(`
@@ -93,7 +93,7 @@ const Index = () => {
             published: retreat.published,
             instructor_id: retreat.instructor_id,
             instructor: {
-              name: retreat.instructor?.full_name || 'Instructor',
+              name: retreat.instructor?.full_name || 'Organizer',
               avatar: retreat.instructor?.avatar_url || '',
               bio: retreat.instructor?.bio || '',
               facebook: retreat.instructor?.facebook_url || '',
@@ -216,7 +216,7 @@ const Index = () => {
           <div className="relative flex-1 group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground transition-colors group-focus-within:text-primary" />
             <Input
-              placeholder="Search by title, location, or instructor..."
+              placeholder="Search by title, location, or organizer..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-12 pr-4 bg-card shadow-lg border-2 border-transparent focus:border-primary/20 h-14 text-base transition-all duration-200 hover:shadow-xl"

@@ -378,6 +378,7 @@ BookMyQuiltRetreat Team
   // Try to get retreat from navigation state first, then fetch by id
   useEffect(() => {
     const retreatFromState = (location.state as any)?.retreat;
+    const selectedVariantFromState = (location.state as any)?.selectedPriceVariant;
     
     if (retreatFromState) {
       // Transform if needed - include all fields
@@ -409,6 +410,10 @@ BookMyQuiltRetreat Team
         location_images: retreatFromState.location_images,
       };
       setRetreat(transformed);
+      // Set selected price variant if provided from navigation state
+      if (selectedVariantFromState) {
+        setSelectedPriceVariant(selectedVariantFromState);
+      }
       setLoading(false);
     } else if (id) {
       // Fetch from Supabase - get all fields

@@ -107,7 +107,7 @@ const AdminDashboard = () => {
   const [loadingInstructors, setLoadingInstructors] = useState(false);
   const [loadingLocationOwners, setLoadingLocationOwners] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
-  const [notificationRecipients, setNotificationRecipients] = useState<'students' | 'instructors' | null>(null);
+  const [notificationRecipients, setNotificationRecipients] = useState<'students' | 'organizers' | null>(null);
   const [notificationSubject, setNotificationSubject] = useState('');
   const [notificationMessage, setNotificationMessage] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -415,12 +415,12 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleNotificationClick = (recipientType: 'students' | 'instructors') => {
+  const handleNotificationClick = (recipientType: 'students' | 'organizers') => {
     const selected = recipientType === 'students' ? selectedStudents : selectedInstructors;
     if (selected.size === 0) {
       toast({
         title: "No recipients selected",
-        description: `Please select at least one ${recipientType === 'students' ? 'student' : 'instructor'} to notify`,
+        description: `Please select at least one ${recipientType === 'students' ? 'student' : 'organizer'} to notify`,
         variant: "destructive",
       });
       return;
@@ -1064,7 +1064,7 @@ const AdminDashboard = () => {
       } else {
         toast({
           title: "Success",
-          description: `Email sent to ${emails.length} ${notificationRecipients === 'students' ? 'student(s)' : 'instructor(s)'}`,
+          description: `Email sent to ${emails.length} ${notificationRecipients === 'students' ? 'student(s)' : 'organizer(s)'}`,
         });
         setNotificationDialogOpen(false);
         setNotificationSubject('');
@@ -1548,7 +1548,7 @@ const AdminDashboard = () => {
                   <span className="hidden sm:inline">Discount</span>
                 </Button>
                 <Button
-                  onClick={() => handleNotificationClick('instructors')}
+                  onClick={() => handleNotificationClick('organizers')}
                   size="sm"
                   className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2"
                   disabled={selectedInstructors.size === 0}
@@ -1886,13 +1886,13 @@ const AdminDashboard = () => {
           <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Bell className="w-5 h-5" />
-              Send Notification to {notificationRecipients === 'students' ? 'Students' : 'Instructors'}
+              Send Notification to {notificationRecipients === 'students' ? 'Students' : 'Organizers'}
             </DialogTitle>
             <DialogDescription>
               <div className="flex items-center justify-between">
                 {notificationRecipients && (
                   <span>
-                    Sending to {notificationRecipients === 'students' ? selectedStudents.size : selectedInstructors.size} selected {notificationRecipients === 'students' ? 'student(s)' : 'instructor(s)'}
+                    Sending to {notificationRecipients === 'students' ? selectedStudents.size : selectedInstructors.size} selected {notificationRecipients === 'students' ? 'student(s)' : 'organizer(s)'}
                   </span>
                 )}
                 <div className="flex gap-2">

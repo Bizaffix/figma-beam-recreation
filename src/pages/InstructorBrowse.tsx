@@ -41,7 +41,7 @@ const InstructorBrowse = () => {
     return null;
   }
 
-  // Fetch published retreats from other instructors
+  // Fetch published retreats from other organizers
   useEffect(() => {
     const fetchRetreats = async () => {
       if (!user) return;
@@ -121,7 +121,7 @@ const InstructorBrowse = () => {
       {/* Hero Section */}
       <div className="bg-gradient-primary text-white px-6 py-8">
         <h1 className="text-3xl font-bold mb-2">Browse Events</h1>
-        <p className="text-white/90 text-lg">Explore retreats from other instructors</p>
+        <p className="text-white/90 text-lg">Explore retreats from other organizers</p>
       </div>
 
       {/* Search Bar */}
@@ -173,7 +173,7 @@ const InstructorBrowse = () => {
         ) : (
           <div className="text-center py-8">
             <p className="text-muted-foreground text-lg">
-              {searchQuery ? `No retreats found matching "${searchQuery}"` : "No retreats from other instructors available"}
+              {searchQuery ? `No retreats found matching "${searchQuery}"` : "No retreats from other organizers available"}
             </p>
           </div>
         )}

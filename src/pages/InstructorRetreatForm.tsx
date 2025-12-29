@@ -605,11 +605,43 @@ const InstructorRetreatForm = () => {
           ));
         }
       } else if (typeof editingId === 'number') {
+        // Get current retreat to calculate spots_available correctly
+        const currentRetreat = draftRetreats.find(r => r.id === editingId);
+        const currentSpotsAvailable = currentRetreat?.spots_available || 0;
+        const currentTotalSpots = currentRetreat?.total_spots || 0;
+        const newTotalSpots = formData.totalSpots || 0;
+        
+        // Calculate new spots_available:
+        // If current spots_available is 0, check if there are actual bookings
+        // If no bookings, set to new total_spots. Otherwise, adjust based on booked spots
+        let newSpotsAvailable = newTotalSpots;
+        if (currentSpotsAvailable === 0 && currentTotalSpots > 0) {
+          // Check if there are actual bookings to determine if spots_available should be 0 or new_total_spots
+          const { count } = await supabase
+            .from('bookings')
+            .select('*', { count: 'exact', head: true })
+            .eq('retreat_id', editingId)
+            .eq('status', 'confirmed');
+          
+          const bookedSpots = count || 0;
+          if (bookedSpots === 0) {
+            // No bookings, so spots_available should match new total_spots
+            newSpotsAvailable = newTotalSpots;
+          } else {
+            // There are bookings, calculate correctly
+            newSpotsAvailable = Math.max(0, newTotalSpots - bookedSpots);
+          }
+        } else if (currentSpotsAvailable > 0 && currentTotalSpots > 0) {
+          const bookedSpots = currentTotalSpots - currentSpotsAvailable;
+          newSpotsAvailable = Math.max(0, newTotalSpots - bookedSpots);
+        }
+        
         const { spots_available, ...updateData } = retreatData;
         const { error } = await supabase
           .from('retreats')
           .update({
             ...updateData,
+            spots_available: newSpotsAvailable,
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingId)
@@ -621,7 +653,7 @@ const InstructorRetreatForm = () => {
         }
 
         setDraftRetreats(prev => prev.map(r => 
-          r.id === editingId ? { ...r, ...updateData, spots_available: r.spots_available } : r
+          r.id === editingId ? { ...r, ...updateData, spots_available: newSpotsAvailable } : r
         ));
       }
 
@@ -1106,11 +1138,43 @@ const InstructorRetreatForm = () => {
 
       if (editingId === 'new') {
         if (autoSaveDraftId) {
+          // Get current retreat to calculate spots_available correctly
+          const currentRetreat = draftRetreats.find(r => r.id === autoSaveDraftId);
+          const currentSpotsAvailable = currentRetreat?.spots_available || 0;
+          const currentTotalSpots = currentRetreat?.total_spots || 0;
+          const newTotalSpots = formData.totalSpots || 0;
+          
+          // Calculate new spots_available:
+          // If current spots_available is 0, check if there are actual bookings
+          // If no bookings, set to new total_spots. Otherwise, adjust based on booked spots
+          let newSpotsAvailable = newTotalSpots;
+          if (currentSpotsAvailable === 0 && currentTotalSpots > 0) {
+            // Check if there are actual bookings to determine if spots_available should be 0 or new_total_spots
+            const { count } = await supabase
+              .from('bookings')
+              .select('*', { count: 'exact', head: true })
+              .eq('retreat_id', autoSaveDraftId)
+              .eq('status', 'confirmed');
+            
+            const bookedSpots = count || 0;
+            if (bookedSpots === 0) {
+              // No bookings, so spots_available should match new total_spots
+              newSpotsAvailable = newTotalSpots;
+            } else {
+              // There are bookings, calculate correctly
+              newSpotsAvailable = Math.max(0, newTotalSpots - bookedSpots);
+            }
+          } else if (currentSpotsAvailable > 0 && currentTotalSpots > 0) {
+            const bookedSpots = currentTotalSpots - currentSpotsAvailable;
+            newSpotsAvailable = Math.max(0, newTotalSpots - bookedSpots);
+          }
+          
           const { spots_available, ...updateData } = retreatData;
           const { error } = await supabase
             .from('retreats')
             .update({
               ...updateData,
+              spots_available: newSpotsAvailable,
               updated_at: new Date().toISOString(),
             })
             .eq('id', autoSaveDraftId)
@@ -1147,7 +1211,7 @@ const InstructorRetreatForm = () => {
               description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
             });
             setDraftRetreats(prev => prev.map(r => 
-              r.id === autoSaveDraftId ? { ...r, ...updateData, spots_available: r.spots_available } : r
+              r.id === autoSaveDraftId ? { ...r, ...updateData, spots_available: newSpotsAvailable } : r
             ));
             cancelEditing();
           }
@@ -1192,11 +1256,27 @@ const InstructorRetreatForm = () => {
           }
         }
       } else if (typeof editingId === 'number') {
+        // Get current retreat to calculate spots_available correctly
+        const currentRetreat = draftRetreats.find(r => r.id === editingId);
+        const currentSpotsAvailable = currentRetreat?.spots_available || 0;
+        const currentTotalSpots = currentRetreat?.total_spots || 0;
+        const newTotalSpots = formData.totalSpots || 0;
+        
+        // Calculate new spots_available:
+        // If current spots_available is 0, assume no bookings and set to new total_spots
+        // Otherwise, adjust based on booked spots
+        let newSpotsAvailable = newTotalSpots;
+        if (currentSpotsAvailable > 0 && currentTotalSpots > 0) {
+          const bookedSpots = currentTotalSpots - currentSpotsAvailable;
+          newSpotsAvailable = Math.max(0, newTotalSpots - bookedSpots);
+        }
+        
         const { spots_available, ...updateData } = retreatData;
         const { error } = await supabase
           .from('retreats')
           .update({
             ...updateData,
+            spots_available: newSpotsAvailable,
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingId)
@@ -1242,7 +1322,7 @@ const InstructorRetreatForm = () => {
           });
           if (!retreatData.published) {
             setDraftRetreats(prev => prev.map(r => 
-              r.id === editingId ? { ...r, ...updateData, spots_available: r.spots_available } : r
+              r.id === editingId ? { ...r, ...updateData, spots_available: newSpotsAvailable } : r
             ));
           } else {
             setDraftRetreats(prev => prev.filter(r => r.id !== editingId));
