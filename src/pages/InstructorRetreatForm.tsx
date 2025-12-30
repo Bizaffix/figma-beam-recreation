@@ -2219,7 +2219,7 @@ const InstructorRetreatForm = () => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex-1">
               <h2 className="text-xl font-semibold text-card-foreground">
-                {isNew ? "Create New Retreat" : "Edit Retreat"}
+                Event Details
               </h2>
               {editingId !== null && (
                 <div className="flex items-center gap-2 mt-1">
@@ -2258,15 +2258,144 @@ const InstructorRetreatForm = () => {
             </div>
 
             <div>
+              <Label>Event Image</Label>
+              <div className="text-xs text-muted-foreground mb-2">
+                Recommended: 1200x400px (3:1 ratio) for best display • Max size: 5MB
+              </div>
+              <div className="space-y-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={uploadingImage}
+                  className="hidden"
+                />
+                {!imagePreview && !formData.image && (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 cursor-pointer hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-3"
+                  >
+                    <Upload className="w-8 h-8 text-muted-foreground" />
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-card-foreground">Upload Image</p>
+                      <p className="text-xs text-muted-foreground mt-1">Click to select an image file</p>
+                    </div>
+                  </div>
+                )}
+                {uploadingImage && (
+                  <p className="text-sm text-muted-foreground">Uploading image...</p>
+                )}
+                {(imagePreview || formData.image) && (
+                  <div className="mt-2">
+                    <div className="relative w-full h-48 bg-muted/20 rounded-lg overflow-hidden">
+                      <img
+                        src={imagePreview || formData.image}
+                        alt="Event preview"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-xs text-muted-foreground">
+                        Image displayed at full size with proper aspect ratio
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setImagePreview("");
+                          setFormData(prev => ({ ...prev, image: "" }));
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <Label>Event Description</Label>
+              <Textarea
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Describe your event, what participants will experience, and what makes this retreat special..."
+                rows={5}
+                className="mt-1"
+              />
+            </div>
+
+            <div>
               <Label>Event Details Content Cards</Label>
               <div className="text-xs text-muted-foreground mb-2">
                 Create organized content sections with titles, descriptions, and photos
               </div>
               
-              {/* Add New Content Card */}
-              <div className="border rounded-lg p-4 space-y-3 mb-4 bg-gradient-to-r from-purple-50 to-blue-50">
-                <h4 className="font-medium text-card-foreground">Create New Content Section</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Suggested Content Titles Box */}
+              <div className="border rounded-lg p-4 mb-4 bg-gradient-to-r from-blue-50 to-purple-50">
+                <Label className="text-sm font-medium text-card-foreground mb-3 block">Suggested Content Sections</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { value: "core", title: "Core Event Description" },
+                    { value: "lodging", title: "Lodging, Rooms, Amenities" },
+                    { value: "volunteer", title: "Volunteer Opportunities" },
+                    { value: "food", title: "Food, Dietary Needs" },
+                    { value: "medical", title: "Medical" },
+                    { value: "accessibility", title: "Accessibility" }
+                  ].map((template) => (
+                    <Button
+                      key={template.value}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const templates = {
+                          "core": { title: "Core Event Description", description: "Describe the main event, what participants will experience, and what makes this retreat special.", images: [], videos: [] },
+                          "lodging": { title: "Lodging, Rooms, Amenities", description: "Details about accommodation options, room types, and available amenities.", images: [], videos: [] },
+                          "volunteer": { title: "Volunteer Opportunities", description: "Information about ways participants can contribute and get involved.", images: [], videos: [] },
+                          "food": { title: "Food, Dietary Needs", description: "Meal plans, dietary accommodations, and food-related information.", images: [], videos: [] },
+                          "medical": { title: "Medical", description: "Medical information, health requirements, emergency contacts, and any medical considerations for participants.", images: [], videos: [] },
+                          "accessibility": { title: "Accessibility", description: "Information about accessibility features, accommodations for disabilities, and how to request additional support.", images: [], videos: [] }
+                        };
+                        if (templates[template.value as keyof typeof templates]) {
+                          const selectedTemplate = templates[template.value as keyof typeof templates];
+                          setNewContentCard(selectedTemplate);
+                          setNewContentCardImages([]);
+                          setNewContentCardVideos([]);
+                        }
+                      }}
+                      className="text-xs h-auto py-2 px-3 text-left justify-start hover:bg-primary hover:text-primary-foreground"
+                    >
+                      {template.title}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Add Content Section Button */}
+              {!newContentCard.title.trim() && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    // Set a placeholder title to show the form
+                    setNewContentCard({ title: "New Section", description: "", images: [], videos: [] });
+                    setNewContentCardImages([]);
+                    setNewContentCardVideos([]);
+                  }}
+                  className="w-full h-12 border-2 border-dashed hover:border-primary hover:bg-primary/5 mb-4"
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  Add Content Section
+                </Button>
+              )}
+
+              {/* Add New Content Card Form */}
+              {newContentCard.title.trim() && (
+                <div className="border rounded-lg p-4 space-y-3 mb-4 bg-gradient-to-r from-purple-50 to-blue-50">
+                  <h4 className="font-medium text-card-foreground">Create New Content Section</h4>
                   <div>
                     <Label className="text-sm">Section Title</Label>
                     <Input
@@ -2277,221 +2406,142 @@ const InstructorRetreatForm = () => {
                     />
                   </div>
                   <div>
-                    <Label className="text-sm">Template</Label>
-                    <Select onValueChange={(value) => {
-                      const templates = {
-                        "core": { title: "Core Event Description", description: "Describe the main event, what participants will experience, and what makes this retreat special.", images: [], videos: [] },
-                        "lodging": { title: "Lodging, Rooms, Amenities", description: "Details about accommodation options, room types, and available amenities.", images: [], videos: [] },
-                        "volunteer": { title: "Volunteer Opportunities", description: "Information about ways participants can contribute and get involved.", images: [], videos: [] },
-                        "food": { title: "Food, Dietary Needs", description: "Meal plans, dietary accommodations, and food-related information.", images: [], videos: [] },
-                        "medical": { title: "Medical", description: "Medical information, health requirements, emergency contacts, and any medical considerations for participants.", images: [], videos: [] },
-                        "accessibility": { title: "Accessibility", description: "Information about accessibility features, accommodations for disabilities, and how to request additional support.", images: [], videos: [] }
-                      };
-                      if (templates[value as keyof typeof templates]) {
-                        setNewContentCard(templates[value as keyof typeof templates]);
-                      }
-                    }}>
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Choose template" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="core">Core Event Description</SelectItem>
-                        <SelectItem value="lodging">Lodging, Rooms, Amenities</SelectItem>
-                        <SelectItem value="volunteer">Volunteer Opportunities</SelectItem>
-                        <SelectItem value="food">Food, Dietary Needs</SelectItem>
-                        <SelectItem value="medical">Medical</SelectItem>
-                        <SelectItem value="accessibility">Accessibility</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-sm">Section Description</Label>
+                    <Textarea
+                      value={newContentCard.description}
+                      onChange={(e) => setNewContentCard(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Enter the content for this section..."
+                      rows={3}
+                      className="mt-1"
+                    />
                   </div>
-                </div>
-                <div>
-                  <Label className="text-sm">Section Description</Label>
-                  <Textarea
-                    value={newContentCard.description}
-                    onChange={(e) => setNewContentCard(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Enter the content for this section..."
-                    rows={3}
-                    className="mt-1"
-                  />
-                </div>
-                
-                {/* Media Upload for New Content Card */}
-                <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-xl p-6 border border-slate-200/60 shadow-sm">
-                  <div className="flex items-center justify-between mb-6 flex-col sm:flex-row gap-4 sm:gap-0">
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <Label className="text-sm font-semibold text-slate-700">Section Media</Label>
-                        <p className="text-xs text-slate-500">Add photos and videos to bring your content to life</p>
-                      </div>
+                  
+                  {/* Add Media Button */}
+                  <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg border border-slate-200">
+                    <div className="flex items-center gap-2">
+                      <Upload className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-card-foreground">Media</span>
                     </div>
-                    <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end">
+                    <div className="flex gap-2">
                       <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => document.getElementById('new-content-image')?.click()}
-                        className="text-xs bg-white hover:bg-blue-50 border-blue-200 text-blue-700 hover:text-blue-800 transition-all duration-200 shadow-sm flex-1 sm:flex-none min-w-[100px]"
+                        className="text-xs"
                       >
                         <Upload className="w-3 h-3 mr-1" />
-                        <span className="hidden sm:inline">Add Images</span>
-                        <span className="sm:hidden">Images</span>
+                        Add Images
                       </Button>
                       <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => document.getElementById('new-content-video')?.click()}
-                        className="text-xs bg-white hover:bg-purple-50 border-purple-200 text-purple-700 hover:text-purple-800 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none min-w-[100px]"
+                        className="text-xs"
                         disabled={newContentCardVideos.length >= 1}
                       >
                         <Upload className="w-3 h-3 mr-1" />
-                        <span className="hidden sm:inline">Add Video</span>
-                        <span className="sm:hidden">Video</span>
+                        Add Video
                       </Button>
                     </div>
                   </div>
                   
-                  {/* Images Section */}
-                  <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 bg-gradient-to-br from-green-400 to-blue-500 rounded-md flex items-center justify-center">
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <Label className="text-xs font-medium text-slate-600">Images</Label>
-                        <p className="text-xs text-slate-400">Multiple photos allowed • Max 5MB each</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-3 p-4 bg-white/60 rounded-lg border border-slate-200/50 min-h-[100px]">
-                      {newContentCardImages.map((imageUrl, imgIndex) => (
-                        <div key={imgIndex} className="relative group">
-                          <div className="relative overflow-hidden rounded-lg border-2 border-slate-200 shadow-sm hover:shadow-md transition-all duration-200">
-                            <img
-                              src={imageUrl}
-                              alt={`New content card ${imgIndex + 1}`}
-                              className="w-24 h-24 object-cover group-hover:scale-105 transition-transform duration-200"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                          </div>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            className="absolute -top-2 -right-2 w-6 h-6 p-0 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
-                            onClick={() => removeNewContentCardImage(imageUrl)}
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      ))}
-                      <div className="relative group">
-                        <div className="w-24 h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center hover:border-blue-400 hover:bg-blue-50/30 transition-all duration-200 cursor-pointer">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleNewContentCardImageUpload}
-                            className="hidden"
-                            id="new-content-image"
-                          />
-                          <label
-                            htmlFor="new-content-image"
-                            className="cursor-pointer p-4"
-                          >
-                            <Plus className="w-6 h-6 text-slate-400 group-hover:text-blue-500 transition-colors duration-200" />
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                   
-                  {/* Video Section */}
-                  <div className="mb-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 bg-gradient-to-br from-red-400 to-pink-500 rounded-md flex items-center justify-center">
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <Label className="text-xs font-medium text-slate-600">Video</Label>
-                        <p className="text-xs text-slate-400">Only one video allowed • Max 50MB</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-3 p-4 bg-white/60 rounded-lg border border-slate-200/50 min-h-[100px]">
-                      {newContentCardVideos.map((videoUrl, vidIndex) => (
-                        <div key={vidIndex} className="relative group">
-                          <div className="w-40 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg border-2 border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center overflow-hidden">
-                            <div className="text-center">
-                              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-600 rounded-full flex items-center justify-center mb-2 mx-auto group-hover:scale-110 transition-transform duration-200">
-                                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                  <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
-                                </svg>
+                  {/* Media Preview Section */}
+                  {(newContentCardImages.length > 0 || newContentCardVideos.length > 0) && (
+                    <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-lg p-4 border border-slate-200/60">
+                      {/* Images Preview */}
+                      {newContentCardImages.length > 0 && (
+                        <div className="mb-4">
+                          <Label className="text-xs font-medium text-slate-600 mb-2 block">Images ({newContentCardImages.length})</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {newContentCardImages.map((imageUrl, imgIndex) => (
+                              <div key={imgIndex} className="relative group">
+                                <img
+                                  src={imageUrl}
+                                  alt={`Preview ${imgIndex + 1}`}
+                                  className="w-20 h-20 object-cover rounded-md border-2 border-slate-200"
+                                />
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => removeNewContentCardImage(imageUrl)}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
                               </div>
-                              <p className="text-xs text-slate-600 font-medium">Video uploaded</p>
-                              <p className="text-xs text-slate-400">Click to replace</p>
-                            </div>
+                            ))}
                           </div>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            className="absolute -top-2 -right-2 w-6 h-6 p-0 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
-                            onClick={() => removeNewContentCardVideo(videoUrl)}
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
                         </div>
-                      ))}
-                      {newContentCardVideos.length === 0 && (
-                        <div className="relative group">
-                          <div className="w-40 h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center hover:border-purple-400 hover:bg-purple-50/30 transition-all duration-200 cursor-pointer">
-                            <input
-                              type="file"
-                              accept="video/*"
-                              onChange={handleNewContentCardVideoUpload}
-                              className="hidden"
-                              id="new-content-video"
-                            />
-                            <label
-                              htmlFor="new-content-video"
-                              className="cursor-pointer p-4"
-                            >
+                      )}
+                      
+                      {/* Video Preview */}
+                      {newContentCardVideos.length > 0 && (
+                        <div>
+                          <Label className="text-xs font-medium text-slate-600 mb-2 block">Video</Label>
+                          <div className="relative">
+                            <div className="w-full h-24 bg-slate-100 rounded-md border-2 border-slate-200 flex items-center justify-center">
                               <div className="text-center">
-                                <Plus className="w-6 h-6 text-slate-400 group-hover:text-purple-500 transition-colors duration-200 mx-auto mb-1" />
-                                <p className="text-xs text-slate-400 group-hover:text-purple-600 transition-colors duration-200">Add video</p>
+                                <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-1">
+                                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                                  </svg>
+                                </div>
+                                <p className="text-xs text-slate-600">Video uploaded</p>
                               </div>
-                            </label>
+                            </div>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full"
+                              onClick={() => removeNewContentCardVideo(newContentCardVideos[0])}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
                           </div>
                         </div>
                       )}
                     </div>
-                  </div>
-                  
-                  {newContentCardImages.length === 0 && newContentCardVideos.length === 0 && (
-                    <div className="text-center py-8 px-4 bg-gradient-to-br from-blue-50/50 to-purple-50/50 rounded-lg border border-blue-200/30">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                      </div>
-                      <p className="text-sm font-medium text-slate-700 mb-1">No media added yet</p>
-                      <p className="text-xs text-slate-500">Add photos and/or a video to make your content more engaging</p>
-                    </div>
                   )}
+                  
+                  {/* Hidden file inputs */}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleNewContentCardImageUpload}
+                    className="hidden"
+                    id="new-content-image"
+                    multiple
+                  />
+                  <input
+                    type="file"
+                    accept="video/*"
+                    onChange={handleNewContentCardVideoUpload}
+                    className="hidden"
+                    id="new-content-video"
+                  />
+                  
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={addContentCard}
+                      disabled={!newContentCard.title.trim()}
+                      className="flex-1"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Section
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setNewContentCard({ title: "", description: "", images: [], videos: [] })}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  onClick={addContentCard}
-                  disabled={!newContentCard.title.trim()}
-                  className="w-full"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Content Section
-                </Button>
-              </div>
+              )}
 
               {/* Display Existing Content Cards */}
               {contentCards.length > 0 && (
@@ -2697,64 +2747,6 @@ const InstructorRetreatForm = () => {
               )}
             </div>
 
-            <div>
-              <Label>Retreat Image</Label>
-              <div className="text-xs text-muted-foreground mb-2">
-                Recommended: 1200x400px (3:1 ratio) for best display • Max size: 5MB
-              </div>
-              <div className="space-y-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  disabled={uploadingImage}
-                  className="hidden"
-                />
-                {!imagePreview && !formData.image && (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 cursor-pointer hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-3"
-                  >
-                    <Upload className="w-8 h-8 text-muted-foreground" />
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-card-foreground">Upload Image</p>
-                      <p className="text-xs text-muted-foreground mt-1">Click to select an image file</p>
-                    </div>
-                  </div>
-                )}
-                {uploadingImage && (
-                  <p className="text-sm text-muted-foreground">Uploading image...</p>
-                )}
-                {(imagePreview || formData.image) && (
-                  <div className="mt-2">
-                    <div className="relative w-full h-48 bg-muted/20 rounded-lg overflow-hidden">
-                      <img
-                        src={imagePreview || formData.image}
-                        alt="Retreat preview"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-xs text-muted-foreground">
-                        Image displayed at full size with proper aspect ratio
-                      </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setImagePreview("");
-                          setFormData(prev => ({ ...prev, image: "" }));
-                        }}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
 
           {/* Location & Dates */}
@@ -3724,7 +3716,7 @@ const InstructorRetreatForm = () => {
           )}
           <div>
             <h1 className="text-3xl font-bold mb-2">
-              {editingId !== null ? (editingId === 'new' ? "Create New Retreat" : "Edit Retreat") : "My Drafts"}
+              {editingId !== null ? (editingId === 'new' ? "Create New Event" : "Edit Event") : "My Drafts"}
             </h1>
             <p className="text-white/90 text-lg">
               {editingId !== null ? "Fill in the details below" : "Manage your draft retreats"}
