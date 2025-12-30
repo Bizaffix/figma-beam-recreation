@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2, Plus, DollarSign, CreditCard, Users, Copy, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
@@ -230,6 +231,7 @@ const InstructorRetreatForm = () => {
     max_uses: "",
     expires_at: ""
   });
+  const [showDiscountCoupon, setShowDiscountCoupon] = useState(false);
   const [contentCards, setContentCards] = useState<ContentCard[]>([]);
   const [newContentCard, setNewContentCard] = useState({ 
     title: "", 
@@ -2886,306 +2888,303 @@ const InstructorRetreatForm = () => {
               <Badge variant="outline" className="text-xs">Configure all pricing options</Badge>
             </div>
 
-            {/* Basic Pricing */}
-            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-blue-50 to-purple-50">
-              <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
-                <CreditCard className="w-5 h-5" />
-                Basic Pricing
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Base Price ($)</Label>
-                  <p className="text-xs text-muted-foreground mb-2">Per Student</p>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.price || ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setFormData(prev => ({ 
-                        ...prev, 
-                        price: value === "" ? undefined : Number(value) 
-                      }));
-                    }}
-                    placeholder="Enter price"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label>Skill Level</Label>
-                  <p className="text-xs text-muted-foreground mb-2">Who is this for?</p>
-                  <Select
-                    value={formData.level}
-                    onValueChange={(value: "Beginner" | "Intermediate" | "Advanced" | "Any") =>
-                      setFormData(prev => ({ ...prev, level: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Any">Any Skill Level</SelectItem>
-                      <SelectItem value="Beginner">Beginner</SelectItem>
-                      <SelectItem value="Intermediate">Intermediate</SelectItem>
-                      <SelectItem value="Advanced">Advanced</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            {/* Deposit Settings */}
-            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-orange-50 to-yellow-50">
-              <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5" />
-                Deposit Settings
-              </h3>
-              
-              <div>
-                <Label>Deposit Amount ($)</Label>
-                <p className="text-xs text-muted-foreground mb-2">Optional - Leave empty if no deposit required</p>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.deposit_amount || ""}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      deposit_amount: value === "" ? null : Number(value) 
-                    }));
-                  }}
-                  placeholder="Enter deposit amount (optional)"
-                />
-                
-                {formData.deposit_amount && formData.deposit_amount > 0 && (
-                  <div className="mt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <Label className="text-sm font-medium">Refundable Deposit</Label>
-                        <p className="text-xs text-muted-foreground">Allow students to get refund on deposit</p>
-                      </div>
-                      <Switch
-                        checked={formData.deposit_refundable || false}
-                        onCheckedChange={(checked) =>
-                          setFormData(prev => ({ ...prev, deposit_refundable: checked }))
-                        }
-                      />
-                    </div>
-                    
-                    {formData.deposit_refundable && (
-                      <div>
-                        <Label className="text-sm">Refund Cutoff (days before event)</Label>
-                        <p className="text-xs text-muted-foreground mb-2">Last day students can request deposit refund</p>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={formData.deposit_refund_days_before || 7}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              deposit_refund_days_before: value === "" ? 7 : Number(value) 
-                            }));
-                          }}
-                          placeholder="7"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Payment Timing */}
-            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-purple-50 to-pink-50">
-              <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5" />
-                Payment Timing
-              </h3>
-              
-              <div>
-                <Label>Full Payment Timing</Label>
-                <p className="text-xs text-muted-foreground mb-2">When is the remaining balance charged?</p>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.payment_days_before_event || 7}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      payment_days_before_event: value === "" ? 7 : Number(value) 
-                    }));
-                  }}
-                  placeholder="7"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Days before the retreat starts
-                </p>
-                
-                <div className="mt-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <Label className="text-sm font-medium">Non-Refundable Full Payment</Label>
-                      <p className="text-xs text-muted-foreground">Full payment cannot be refunded once charged</p>
-                    </div>
-                    <Switch
-                      checked={formData.full_payment_non_refundable || false}
-                      onCheckedChange={(checked) =>
-                        setFormData(prev => ({ ...prev, full_payment_non_refundable: checked }))
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Discount Coupon */}
-            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-green-50 to-emerald-50">
-              <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
-                <Share2 className="w-5 h-5" />
-                Discount Coupon
-              </h3>
-              
+            {/* Merged Pricing Content Card */}
+            <div className="space-y-6 p-6 border rounded-lg bg-gradient-to-r from-blue-50 to-purple-50">
+              {/* Basic Pricing */}
               <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                  <CreditCard className="w-5 h-5" />
+                  Basic Pricing
+                </h3>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label>Coupon Code</Label>
-                    <p className="text-xs text-muted-foreground mb-2">Unique code students will enter</p>
+                    <Label>Base Price ($)</Label>
+                    <p className="text-xs text-muted-foreground mb-2">Per Student</p>
                     <Input
-                      value={discountCoupon.code}
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.price || ""}
                       onChange={(e) => {
-                        const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-                        setDiscountCoupon(prev => ({ ...prev, code: value }));
+                        const value = e.target.value;
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          price: value === "" ? undefined : Number(value) 
+                        }));
                       }}
-                      placeholder="SAVE20"
-                      maxLength={20}
+                      placeholder="Enter price"
+                      required
                     />
                   </div>
-                  
+
                   <div>
-                    <Label>Discount Type</Label>
-                    <p className="text-xs text-muted-foreground mb-2">How the discount is calculated</p>
+                    <Label>Skill Level</Label>
+                    <p className="text-xs text-muted-foreground mb-2">Who is this for?</p>
                     <Select
-                      value={discountCoupon.type}
-                      onValueChange={(value: 'percentage' | 'fixed') => 
-                        setDiscountCoupon(prev => ({ ...prev, type: value }))
+                      value={formData.level}
+                      onValueChange={(value: "Beginner" | "Intermediate" | "Advanced" | "Any") =>
+                        setFormData(prev => ({ ...prev, level: value }))
                       }
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="percentage">Percentage (%)</SelectItem>
-                        <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
+                        <SelectItem value="Any">Any Skill Level</SelectItem>
+                        <SelectItem value="Beginner">Beginner</SelectItem>
+                        <SelectItem value="Intermediate">Intermediate</SelectItem>
+                        <SelectItem value="Advanced">Advanced</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Discount Value</Label>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      {discountCoupon.type === 'percentage' ? 'Percentage discount (0-100)' : 'Fixed amount in dollars'}
-                    </p>
-                    <Input
-                      type="number"
-                      step={discountCoupon.type === 'percentage' ? '1' : '0.01'}
-                      min={discountCoupon.type === 'percentage' ? '1' : '0.01'}
-                      max={discountCoupon.type === 'percentage' ? '100' : '10000'}
-                      value={discountCoupon.value}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setDiscountCoupon(prev => ({ 
-                          ...prev, 
-                          value: value
-                        }));
-                      }}
-                      placeholder={discountCoupon.type === 'percentage' ? '20' : '50.00'}
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label>Maximum Uses (Optional)</Label>
-                    <p className="text-xs text-muted-foreground mb-2">Leave empty for unlimited uses</p>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={discountCoupon.max_uses}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setDiscountCoupon(prev => ({ 
-                          ...prev, 
-                          max_uses: value
-                        }));
-                      }}
-                      placeholder="Unlimited"
-                    />
-                  </div>
+              </div>
+
+              <Separator />
+
+              {/* Price Options */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    Price Options
+                  </h3>
+                  {(!formData.price_variants || formData.price_variants.length === 0) && (
+                    <Badge variant="destructive" className="text-xs">
+                      At least one price option required
+                    </Badge>
+                  )}
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  Offer different pricing tiers for students to choose from (at least one required)
+                </p>
+                
+                {/* Add new price variant */}
+                <div className="space-y-3 p-4 border-2 border-dashed rounded-lg bg-muted/30">
+                  <h4 className="font-medium text-card-foreground">Add New Price Option</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-sm font-medium">Option Name *</Label>
+                      <Input
+                        value={newPriceVariant.name}
+                        onChange={(e) => setNewPriceVariant(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="e.g., VIP Pass, Early Bird, Standard"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Price ($) *</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newPriceVariant.price}
+                        onChange={(e) => setNewPriceVariant(prev => ({ ...prev, price: e.target.value }))}
+                        placeholder="299.00"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Description</Label>
+                      <Input
+                        value={newPriceVariant.description}
+                        onChange={(e) => setNewPriceVariant(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="What's included in this option?"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    type="button" 
+                    onClick={addPriceVariant}
+                    disabled={!newPriceVariant.name.trim() || !newPriceVariant.price.trim()}
+                    size="sm"
+                    className="mt-2"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Price Option
+                  </Button>
+                </div>
+
+                {/* Display existing price variants */}
+                {formData.price_variants && formData.price_variants.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-card-foreground">Current Price Options ({formData.price_variants.length})</h4>
+                      <Badge variant="outline" className="text-xs">
+                        {formData.price_variants.length} option{formData.price_variants.length !== 1 ? 's' : ''} configured
+                      </Badge>
+                    </div>
+                    {formData.price_variants.map((variant, index) => (
+                      <div key={variant.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-sm font-semibold text-blue-600">{index + 1}</span>
+                            </div>
+                            <div>
+                              <div className="font-semibold text-card-foreground">{variant.name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                ${variant.price.toFixed(2)}
+                                {variant.description && ` • ${variant.description}`}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removePriceVariant(variant.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Deposit Settings */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5" />
+                  Deposit Settings
+                </h3>
                 
                 <div>
-                  <Label>Expiration Date (Optional)</Label>
-                  <p className="text-xs text-muted-foreground mb-2">Leave empty for no expiration</p>
+                  <Label>Deposit Amount ($)</Label>
+                  <p className="text-xs text-muted-foreground mb-2">Optional - Leave empty if no deposit required</p>
                   <Input
-                    type="date"
-                    value={discountCoupon.expires_at}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.deposit_amount || ""}
                     onChange={(e) => {
-                      setDiscountCoupon(prev => ({ 
+                      const value = e.target.value;
+                      setFormData(prev => ({ 
                         ...prev, 
-                        expires_at: e.target.value 
+                        deposit_amount: value === "" ? null : Number(value) 
                       }));
                     }}
-                    min={new Date().toISOString().split('T')[0]}
+                    placeholder="Enter deposit amount (optional)"
                   />
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      if (discountCoupon.code && discountCoupon.value) {
-                        setFormData(prev => ({
-                          ...prev,
-                          discount_coupon: {
-                            code: discountCoupon.code,
-                            type: discountCoupon.type,
-                            value: Number(discountCoupon.value),
-                            max_uses: discountCoupon.max_uses ? Number(discountCoupon.max_uses) : undefined,
-                            expires_at: discountCoupon.expires_at || undefined
-                          }
-                        }));
-                        toast({
-                          title: "Discount Coupon Created",
-                          description: `Coupon ${discountCoupon.code} has been added to this retreat.`,
-                        });
-                      } else {
-                        toast({
-                          title: "Missing Information",
-                          description: "Please enter coupon code and discount value.",
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                  >
-                    Create Discount
-                  </Button>
                   
-                  {formData.discount_coupon && (
+                  {formData.deposit_amount && formData.deposit_amount > 0 && (
+                    <div className="mt-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <Label className="text-sm font-medium">Refundable Deposit</Label>
+                          <p className="text-xs text-muted-foreground">Allow students to get refund on deposit</p>
+                        </div>
+                        <Switch
+                          checked={formData.deposit_refundable || false}
+                          onCheckedChange={(checked) =>
+                            setFormData(prev => ({ ...prev, deposit_refundable: checked }))
+                          }
+                        />
+                      </div>
+                      
+                      {formData.deposit_refundable && (
+                        <div>
+                          <Label className="text-sm">Refund Cutoff (days before event)</Label>
+                          <p className="text-xs text-muted-foreground mb-2">Last day students can request deposit refund</p>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={formData.deposit_refund_days_before || 7}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setFormData(prev => ({ 
+                                ...prev, 
+                                deposit_refund_days_before: value === "" ? 7 : Number(value) 
+                              }));
+                            }}
+                            placeholder="7"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Payment Timing */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                  <CalendarIcon className="w-5 h-5" />
+                  Payment Timing
+                </h3>
+                
+                <div>
+                  <Label>Full Payment Timing</Label>
+                  <p className="text-xs text-muted-foreground mb-2">When is the remaining balance charged?</p>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={formData.payment_days_before_event || 7}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        payment_days_before_event: value === "" ? 7 : Number(value) 
+                      }));
+                    }}
+                    placeholder="7"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Days before the retreat starts
+                  </p>
+                  
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <Label className="text-sm font-medium">Non-Refundable Full Payment</Label>
+                        <p className="text-xs text-muted-foreground">Full payment cannot be refunded once charged</p>
+                      </div>
+                      <Switch
+                        checked={formData.full_payment_non_refundable || false}
+                        onCheckedChange={(checked) =>
+                          setFormData(prev => ({ ...prev, full_payment_non_refundable: checked }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Discount Coupon - Expandable */}
+            <div className="space-y-4">
+              {!showDiscountCoupon ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowDiscountCoupon(true)}
+                  className="w-full border-2 border-dashed hover:border-primary hover:bg-primary/5"
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  Add Discount Coupon
+                </Button>
+              ) : (
+                <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-green-50 to-emerald-50">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                      <Share2 className="w-5 h-5" />
+                      Discount Coupon
+                    </h3>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => {
-                        setFormData(prev => ({ ...prev, discount_coupon: null }));
+                        setShowDiscountCoupon(false);
                         setDiscountCoupon({
                           code: "",
                           type: 'percentage',
@@ -3194,159 +3193,205 @@ const InstructorRetreatForm = () => {
                           expires_at: ""
                         });
                       }}
-                      className="text-red-600 hover:text-red-700"
                     >
-                      Remove Discount
+                      <X className="w-4 h-4" />
                     </Button>
-                  )}
-                </div>
-                
-                {formData.discount_coupon && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center justify-between">
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <div className="font-medium text-green-800">{formData.discount_coupon.code}</div>
-                        <div className="text-sm text-green-600">
-                          {formData.discount_coupon.type === 'percentage' 
-                            ? `${formData.discount_coupon.value}% off`
-                            : `$${formData.discount_coupon.value.toFixed(2)} off`
+                        <Label>Coupon Code</Label>
+                        <p className="text-xs text-muted-foreground mb-2">Unique code students will enter</p>
+                        <Input
+                          value={discountCoupon.code}
+                          onChange={(e) => {
+                            const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                            setDiscountCoupon(prev => ({ ...prev, code: value }));
+                          }}
+                          placeholder="SAVE20"
+                          maxLength={20}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label>Discount Type</Label>
+                        <p className="text-xs text-muted-foreground mb-2">How the discount is calculated</p>
+                        <Select
+                          value={discountCoupon.type}
+                          onValueChange={(value: 'percentage' | 'fixed') => 
+                            setDiscountCoupon(prev => ({ ...prev, type: value }))
                           }
-                          {formData.discount_coupon.max_uses && ` • Max ${formData.discount_coupon.max_uses} uses`}
-                          {formData.discount_coupon.expires_at && ` • Expires ${new Date(formData.discount_coupon.expires_at).toLocaleDateString()}`}
-                        </div>
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percentage">Percentage (%)</SelectItem>
+                            <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <Badge variant="secondary" className="bg-green-100 text-green-800">
-                        Active
-                      </Badge>
                     </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Price Options */}
-            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Price Options
-                </h3>
-                {(!formData.price_variants || formData.price_variants.length === 0) && (
-                  <Badge variant="destructive" className="text-xs">
-                    At least one price option required
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Offer different pricing tiers for students to choose from (at least one required)
-              </p>
-              
-              {/* Add new price variant */}
-              <div className="space-y-3 p-4 border-2 border-dashed rounded-lg bg-muted/30">
-                <h4 className="font-medium text-card-foreground">Add New Price Option</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <Label className="text-sm font-medium">Option Name *</Label>
-                    <Input
-                      value={newPriceVariant.name}
-                      onChange={(e) => setNewPriceVariant(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="e.g., VIP Pass, Early Bird, Standard"
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Price ($) *</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={newPriceVariant.price}
-                      onChange={(e) => setNewPriceVariant(prev => ({ ...prev, price: e.target.value }))}
-                      placeholder="299.00"
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Description</Label>
-                    <Input
-                      value={newPriceVariant.description}
-                      onChange={(e) => setNewPriceVariant(prev => ({ ...prev, description: e.target.value }))}
-                      placeholder="What's included in this option?"
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-                <Button 
-                  type="button" 
-                  onClick={addPriceVariant}
-                  disabled={!newPriceVariant.name.trim() || !newPriceVariant.price.trim()}
-                  size="sm"
-                  className="mt-2"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Price Option
-                </Button>
-              </div>
-
-              {/* Display existing price variants */}
-              {formData.price_variants && formData.price_variants.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium text-card-foreground">Current Price Options ({formData.price_variants.length})</h4>
-                    <Badge variant="outline" className="text-xs">
-                      {formData.price_variants.length} option{formData.price_variants.length !== 1 ? 's' : ''} configured
-                    </Badge>
-                  </div>
-                  {formData.price_variants.map((variant, index) => (
-                    <div key={variant.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-sm font-semibold text-blue-600">{index + 1}</span>
-                          </div>
-                          <div>
-                            <div className="font-semibold text-card-foreground">{variant.name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              ${variant.price.toFixed(2)}
-                              {variant.description && ` • ${variant.description}`}
-                            </div>
-                          </div>
-                        </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Discount Value</Label>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {discountCoupon.type === 'percentage' ? 'Percentage discount (0-100)' : 'Fixed amount in dollars'}
+                        </p>
+                        <Input
+                          type="number"
+                          step={discountCoupon.type === 'percentage' ? '1' : '0.01'}
+                          min={discountCoupon.type === 'percentage' ? '1' : '0.01'}
+                          max={discountCoupon.type === 'percentage' ? '100' : '10000'}
+                          value={discountCoupon.value}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setDiscountCoupon(prev => ({ 
+                              ...prev, 
+                              value: value
+                            }));
+                          }}
+                          placeholder={discountCoupon.type === 'percentage' ? '20' : '50.00'}
+                        />
                       </div>
+                      
+                      <div>
+                        <Label>Maximum Uses (Optional)</Label>
+                        <p className="text-xs text-muted-foreground mb-2">Leave empty for unlimited uses</p>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={discountCoupon.max_uses}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setDiscountCoupon(prev => ({ 
+                              ...prev, 
+                              max_uses: value
+                            }));
+                          }}
+                          placeholder="Unlimited"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label>Expiration Date (Optional)</Label>
+                      <p className="text-xs text-muted-foreground mb-2">Leave empty for no expiration</p>
+                      <Input
+                        type="date"
+                        value={discountCoupon.expires_at}
+                        onChange={(e) => {
+                          setDiscountCoupon(prev => ({ 
+                            ...prev, 
+                            expires_at: e.target.value 
+                          }));
+                        }}
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        onClick={() => removePriceVariant(variant.id)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => {
+                          if (discountCoupon.code && discountCoupon.value) {
+                            setFormData(prev => ({
+                              ...prev,
+                              discount_coupon: {
+                                code: discountCoupon.code,
+                                type: discountCoupon.type,
+                                value: Number(discountCoupon.value),
+                                max_uses: discountCoupon.max_uses ? Number(discountCoupon.max_uses) : undefined,
+                                expires_at: discountCoupon.expires_at || undefined
+                              }
+                            }));
+                            toast({
+                              title: "Discount Coupon Created",
+                              description: `Coupon ${discountCoupon.code} has been added to this retreat.`,
+                            });
+                          } else {
+                            toast({
+                              title: "Missing Information",
+                              description: "Please enter coupon code and discount value.",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        Create Discount
                       </Button>
+                      
+                      {formData.discount_coupon && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, discount_coupon: null }));
+                            setDiscountCoupon({
+                              code: "",
+                              type: 'percentage',
+                              value: "",
+                              max_uses: "",
+                              expires_at: ""
+                            });
+                          }}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          Remove Discount
+                        </Button>
+                      )}
                     </div>
-                  ))}
+                    
+                    {formData.discount_coupon && (
+                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-green-800">{formData.discount_coupon.code}</div>
+                            <div className="text-sm text-green-600">
+                              {formData.discount_coupon.type === 'percentage' 
+                                ? `${formData.discount_coupon.value}% off`
+                                : `$${formData.discount_coupon.value.toFixed(2)} off`
+                              }
+                              {formData.discount_coupon.max_uses && ` • Max ${formData.discount_coupon.max_uses} uses`}
+                              {formData.discount_coupon.expires_at && ` • Expires ${new Date(formData.discount_coupon.expires_at).toLocaleDateString()}`}
+                            </div>
+                          </div>
+                          <Badge variant="secondary" className="bg-green-100 text-green-800">
+                            Active
+                          </Badge>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Add-ons */}
-            <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-green-50 to-teal-50">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
-                  <Plus className="w-5 h-5" />
-                  Add-ons & Extras
-                </h3>
-                {formData.add_ons && formData.add_ons.length > 0 && (
-                  <Badge variant="outline" className="text-xs">
-                    {formData.add_ons.length} add-on{formData.add_ons.length !== 1 ? 's' : ''}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Offer additional items or services that students can purchase with their booking
-              </p>
-              
-              {/* Add new add-on */}
-              <div className="space-y-4 p-4 border-2 border-dashed rounded-lg bg-muted/30">
+          {/* Add-ons */}
+          <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-r from-green-50 to-teal-50">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                <Plus className="w-5 h-5" />
+                Add-ons & Extras
+              </h3>
+              {formData.add_ons && formData.add_ons.length > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  {formData.add_ons.length} add-on{formData.add_ons.length !== 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Offer additional items or services that students can purchase with their booking
+            </p>
+            
+            {/* Add new add-on */}
+            <div className="space-y-4 p-4 border-2 border-dashed rounded-lg bg-muted/30">
                 <h4 className="font-medium text-card-foreground">Add New Add-on</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -3468,7 +3513,6 @@ const InstructorRetreatForm = () => {
                 </div>
               )}
             </div>
-          </div>
 
           {/* Financial Breakdown */}
           {(formData.price && formData.price > 0 && formData.totalSpots > 0) && (
