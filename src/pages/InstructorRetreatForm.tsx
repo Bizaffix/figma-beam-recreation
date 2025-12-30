@@ -21,9 +21,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
-import { ItineraryBuilder, ItineraryBlock } from "@/components/ItineraryBuilder";
+import { ItineraryBuilder, ItineraryBlock, BlockType } from "@/components/ItineraryBuilder";
 import { VenueSelector } from "@/components/VenueSelector";
 import { ShareDialog } from "@/components/ShareDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface ContentCard {
   id: string;
@@ -232,6 +234,8 @@ const InstructorRetreatForm = () => {
     expires_at: ""
   });
   const [showDiscountCoupon, setShowDiscountCoupon] = useState(false);
+  const [showItineraryModal, setShowItineraryModal] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<number>(1);
   const [contentCards, setContentCards] = useState<ContentCard[]>([]);
   const [newContentCard, setNewContentCard] = useState({ 
     title: "", 
@@ -2216,6 +2220,7 @@ const InstructorRetreatForm = () => {
     const isNew = editingId === 'new';
     
     return (
+      <>
       <Card className="overflow-hidden">
         <CardContent className="p-6 space-y-6">
           <div className="flex items-center justify-between mb-4">
@@ -2855,6 +2860,21 @@ const InstructorRetreatForm = () => {
                 </PopoverContent>
               </Popover>
             </div>
+
+            {/* Create Itinerary Button */}
+            {dateRange?.from && dateRange?.to && (
+              <div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowItineraryModal(true)}
+                  className="w-full"
+                >
+                  <CalendarIcon className="w-4 h-4 mr-2" />
+                  Create Itinerary
+                </Button>
+              </div>
+            )}
             
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -3638,47 +3658,6 @@ const InstructorRetreatForm = () => {
             </div>
           )}
 
-          {/* What's Included */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-card-foreground">What's Included</h2>
-            
-            <div className="flex gap-2">
-              <Input
-                value={includeItem}
-                onChange={(e) => setIncludeItem(e.target.value)}
-                placeholder="Add an item..."
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addIncludeItem())}
-              />
-              <Button type="button" onClick={addIncludeItem}>Add</Button>
-            </div>
-
-            <div className="space-y-2">
-              {formData.includes?.map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
-                  <span className="text-sm">{item}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeIncludeItem(index)}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Itinerary Builder */}
-          <Card>
-            <CardContent className="p-6 space-y-4">
-              <ItineraryBuilder
-                blocks={itineraryBlocks}
-                onChange={setItineraryBlocks}
-                user={user}
-              />
-            </CardContent>
-          </Card>
 
           {/* Publish Status */}
           <div className="p-4 bg-muted rounded-lg">
@@ -3735,6 +3714,276 @@ const InstructorRetreatForm = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Itinerary Builder Modal */}
+      <Dialog open={showItineraryModal} onOpenChange={setShowItineraryModal}>
+        <DialogContent className="w-[95vw] max-w-6xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg sm:text-xl">Create Itinerary</DialogTitle>
+            <DialogDescription className="text-sm">
+              Build your schedule by day. Click on a day to view and manage time slots.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {dateRange?.from && dateRange?.to ? (() => {
+            const days: Date[] = [];
+            const currentDate = new Date(dateRange.from);
+            const endDate = new Date(dateRange.to);
+            
+            while (currentDate <= endDate) {
+              days.push(new Date(currentDate));
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            return (
+              <Tabs value={selectedDay.toString()} onValueChange={(val) => setSelectedDay(Number(val))} className="w-full">
+                {/* Responsive TabsList - scrollable on mobile when more than 4 days */}
+                <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+                  <TabsList 
+                    className={cn(
+                      "w-full",
+                      days.length > 4 
+                        ? "inline-flex min-w-full sm:grid sm:grid-cols-4 lg:grid-cols-6" 
+                        : days.length === 1 ? "grid grid-cols-1"
+                        : days.length === 2 ? "grid grid-cols-2"
+                        : days.length === 3 ? "grid grid-cols-3"
+                        : "grid grid-cols-4"
+                    )} 
+                    style={days.length > 4 ? {
+                      gridTemplateColumns: `repeat(${days.length}, minmax(100px, 1fr))`
+                    } : undefined}
+                  >
+                    {days.map((day, index) => (
+                      <TabsTrigger 
+                        key={index} 
+                        value={(index + 1).toString()}
+                        className="text-xs sm:text-sm whitespace-nowrap min-w-[100px] sm:min-w-0 flex-shrink-0"
+                      >
+                        <span className="hidden sm:inline">Day {index + 1}</span>
+                        <span className="sm:hidden">D{index + 1}</span>
+                        <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs text-muted-foreground">
+                          {format(day, "MMM d")}
+                        </span>
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </div>
+
+                {days.map((day, dayIndex) => {
+                  const dayNumber = dayIndex + 1;
+                  const dayBlocks = itineraryBlocks.filter(block => 
+                    block.day === dayNumber.toString() || block.day === `Day ${dayNumber}`
+                  );
+                  
+                  // Generate time slots (every 30 minutes from 6 AM to 11 PM)
+                  const timeSlots: string[] = [];
+                  for (let hour = 6; hour < 24; hour++) {
+                    for (let minute = 0; minute < 60; minute += 30) {
+                      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                      timeSlots.push(timeStr);
+                    }
+                  }
+
+                  return (
+                    <TabsContent key={dayIndex} value={dayNumber.toString()} className="mt-4">
+                      <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                          <h3 className="text-base sm:text-lg font-semibold">
+                            <span className="hidden sm:inline">{format(day, "EEEE, MMMM d, yyyy")}</span>
+                            <span className="sm:hidden">{format(day, "MMM d, yyyy")}</span>
+                          </h3>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const newBlock: ItineraryBlock = {
+                                id: `block-${Date.now()}`,
+                                type: "class",
+                                title: "",
+                                description: "",
+                                day: dayNumber.toString(),
+                                time: ""
+                              };
+                              setItineraryBlocks([...itineraryBlocks, newBlock]);
+                            }}
+                            className="w-full sm:w-auto"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Activity
+                          </Button>
+                        </div>
+
+                        {/* Time Slot Calendar View */}
+                        <div className="border rounded-lg overflow-hidden">
+                          <div className="grid grid-cols-1 gap-0 max-h-[60vh] overflow-y-auto">
+                            {timeSlots.map((timeSlot, slotIndex) => {
+                              const blocksInSlot = dayBlocks.filter(block => block.time === timeSlot);
+                              
+                              return (
+                                <div
+                                  key={slotIndex}
+                                  className="border-b last:border-b-0 min-h-[50px] sm:min-h-[60px] p-1.5 sm:p-2 hover:bg-muted/50 transition-colors"
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    const blockId = e.dataTransfer.getData("blockId");
+                                    if (blockId) {
+                                      setItineraryBlocks(prev => prev.map(block => 
+                                        block.id === blockId 
+                                          ? { ...block, day: dayNumber.toString(), time: timeSlot }
+                                          : block
+                                      ));
+                                    }
+                                  }}
+                                  onDragOver={(e) => e.preventDefault()}
+                                >
+                                  <div className="flex gap-2 sm:gap-4">
+                                    <div className="w-14 sm:w-20 text-xs sm:text-sm font-medium text-muted-foreground flex-shrink-0 pt-1">
+                                      {timeSlot}
+                                    </div>
+                                    <div className="flex-1 space-y-1.5 sm:space-y-2 min-w-0">
+                                      {blocksInSlot.map((block) => {
+                                        const blockTypeInfo = {
+                                          class: { label: "Class", color: "bg-blue-100 text-blue-800 border-blue-200" },
+                                          open_sew: { label: "Open Sew", color: "bg-green-100 text-green-800 border-green-200" },
+                                          meal: { label: "Meal", color: "bg-orange-100 text-orange-800 border-orange-200" },
+                                          field_trip: { label: "Field Trip", color: "bg-purple-100 text-purple-800 border-purple-200" },
+                                          rest: { label: "Rest", color: "bg-gray-100 text-gray-800 border-gray-200" },
+                                        }[block.type];
+                                        
+                                        return (
+                                          <div
+                                            key={block.id}
+                                            draggable
+                                            onDragStart={(e) => e.dataTransfer.setData("blockId", block.id)}
+                                            className={`p-1.5 sm:p-2 rounded border ${blockTypeInfo.color} cursor-move`}
+                                          >
+                                            <div className="flex items-start sm:items-center justify-between gap-2">
+                                              <div className="flex-1 min-w-0">
+                                                <div className="font-medium text-xs sm:text-sm truncate">{block.title || "Untitled Activity"}</div>
+                                                {block.description && (
+                                                  <div className="text-[10px] sm:text-xs mt-0.5 sm:mt-1 opacity-80 line-clamp-1">{block.description}</div>
+                                                )}
+                                              </div>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                  setItineraryBlocks(prev => prev.filter(b => b.id !== block.id));
+                                                }}
+                                                className="h-5 w-5 sm:h-6 sm:w-6 p-0 flex-shrink-0"
+                                              >
+                                                <X className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                      {blocksInSlot.length === 0 && (
+                                        <div className="text-[10px] sm:text-xs text-muted-foreground italic py-1 sm:py-2">
+                                          <span className="hidden sm:inline">Drop activities here or click "Add Activity"</span>
+                                          <span className="sm:hidden">Drop or add activity</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* List of activities for this day (for editing) */}
+                        {dayBlocks.length > 0 && (
+                          <div className="space-y-2 sm:space-y-3">
+                            <h4 className="font-medium text-sm sm:text-base">Activities for this day:</h4>
+                            <div className="space-y-2 sm:space-y-3 max-h-[40vh] overflow-y-auto">
+                              {dayBlocks.map((block) => (
+                                <div key={block.id} className="p-2 sm:p-3 border rounded-lg">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                    <div>
+                                      <Label className="text-xs sm:text-sm">Time</Label>
+                                      <Input
+                                        type="time"
+                                        value={block.time || ""}
+                                        onChange={(e) => {
+                                          setItineraryBlocks(prev => prev.map(b => 
+                                            b.id === block.id ? { ...b, time: e.target.value } : b
+                                          ));
+                                        }}
+                                        className="mt-1 text-sm"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs sm:text-sm">Type</Label>
+                                      <Select
+                                        value={block.type}
+                                        onValueChange={(value: BlockType) => {
+                                          setItineraryBlocks(prev => prev.map(b => 
+                                            b.id === block.id ? { ...b, type: value } : b
+                                          ));
+                                        }}
+                                      >
+                                        <SelectTrigger className="mt-1 text-sm">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="class">Class</SelectItem>
+                                          <SelectItem value="open_sew">Open Sew</SelectItem>
+                                          <SelectItem value="meal">Meal</SelectItem>
+                                          <SelectItem value="field_trip">Field Trip</SelectItem>
+                                          <SelectItem value="rest">Rest</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                  <div className="mt-2 sm:mt-3">
+                                    <Label className="text-xs sm:text-sm">Title</Label>
+                                    <Input
+                                      value={block.title}
+                                      onChange={(e) => {
+                                        setItineraryBlocks(prev => prev.map(b => 
+                                          b.id === block.id ? { ...b, title: e.target.value } : b
+                                        ));
+                                      }}
+                                      placeholder="Activity title"
+                                      className="mt-1 text-sm"
+                                    />
+                                  </div>
+                                  <div className="mt-2 sm:mt-3">
+                                    <Label className="text-xs sm:text-sm">Description</Label>
+                                    <Textarea
+                                      value={block.description}
+                                      onChange={(e) => {
+                                        setItineraryBlocks(prev => prev.map(b => 
+                                          b.id === block.id ? { ...b, description: e.target.value } : b
+                                        ));
+                                      }}
+                                      placeholder="Activity description"
+                                      rows={2}
+                                      className="mt-1 text-sm resize-none"
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+                  );
+                })}
+              </Tabs>
+            );
+          })() : (
+            <div className="text-center py-8 text-muted-foreground">
+              Please select a date range first
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      </>
     );
   };
 
