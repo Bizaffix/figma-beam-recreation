@@ -1863,6 +1863,87 @@ const InstructorRetreatForm = () => {
     }
   };
 
+  const handleContentCardVideoUpload = async (cardId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('video/')) {
+      toast({
+        title: "Error",
+        description: "Please select a video file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const card = contentCards.find(c => c.id === cardId);
+    if (card?.videos && card.videos.length >= 1) {
+      toast({
+        title: "Error",
+        description: "Only one video can be uploaded per content section",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingContentCardVideo(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/content-cards/videos/${Date.now()}.${fileExt}`;
+      const filePath = `retreats/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('retreat-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error('Error uploading content card video:', uploadError);
+        toast({
+          title: "Error",
+          description: uploadError.message || "Failed to upload video",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('retreat-images')
+        .getPublicUrl(filePath);
+
+      updateContentCard(cardId, {
+        videos: [publicUrl],
+      });
+
+      toast({
+        title: "Success",
+        description: "Content card video uploaded successfully",
+      });
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while uploading video",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingContentCardVideo(false);
+      e.target.value = '';
+    }
+  };
+
+  const removeContentCardVideo = (cardId: string, videoUrl: string) => {
+    const card = contentCards.find(c => c.id === cardId);
+    if (card) {
+      updateContentCard(cardId, {
+        videos: (card.videos || []).filter(v => v !== videoUrl),
+      });
+    }
+  };
+
   const renderPreview = () => {
     const scheduleData = itineraryBlocks.length > 0
       ? convertItineraryToSchedule(itineraryBlocks)
@@ -1916,6 +1997,24 @@ const InstructorRetreatForm = () => {
                       <p className="text-xs sm:text-sm text-muted-foreground">
                         {formData.price_variants.length} option{formData.price_variants.length !== 1 ? 's' : ''}
                       </p>
+
+                      <div className="mt-3 space-y-2">
+                        {formData.price_variants.map((variant) => (
+                          <div key={variant.id} className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-card-foreground truncate">{variant.name}</p>
+                              {variant.description && (
+                                <p className="text-xs text-muted-foreground leading-snug break-words">
+                                  {variant.description}
+                                </p>
+                              )}
+                            </div>
+                            <p className="text-sm font-semibold text-card-foreground whitespace-nowrap">
+                              ${variant.price.toFixed(2)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <div>
@@ -2349,7 +2448,7 @@ const InstructorRetreatForm = () => {
               
               {/* Suggested Content Titles Box */}
               <div className="border rounded-lg p-4 mb-4 bg-gradient-to-r from-blue-50 to-purple-50">
-                <Label className="text-sm font-medium text-card-foreground mb-3 block">Suggested Content Sections</Label>
+                <Label className="text-sm font-medium text-card-foreground/70 mb-3 block">Suggested Content Sections</Label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {[
                     { value: "core", title: "Core Event Description" },
@@ -2365,22 +2464,12 @@ const InstructorRetreatForm = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        const templates = {
-                          "core": { title: "Core Event Description", description: "Describe the main event, what participants will experience, and what makes this retreat special.", images: [], videos: [] },
-                          "lodging": { title: "Lodging, Rooms, Amenities", description: "Details about accommodation options, room types, and available amenities.", images: [], videos: [] },
-                          "volunteer": { title: "Volunteer Opportunities", description: "Information about ways participants can contribute and get involved.", images: [], videos: [] },
-                          "food": { title: "Food, Dietary Needs", description: "Meal plans, dietary accommodations, and food-related information.", images: [], videos: [] },
-                          "medical": { title: "Medical", description: "Medical information, health requirements, emergency contacts, and any medical considerations for participants.", images: [], videos: [] },
-                          "accessibility": { title: "Accessibility", description: "Information about accessibility features, accommodations for disabilities, and how to request additional support.", images: [], videos: [] }
-                        };
-                        if (templates[template.value as keyof typeof templates]) {
-                          const selectedTemplate = templates[template.value as keyof typeof templates];
-                          setNewContentCard(selectedTemplate);
-                          setNewContentCardImages([]);
-                          setNewContentCardVideos([]);
-                        }
+                        setNewContentCard(prev => ({
+                          ...prev,
+                          title: template.title,
+                        }));
                       }}
-                      className="text-xs h-auto py-2 px-3 text-left justify-start hover:bg-primary hover:text-primary-foreground"
+                      className="text-xs h-auto py-2 px-3 text-left justify-start bg-white/40 border-white/60 text-card-foreground/70 hover:text-card-foreground hover:bg-white/70"
                     >
                       {template.title}
                     </Button>
@@ -2409,333 +2498,325 @@ const InstructorRetreatForm = () => {
               {/* Add New Content Card Form */}
               {newContentCard.title.trim() && (
                 <div className="border rounded-lg p-4 space-y-3 mb-4 bg-gradient-to-r from-purple-50 to-blue-50">
-                  <h4 className="font-medium text-card-foreground">Create New Content Section</h4>
-                  <div>
-                    <Label className="text-sm">Section Title</Label>
-                    <Input
-                      value={newContentCard.title}
-                      onChange={(e) => setNewContentCard(prev => ({ ...prev, title: e.target.value }))}
-                      placeholder="e.g., Core Event Description"
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm">Section Description</Label>
-                    <Textarea
-                      value={newContentCard.description}
-                      onChange={(e) => setNewContentCard(prev => ({ ...prev, description: e.target.value }))}
-                      placeholder="Enter the content for this section..."
-                      rows={3}
-                      className="mt-1"
-                    />
-                  </div>
-                  
-                  {/* Add Media Button */}
-                  <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg border border-slate-200">
-                    <div className="flex items-center gap-2">
-                      <Upload className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm font-medium text-card-foreground">Media</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => document.getElementById('new-content-image')?.click()}
-                        className="text-xs"
-                      >
-                        <Upload className="w-3 h-3 mr-1" />
-                        Add Images
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => document.getElementById('new-content-video')?.click()}
-                        className="text-xs"
-                        disabled={newContentCardVideos.length >= 1}
-                      >
-                        <Upload className="w-3 h-3 mr-1" />
-                        Add Video
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  
-                  {/* Media Preview Section */}
-                  {(newContentCardImages.length > 0 || newContentCardVideos.length > 0) && (
-                    <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-lg p-4 border border-slate-200/60">
-                      {/* Images Preview */}
-                      {newContentCardImages.length > 0 && (
-                        <div className="mb-4">
-                          <Label className="text-xs font-medium text-slate-600 mb-2 block">Images ({newContentCardImages.length})</Label>
-                          <div className="flex flex-wrap gap-2">
-                            {newContentCardImages.map((imageUrl, imgIndex) => (
-                              <div key={imgIndex} className="relative group">
-                                <img
-                                  src={imageUrl}
-                                  alt={`Preview ${imgIndex + 1}`}
-                                  className="w-20 h-20 object-cover rounded-md border-2 border-slate-200"
-                                />
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={() => removeNewContentCardImage(imageUrl)}
-                                >
-                                  <X className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Video Preview */}
-                      {newContentCardVideos.length > 0 && (
-                        <div>
-                          <Label className="text-xs font-medium text-slate-600 mb-2 block">Video</Label>
-                          <div className="relative">
-                            <div className="w-full h-24 bg-slate-100 rounded-md border-2 border-slate-200 flex items-center justify-center">
-                              <div className="text-center">
-                                <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-1">
-                                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
-                                  </svg>
-                                </div>
-                                <p className="text-xs text-slate-600">Video uploaded</p>
-                              </div>
-                            </div>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full"
-                              onClick={() => removeNewContentCardVideo(newContentCardVideos[0])}
-                            >
-                              <X className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* Hidden file inputs */}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleNewContentCardImageUpload}
-                    className="hidden"
-                    id="new-content-image"
-                    multiple
+                <h4 className="font-medium text-card-foreground">Create New Content Section</h4>
+                <div>
+                  <Label className="text-sm">Section Title</Label>
+                  <Input
+                    value={newContentCard.title}
+                    onChange={(e) => setNewContentCard(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="e.g., Core Event Description"
+                    className="mt-1"
                   />
-                  <input
-                    type="file"
-                    accept="video/*"
-                    onChange={handleNewContentCardVideoUpload}
-                    className="hidden"
-                    id="new-content-video"
-                  />
-                  
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={addContentCard}
-                      disabled={!newContentCard.title.trim()}
-                      className="flex-1"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Section
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setNewContentCard({ title: "", description: "", images: [], videos: [] })}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
                 </div>
-              )}
-
-              {/* Display Existing Content Cards */}
-              {contentCards.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium text-card-foreground">Content Sections ({contentCards.length})</h4>
-                    <Badge variant="outline" className="text-xs">
-                      {contentCards.length} section{contentCards.length !== 1 ? 's' : ''} created
-                    </Badge>
-                  </div>
-                  {contentCards.map((card, index) => (
-                    <div key={card.id} className="border rounded-lg p-4 bg-gradient-to-r from-green-50 to-blue-50">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <Input
-                            value={card.title}
-                            onChange={(e) => updateContentCard(card.id, { title: e.target.value })}
-                            className="font-medium mb-2"
-                            placeholder="Section title"
-                          />
-                          <Textarea
-                            value={card.description}
-                            onChange={(e) => updateContentCard(card.id, { description: e.target.value })}
-                            rows={3}
-                            placeholder="Section content..."
-                            className="mb-3"
-                          />
+                <div>
+                  <Label className="text-sm">Section Description</Label>
+                  <Textarea
+                    value={newContentCard.description}
+                    onChange={(e) => setNewContentCard(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Enter the content for this section..."
+                    rows={3}
+                    className="mt-1"
+                  />
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('new-content-image')?.click()}
+                    className="text-xs"
+                  >
+                    <Upload className="w-3 h-3 mr-1" />
+                    Add Images
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('new-content-video')?.click()}
+                    className="text-xs"
+                    disabled={newContentCardVideos.length >= 1}
+                  >
+                    <Upload className="w-3 h-3 mr-1" />
+                    Add Videos
+                  </Button>
+                </div>
+                
+                {/* Media Preview Section */}
+                {(newContentCardImages.length > 0 || newContentCardVideos.length > 0) && (
+                  <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-lg p-4 border border-slate-200/60">
+                    {/* Images Preview */}
+                    {newContentCardImages.length > 0 && (
+                      <div className="mb-4">
+                        <Label className="text-xs font-medium text-slate-600 mb-2 block">Images ({newContentCardImages.length})</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {newContentCardImages.map((imageUrl, imgIndex) => (
+                            <div key={imgIndex} className="relative group">
+                              <img
+                                src={imageUrl}
+                                alt={`Preview ${imgIndex + 1}`}
+                                className="w-20 h-20 object-cover rounded-md border-2 border-slate-200"
+                              />
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => removeNewContentCardImage(imageUrl)}
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ))}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeContentCard(card.id)}
-                          className="ml-2 text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                      </div>
+                    )}
+                    
+                    {/* Video Preview */}
+                    {newContentCardVideos.length > 0 && (
+                      <div>
+                        <Label className="text-xs font-medium text-slate-600 mb-2 block">Video</Label>
+                        <div className="relative">
+                          <div className="w-full h-24 bg-slate-100 rounded-md border-2 border-slate-200 flex items-center justify-center">
+                            <div className="text-center">
+                              <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-1">
+                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                                </svg>
+                              </div>
+                              <p className="text-xs text-slate-600">Video uploaded</p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full"
+                            onClick={() => removeNewContentCardVideo(newContentCardVideos[0])}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Hidden file inputs */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleNewContentCardImageUpload}
+                  className="hidden"
+                  id="new-content-image"
+                  multiple
+                />
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={handleNewContentCardVideoUpload}
+                  className="hidden"
+                  id="new-content-video"
+                />
+                
+                <div className="flex gap-2">
+                  <Button
+                    onClick={addContentCard}
+                    disabled={!newContentCard.title.trim()}
+                    className="flex-1"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Section
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setNewContentCard({ title: "", description: "", images: [], videos: [] })}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Display Existing Content Cards */}
+            {contentCards.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-card-foreground">Content Sections ({contentCards.length})</h4>
+                  <Badge variant="outline" className="text-xs">
+                    {contentCards.length} section{contentCards.length !== 1 ? 's' : ''} created
+                  </Badge>
+                </div>
+                {contentCards.map((card, index) => (
+                  <div key={card.id} className="border rounded-lg p-4 bg-gradient-to-r from-green-50 to-blue-50">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <Input
+                          value={card.title}
+                          onChange={(e) => updateContentCard(card.id, { title: e.target.value })}
+                          className="font-medium mb-2"
+                          placeholder="Section title"
+                        />
+                        <Textarea
+                          value={card.description}
+                          onChange={(e) => updateContentCard(card.id, { description: e.target.value })}
+                          rows={3}
+                          placeholder="Section content..."
+                          className="mb-3"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeContentCard(card.id)}
+                        className="ml-2 text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    
+                    {/* Media Upload for Content Card */}
+                    <div className="bg-gradient-to-br from-slate-50/50 to-blue-50/20 rounded-lg p-4 border border-slate-200/40">
+                      <div className="flex items-center justify-between mb-4 flex-col sm:flex-row gap-3 sm:gap-0">
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md flex items-center justify-center flex-shrink-0">
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                          <Label className="text-xs font-medium text-slate-600">Section Media</Label>
+                        </div>
+                        <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => document.getElementById(`content-image-${card.id}`)?.click()}
+                            className="text-xs bg-white hover:bg-blue-50 border-blue-200 text-blue-700 hover:text-blue-800 transition-all duration-200 shadow-sm flex-1 sm:flex-none min-w-[80px]"
+                          >
+                            <Upload className="w-3 h-3 mr-1" />
+                            <span className="hidden sm:inline">Add Images</span>
+                            <span className="sm:hidden">Images</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => document.getElementById(`content-video-${card.id}`)?.click()}
+                            className="text-xs bg-white hover:bg-purple-50 border-purple-200 text-purple-700 hover:text-purple-800 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none min-w-[80px]"
+                            disabled={card.videos && card.videos.length >= 1}
+                          >
+                            <Upload className="w-3 h-3 mr-1" />
+                            <span className="hidden sm:inline">Add Videos</span>
+                            <span className="sm:hidden">Videos</span>
+                          </Button>
+                        </div>
                       </div>
                       
-                      {/* Media Upload for Content Card */}
-                      <div className="bg-gradient-to-br from-slate-50/50 to-blue-50/20 rounded-lg p-4 border border-slate-200/40">
-                        <div className="flex items-center justify-between mb-4 flex-col sm:flex-row gap-3 sm:gap-0">
-                          <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md flex items-center justify-center flex-shrink-0">
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                            </div>
-                            <Label className="text-xs font-medium text-slate-600">Section Media</Label>
+                      {/* Images Display */}
+                      <div className="mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-5 h-5 bg-gradient-to-br from-green-400 to-blue-500 rounded-sm flex items-center justify-center">
+                            <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
                           </div>
-                          <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => document.getElementById(`content-image-${card.id}`)?.click()}
-                              className="text-xs bg-white hover:bg-blue-50 border-blue-200 text-blue-700 hover:text-blue-800 transition-all duration-200 shadow-sm flex-1 sm:flex-none min-w-[80px]"
-                            >
-                              <Upload className="w-3 h-3 mr-1" />
-                              <span className="hidden sm:inline">Add Images</span>
-                              <span className="sm:hidden">Images</span>
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => document.getElementById(`content-video-${card.id}`)?.click()}
-                              className="text-xs bg-white hover:bg-purple-50 border-purple-200 text-purple-700 hover:text-purple-800 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none min-w-[80px]"
-                              disabled={card.videos && card.videos.length >= 1}
-                            >
-                              <Upload className="w-3 h-3 mr-1" />
-                              <span className="hidden sm:inline">Add Video</span>
-                              <span className="sm:hidden">Video</span>
-                            </Button>
+                          <Label className="text-xs text-slate-600">Images ({card.images?.length || 0})</Label>
+                        </div>
+                        <div className="flex flex-wrap gap-2 p-3 bg-white/40 rounded-lg border border-slate-200/30 min-h-[80px]">
+                          {card.images?.map((imageUrl, imgIndex) => (
+                            <div key={imgIndex} className="relative group">
+                              <div className="relative overflow-hidden rounded-md border-2 border-slate-200 shadow-sm hover:shadow-md transition-all duration-200">
+                                <img
+                                  src={imageUrl}
+                                  alt={`${card.title} ${imgIndex + 1}`}
+                                  className="w-20 h-20 object-cover group-hover:scale-105 transition-transform duration-200"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                              </div>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
+                                onClick={() => removeContentCardImage(card.id, imageUrl)}
+                              >
+                                <X className="w-2 h-2" />
+                              </Button>
+                            </div>
+                          ))}
+                          <div className="relative group">
+                            <div className="w-20 h-20 border-2 border-dashed border-slate-300 rounded-md flex items-center justify-center hover:border-blue-400 hover:bg-blue-50/30 transition-all duration-200 cursor-pointer">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleContentCardImageUpload(card.id, e)}
+                                className="hidden"
+                                id={`content-image-${card.id}`}
+                              />
+                              <label
+                                htmlFor={`content-image-${card.id}`}
+                                className="cursor-pointer p-3"
+                              >
+                                <Plus className="w-5 h-5 text-slate-400 group-hover:text-blue-500 transition-colors duration-200" />
+                              </label>
+                            </div>
                           </div>
                         </div>
-                        
-                        {/* Images Display */}
-                        <div className="mb-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-5 h-5 bg-gradient-to-br from-green-400 to-blue-500 rounded-sm flex items-center justify-center">
-                              <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                            </div>
-                            <Label className="text-xs text-slate-600">Images ({card.images?.length || 0})</Label>
+                      </div>
+                      
+                      {/* Videos Display */}
+                      <div className="mb-2">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-5 h-5 bg-gradient-to-br from-red-400 to-pink-500 rounded-sm flex items-center justify-center">
+                            <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                            </svg>
                           </div>
-                          <div className="flex flex-wrap gap-2 p-3 bg-white/40 rounded-lg border border-slate-200/30 min-h-[80px]">
-                            {card.images?.map((imageUrl, imgIndex) => (
-                              <div key={imgIndex} className="relative group">
-                                <div className="relative overflow-hidden rounded-md border-2 border-slate-200 shadow-sm hover:shadow-md transition-all duration-200">
-                                  <img
-                                    src={imageUrl}
-                                    alt={`${card.title} ${imgIndex + 1}`}
-                                    className="w-20 h-20 object-cover group-hover:scale-105 transition-transform duration-200"
-                                  />
-                                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                          <Label className="text-xs text-slate-600">Video ({card.videos?.length || 0}/1)</Label>
+                        </div>
+                        <div className="flex flex-wrap gap-2 p-3 bg-white/40 rounded-lg border border-slate-200/30 min-h-[80px]">
+                          {card.videos?.map((videoUrl, vidIndex) => (
+                            <div key={vidIndex} className="relative group">
+                              <div className="w-32 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-md border-2 border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center overflow-hidden">
+                                <div className="text-center">
+                                  <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-pink-600 rounded-full flex items-center justify-center mb-1 mx-auto group-hover:scale-110 transition-transform duration-200">
+                                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                      <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                                    </svg>
+                                  </div>
+                                  <p className="text-xs text-slate-600">Video</p>
                                 </div>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
-                                  onClick={() => removeContentCardImage(card.id, imageUrl)}
-                                >
-                                  <X className="w-2 h-2" />
-                                </Button>
                               </div>
-                            ))}
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
+                                onClick={() => removeContentCardVideo(card.id, videoUrl)}
+                              >
+                                <X className="w-2 h-2" />
+                              </Button>
+                            </div>
+                          ))}
+                          {(!card.videos || card.videos.length === 0) && (
                             <div className="relative group">
-                              <div className="w-20 h-20 border-2 border-dashed border-slate-300 rounded-md flex items-center justify-center hover:border-blue-400 hover:bg-blue-50/30 transition-all duration-200 cursor-pointer">
+                              <div className="w-32 h-20 border-2 border-dashed border-slate-300 rounded-md flex items-center justify-center hover:border-purple-400 hover:bg-purple-50/30 transition-all duration-200 cursor-pointer">
                                 <input
                                   type="file"
-                                  accept="image/*"
-                                  onChange={(e) => handleContentCardImageUpload(card.id, e)}
+                                  accept="video/*"
+                                  onChange={(e) => handleContentCardVideoUpload(card.id, e)}
                                   className="hidden"
-                                  id={`content-image-${card.id}`}
+                                  id={`content-video-${card.id}`}
                                 />
                                 <label
-                                  htmlFor={`content-image-${card.id}`}
+                                  htmlFor={`content-video-${card.id}`}
                                   className="cursor-pointer p-3"
                                 >
-                                  <Plus className="w-5 h-5 text-slate-400 group-hover:text-blue-500 transition-colors duration-200" />
+                                  <div className="text-center">
+                                    <Plus className="w-5 h-5 text-slate-400 group-hover:text-purple-500 transition-colors duration-200 mx-auto mb-1" />
+                                    <p className="text-xs text-slate-400 group-hover:text-purple-600 transition-colors duration-200">Add videos</p>
+                                  </div>
                                 </label>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                        
-                        {/* Videos Display */}
-                        <div className="mb-2">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-5 h-5 bg-gradient-to-br from-red-400 to-pink-500 rounded-sm flex items-center justify-center">
-                              <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
-                              </svg>
-                            </div>
-                            <Label className="text-xs text-slate-600">Video ({card.videos?.length || 0}/1)</Label>
-                          </div>
-                          <div className="flex flex-wrap gap-2 p-3 bg-white/40 rounded-lg border border-slate-200/30 min-h-[80px]">
-                            {card.videos?.map((videoUrl, vidIndex) => (
-                              <div key={vidIndex} className="relative group">
-                                <div className="w-32 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-md border-2 border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center overflow-hidden">
-                                  <div className="text-center">
-                                    <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-pink-600 rounded-full flex items-center justify-center mb-1 mx-auto group-hover:scale-110 transition-transform duration-200">
-                                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
-                                      </svg>
-                                    </div>
-                                    <p className="text-xs text-slate-600">Video</p>
-                                  </div>
-                                </div>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  className="absolute -top-1 -right-1 w-5 h-5 p-0 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
-                                  onClick={() => removeContentCardImage(card.id, videoUrl)}
-                                >
-                                  <X className="w-2 h-2" />
-                                </Button>
-                              </div>
-                            ))}
-                            {(!card.videos || card.videos.length === 0) && (
-                              <div className="relative group">
-                                <div className="w-32 h-20 border-2 border-dashed border-slate-300 rounded-md flex items-center justify-center hover:border-purple-400 hover:bg-purple-50/30 transition-all duration-200 cursor-pointer">
-                                  <input
-                                    type="file"
-                                    accept="video/*"
-                                    onChange={(e) => handleContentCardImageUpload(card.id, e)}
-                                    className="hidden"
-                                    id={`content-video-${card.id}`}
-                                  />
-                                  <label
-                                    htmlFor={`content-video-${card.id}`}
-                                    className="cursor-pointer p-3"
-                                  >
-                                    <div className="text-center">
-                                      <Plus className="w-5 h-5 text-slate-400 group-hover:text-purple-500 transition-colors duration-200 mx-auto mb-1" />
-                                      <p className="text-xs text-slate-400 group-hover:text-purple-600 transition-colors duration-200">Add video</p>
-                                    </div>
-                                  </label>
-                                </div>
-                              </div>
-                            )}
+                          )}
                           </div>
                         </div>
                         
@@ -3686,11 +3767,11 @@ const InstructorRetreatForm = () => {
           </div>
 
           {/* Save/Cancel/Publish Buttons */}
-          <div className="flex gap-4 pt-4">
+          <div className="grid grid-cols-2 gap-3 pt-4 sm:flex sm:gap-4">
             <Button
               type="button"
               variant="outline"
-              className="flex-1"
+              className="w-full sm:flex-1"
               onClick={cancelEditing}
             >
               Cancel
@@ -3698,7 +3779,7 @@ const InstructorRetreatForm = () => {
             <Button
               type="button"
               variant="outline"
-              className="flex-1"
+              className="w-full sm:flex-1"
               onClick={() => setIsPreviewMode(true)}
             >
               <Eye className="w-4 h-4 mr-2" />
@@ -3707,7 +3788,7 @@ const InstructorRetreatForm = () => {
             <Button
               type="button"
               variant="outline"
-              className="flex-1"
+              className="w-full sm:flex-1"
               onClick={() => handleSave(false)}
               disabled={saving}
             >
@@ -3716,7 +3797,7 @@ const InstructorRetreatForm = () => {
             </Button>
             <Button
               type="button"
-              className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+              className="col-span-2 w-full sm:col-span-1 sm:flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
               onClick={() => handleSave(true)}
               disabled={saving}
             >
