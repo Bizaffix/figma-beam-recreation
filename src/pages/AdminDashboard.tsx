@@ -50,7 +50,7 @@ interface EmailTemplate {
   subject: string;
   message: string;
   images: string[];
-  recipient_type: 'students' | 'instructors' | null;
+  recipient_type: 'students' | 'organizers' | null;
   created_at: string;
   updated_at: string;
 }
@@ -129,6 +129,7 @@ const AdminDashboard = () => {
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [draftEvents, setDraftEvents] = useState<DraftEvent[]>([]);
   const [draftVenues, setDraftVenues] = useState<DraftVenue[]>([]);
+  const [profileNamesById, setProfileNamesById] = useState<Record<string, string>>({});
   const [loadingDrafts, setLoadingDrafts] = useState(false);
   const [draftEventsDialogOpen, setDraftEventsDialogOpen] = useState(false);
   const [draftVenuesDialogOpen, setDraftVenuesDialogOpen] = useState(false);
@@ -267,6 +268,27 @@ const AdminDashboard = () => {
       if (!draftVenuesError && draftVenuesData) {
         setDraftVenues(draftVenuesData || []);
         setRecentDraftVenues(draftVenuesData.slice(0, 4));
+      }
+
+      if (draftEventsData || draftVenuesData) {
+        const ids = new Set<string>();
+        (draftEventsData || []).forEach((e: any) => e?.instructor_id && ids.add(e.instructor_id));
+        (draftVenuesData || []).forEach((v: any) => v?.owner_id && ids.add(v.owner_id));
+
+        if (ids.size > 0) {
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', Array.from(ids));
+
+          if (profilesData) {
+            const map: Record<string, string> = {};
+            profilesData.forEach((p: any) => {
+              map[p.id] = p.full_name || 'Unknown';
+            });
+            setProfileNamesById(map);
+          }
+        }
       }
 
       // Enrich bookings with retreat info
@@ -1889,41 +1911,62 @@ const AdminDashboard = () => {
               Send Notification to {notificationRecipients === 'students' ? 'Students' : 'Organizers'}
             </DialogTitle>
             <DialogDescription>
-              <div className="flex items-center justify-between">
-                {notificationRecipients && (
-                  <span>
-                    Sending to {notificationRecipients === 'students' ? selectedStudents.size : selectedInstructors.size} selected {notificationRecipients === 'students' ? 'student(s)' : 'organizer(s)'}
-                  </span>
-                )}
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setLoadTemplateDialogOpen(true)}
-                    disabled={sendingEmail}
-                  >
-                    <FolderOpen className="w-4 h-4 mr-2" />
-                    Load
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setTemplateName('');
-                      setSaveTemplateDialogOpen(true);
-                    }}
-                    disabled={sendingEmail || !notificationSubject.trim() || !emailSections.some(s => s.message.trim() || s.images.length > 0)}
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Save
-                  </Button>
-                </div>
-              </div>
+              {notificationRecipients
+                ? `Sending to ${notificationRecipients === 'students' ? selectedStudents.size : selectedInstructors.size} selected ${notificationRecipients === 'students' ? 'student(s)' : 'organizer(s)'}`
+                : ''}
             </DialogDescription>
+
+            <div className="flex gap-2 mt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setLoadTemplateDialogOpen(true)}
+                disabled={sendingEmail}
+              >
+                <FolderOpen className="w-4 h-4 mr-2" />
+                Load
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setTemplateName('');
+                  setSaveTemplateDialogOpen(true);
+                }}
+                disabled={sendingEmail || !notificationSubject.trim() || !emailSections.some(s => s.message.trim() || s.images.length > 0)}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Save
+              </Button>
+            </div>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            {(() => {
+              const recipientList = notificationRecipients === 'students' ? studentsList : instructorsList;
+              const selectedIds = notificationRecipients === 'students' ? selectedStudents : selectedInstructors;
+              const selectedRecipients = recipientList.filter(u => selectedIds.has(u.id));
+
+              if (!notificationRecipients || selectedRecipients.length === 0) return null;
+
+              return (
+                <div className="space-y-2">
+                  <Label>Selected Recipients</Label>
+                  <div className="border rounded-lg bg-muted/30 max-h-44 overflow-y-auto">
+                    {selectedRecipients.map((r) => (
+                      <div key={r.id} className="flex items-start justify-between gap-3 px-3 py-2 border-b last:border-b-0">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-card-foreground truncate">{r.full_name || 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground break-all">{r.email}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="space-y-2">
               <Label htmlFor="notification-subject">Subject</Label>
               <Input
@@ -2299,6 +2342,9 @@ const AdminDashboard = () => {
                             Event ID: {event.id}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
+                            Created by: {profileNamesById[event.instructor_id] || 'Unknown'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
                             Last updated: {new Date(event.updated_at).toLocaleDateString()}
                           </p>
                         </div>
@@ -2356,6 +2402,9 @@ const AdminDashboard = () => {
                           <h4 className="font-medium truncate">{venue.property_name}</h4>
                           <p className="text-sm text-muted-foreground mt-1">
                             Venue ID: {venue.id}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Created by: {profileNamesById[venue.owner_id] || 'Unknown'}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             Last updated: {new Date(venue.updated_at).toLocaleDateString()}
@@ -2609,4 +2658,3 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
-
