@@ -118,7 +118,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       : `${window.location.origin}/auth/confirm`;
     
     // Store role, referral code, and user data in user metadata so the database trigger can use it
-    const userMetadata: { role?: string; referred_by?: string; first_name?: string; last_name?: string; bio?: string; property_name?: string } = {
+    const userMetadata: { role?: string; referred_by?: string; first_name?: string; last_name?: string; full_name?: string; bio?: string; property_name?: string } = {
       role: role,
     };
     if (referralCode) {
@@ -129,13 +129,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (role === 'instructor' && instructorData) {
       userMetadata.first_name = instructorData.firstName;
       userMetadata.last_name = instructorData.lastName;
+      userMetadata.full_name = `${instructorData.firstName} ${instructorData.lastName}`.trim();
       userMetadata.bio = instructorData.bio;
     } else if (role === 'student' && studentData) {
       userMetadata.first_name = studentData.firstName;
       userMetadata.last_name = studentData.lastName;
+      userMetadata.full_name = `${studentData.firstName} ${studentData.lastName}`.trim();
     } else if (role === 'location_owner' && locationOwnerData) {
       userMetadata.first_name = locationOwnerData.firstName;
       userMetadata.last_name = locationOwnerData.lastName;
+      userMetadata.full_name = `${locationOwnerData.firstName} ${locationOwnerData.lastName}`.trim();
       if (locationOwnerData.propertyName) {
         userMetadata.property_name = locationOwnerData.propertyName;
       }

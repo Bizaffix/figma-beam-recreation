@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2, Plus, DollarSign, CreditCard, Users, Copy, Clock } from "lucide-react";
+import { ArrowLeft, Upload, MapPin, ExternalLink, Calendar as CalendarIcon, X, Save, Edit, Trash2, Eye, EyeOff, CheckCircle2, Share2, Plus, DollarSign, CreditCard, Users, Copy, Clock, ArrowUp, ArrowDown } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1783,6 +1783,23 @@ const InstructorRetreatForm = () => {
     ));
   };
 
+  const moveContentCard = (cardId: string, direction: 'up' | 'down') => {
+    setContentCards(prev => {
+      const sorted = [...prev].sort((a, b) => (a.order || 0) - (b.order || 0));
+      const index = sorted.findIndex(c => c.id === cardId);
+      if (index === -1) return prev;
+
+      const swapWith = direction === 'up' ? index - 1 : index + 1;
+      if (swapWith < 0 || swapWith >= sorted.length) return prev;
+
+      const next = [...sorted];
+      [next[index], next[swapWith]] = [next[swapWith], next[index]];
+
+      const reOrdered = next.map((c, i) => ({ ...c, order: i }));
+      return reOrdered;
+    });
+  };
+
   const handleContentCardImageUpload = async (cardId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -2086,7 +2103,7 @@ const InstructorRetreatForm = () => {
             <Card>
               <CardContent className="p-4 sm:p-6">
                 <h2 className="text-lg sm:text-xl font-semibold text-card-foreground mb-3">About This Retreat</h2>
-                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">{formData.description}</p>
+                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed whitespace-pre-wrap">{formData.description}</p>
               </CardContent>
             </Card>
           )}
@@ -2150,7 +2167,7 @@ const InstructorRetreatForm = () => {
                           </p>
                         ) : null}
                         {block.description && block.description.trim() && (
-                          <p className="text-xs sm:text-sm text-muted-foreground">{block.description}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground whitespace-pre-wrap">{block.description}</p>
                         )}
                       </div>
                     ))}
@@ -2171,7 +2188,7 @@ const InstructorRetreatForm = () => {
                       <div key={card.id} className="border rounded-lg p-4 sm:p-6 bg-card">
                         <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3">{card.title}</h3>
                         {card.description && (
-                          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed mb-4">{card.description}</p>
+                          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed whitespace-pre-wrap mb-4">{card.description}</p>
                         )}
                         {/* Images */}
                         {card.images && card.images.length > 0 && (
@@ -2647,7 +2664,10 @@ const InstructorRetreatForm = () => {
                     {contentCards.length} section{contentCards.length !== 1 ? 's' : ''} created
                   </Badge>
                 </div>
-                {contentCards.map((card, index) => (
+                {contentCards
+                  .slice()
+                  .sort((a, b) => (a.order || 0) - (b.order || 0))
+                  .map((card, index) => (
                   <div key={card.id} className="border rounded-lg p-4 bg-gradient-to-r from-green-50 to-blue-50">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
@@ -2665,14 +2685,37 @@ const InstructorRetreatForm = () => {
                           className="mb-3"
                         />
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeContentCard(card.id)}
-                        className="ml-2 text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <div className="ml-2 flex flex-col gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => moveContentCard(card.id, 'up')}
+                          disabled={index === 0}
+                          className="h-8 w-8 p-0"
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => moveContentCard(card.id, 'down')}
+                          disabled={index === contentCards.length - 1}
+                          className="h-8 w-8 p-0"
+                        >
+                          <ArrowDown className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeContentCard(card.id)}
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                     
                     {/* Media Upload for Content Card */}
