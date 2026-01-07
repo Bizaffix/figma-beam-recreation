@@ -20,6 +20,7 @@ import InstructorBrowse from "./pages/InstructorBrowse";
 import InstructorMessages from "./pages/InstructorMessages";
 import StudentMessages from "./pages/StudentMessages";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminAnalytics from "./pages/AdminAnalytics";
 import AffiliateProgramManager from "./pages/AffiliateProgramManager";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -200,6 +201,7 @@ const App = () => (
           
           {/* Protected Admin Routes */}
           <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
           <Route path="/admin/affiliates" element={<AdminRoute><AffiliateProgramManager /></AdminRoute>} />
           
           {/* Catch-all route - redirect to login if not authenticated */}

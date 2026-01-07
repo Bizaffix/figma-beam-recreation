@@ -1170,15 +1170,26 @@ const AdminDashboard = () => {
             <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Admin Dashboard</h1>
             <p className="text-white/90 text-sm sm:text-lg">Monitor and manage platform activity</p>
           </div>
-          <Button
-            variant="outline"
-            onClick={handleLogout}
-            className="bg-white/10 hover:bg-white/20 text-white border-white/20 w-full sm:w-auto"
-            size="sm"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Log Out
-          </Button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              onClick={() => navigate('/admin/analytics')}
+              className="bg-white/10 hover:bg-white/20 text-white border-white/20 w-full sm:w-auto"
+              size="sm"
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              Analytics
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              className="bg-white/10 hover:bg-white/20 text-white border-white/20 w-full sm:w-auto"
+              size="sm"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Log Out
+            </Button>
+          </div>
         </div>
       </div>
 

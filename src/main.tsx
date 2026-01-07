@@ -5,7 +5,6 @@ import "./index.css";
 import { AuthProvider } from "./contexts/AuthContext";
 import { Elements } from "@stripe/react-stripe-js";
 import { getStripe } from "./lib/stripe";
-import { Analytics } from "@vercel/analytics/react";
 
 const stripePromise = getStripe();
 
@@ -14,7 +13,6 @@ createRoot(document.getElementById("root")!).render(
     <AuthProvider>
       <Elements stripe={stripePromise}>
         <App />
-        <Analytics />
       </Elements>
     </AuthProvider>
   </StrictMode>
