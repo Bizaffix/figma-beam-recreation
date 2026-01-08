@@ -1,3 +1,38 @@
+/**
+ * Analytics Edge Function
+ * 
+ * This function acts as a proxy between the frontend and Umami Analytics API.
+ * It handles authentication, authorization, and routes requests to the appropriate
+ * Umami API endpoints.
+ * 
+ * Umami API Documentation Reference:
+ * - GET /api/websites/:websiteId/stats - Website statistics
+ * - GET /api/websites/:websiteId/pageviews - Pageviews over time
+ * - GET /api/websites/:websiteId/metrics - Metrics (simple format)
+ * - GET /api/websites/:websiteId/metrics/expanded - Metrics (expanded format)
+ * - GET /api/websites/:websiteId/events/series - Event series
+ * - GET /api/websites/:websiteId/active - Active users (last 5 minutes)
+ * - GET /api/realtime/:websiteId - Realtime data (last 30 minutes)
+ * - GET /api/websites/:websiteId/sessions - Session list
+ * - GET /api/websites/:websiteId/sessions/stats - Session statistics
+ * - GET /api/websites/:websiteId/sessions/weekly - Weekly session patterns
+ * - GET /api/websites/:websiteId/sessions/:sessionId - Session details
+ * - GET /api/websites/:websiteId/sessions/:sessionId/activity - Session activity
+ * - GET /api/websites/:websiteId/sessions/:sessionId/properties - Session properties
+ * - GET /api/websites/:websiteId/session-data/properties - Session data properties
+ * - GET /api/websites/:websiteId/session-data/values - Session data values
+ * 
+ * All endpoints support filters: path, referrer, title, query, browser, os, device,
+ * country, region, city, hostname, tag, segment, cohort
+ * 
+ * Unit parameter limits:
+ * - minute: Up to 60 minutes
+ * - hour: Up to 48 hours
+ * - day: Up to 12 months
+ * - month: No limit
+ * - year: No limit
+ */
+
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -111,17 +146,30 @@ serve(async (req: Request) => {
   const route = idx >= 0 ? path.slice(idx + "/analytics".length) : "";
   const normalizedRoute = route === "" || route === "/" ? "/overview" : route;
 
-  const umamiFetch = async (pathname: string, searchParams: Record<string, string>) => {
+  const umamiFetch = async (
+    pathname: string,
+    searchParams: Record<string, string> = {},
+    options: { method?: string; body?: string } = {},
+  ) => {
     const umamiUrl = new URL(`${umamiApiBase}${pathname}`);
     Object.entries(searchParams).forEach(([k, v]) => umamiUrl.searchParams.set(k, v));
+
+    const method = options.method || "GET";
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "x-umami-api-key": umamiApiKey,
+    };
+
+    if (options.body) {
+      headers["Content-Type"] = "application/json";
+    }
 
     let umamiRes: Response;
     try {
       umamiRes = await fetch(umamiUrl.toString(), {
-        headers: {
-          Accept: "application/json",
-          "x-umami-api-key": umamiApiKey,
-        },
+        method,
+        headers,
+        body: options.body,
       });
     } catch (error) {
       return {
@@ -301,109 +349,90 @@ serve(async (req: Request) => {
     const model = body?.model ?? "last-click";
     const type = body?.type ?? "path";
     const step = body?.step ?? null;
+    const filters = body?.filters || {};
 
-    // Fetch referrer data (utm_source, utm_medium, utm_campaign, etc.)
-    const referrerRes = await umamiFetch(`/websites/${umamiWebsiteId}/metrics`, {
-      startAt: String(Math.floor(startAt)),
-      endAt: String(Math.floor(endAt)),
-      type: "referrer",
-      limit: "100",
-      offset: "0",
-    });
+    // Use Umami Reports API
+    const reportRes = await umamiFetch(
+      `/reports/attribution`,
+      {},
+      {
+        method: "POST",
+        body: JSON.stringify({
+          websiteId: umamiWebsiteId,
+          type: "attribution",
+          filters,
+          parameters: {
+            startDate: new Date(startAt).toISOString(),
+            endDate: new Date(endAt).toISOString(),
+            model,
+            type,
+            step,
+          },
+        }),
+      },
+    );
 
-    const referrerData = referrerRes.ok
-      ? ((referrerRes.body as Array<{ name: string; pageviews: number; visitors: number }>) ?? [])
-      : [];
+    if (!reportRes.ok) return jsonResponse(reportRes.body, { status: reportRes.status });
 
-    // Fetch utm data
-    const utmRes = await umamiFetch(`/websites/${umamiWebsiteId}/metrics`, {
-      startAt: String(Math.floor(startAt)),
-      endAt: String(Math.floor(endAt)),
-      type: "query",
-      limit: "100",
-      offset: "0",
-    });
-
-    const utmData = utmRes.ok
-      ? ((utmRes.body as Array<{ name: string; pageviews: number; visitors: number }>) ?? [])
-      : [];
-
-    // Get overall stats
-    const statsRes = await umamiFetch(`/websites/${umamiWebsiteId}/stats`, {
-      startAt: String(Math.floor(startAt)),
-      endAt: String(Math.floor(endAt)),
-    });
-
-    if (!statsRes.ok) return jsonResponse(statsRes.body, { status: statsRes.status });
-
-    const stats = statsRes.body as {
-      visitors: number;
-      pageviews: number;
-      visits: number;
+    // Umami Reports API returns: { referrer, paidAds, utm_source, utm_medium, utm_campaign, utm_content, utm_term, total }
+    const report = reportRes.body as {
+      referrer?: Array<{ name: string; value: number }>;
+      paidAds?: Array<{ name: string; value: number }>;
+      utm_source?: Array<{ name: string; value: number }>;
+      utm_medium?: Array<{ name: string; value: number }>;
+      utm_campaign?: Array<{ name: string; value: number }>;
+      utm_content?: Array<{ name: string; value: number }>;
+      utm_term?: Array<{ name: string; value: number }>;
+      total?: {
+        pageviews: number;
+        visitors: number;
+        visits: number;
+      };
     };
 
-    // Parse and organize attribution data
-    const attribution = {
+    // Transform to match existing UI expectations
+    return jsonResponse({
       model,
       type,
       step,
-      referrers: referrerData
-        .slice(0, 20)
-        .map((r) => ({
-          name: r.name || "Direct",
-          pageviews: Number(r.pageviews ?? 0),
-          visitors: Number(r.visitors ?? 0),
-        })),
+      referrers: (report.referrer || []).map((r) => ({
+        name: r.name || "Direct",
+        pageviews: r.value,
+        visitors: r.value,
+      })),
       utm: {
-        sources: utmData
-          .filter((u) => u.name?.includes("utm_source="))
-          .slice(0, 10)
-          .map((u) => ({
-            name: u.name?.split("utm_source=")[1]?.split("&")[0] || u.name,
-            pageviews: Number(u.pageviews ?? 0),
-            visitors: Number(u.visitors ?? 0),
-          })),
-        mediums: utmData
-          .filter((u) => u.name?.includes("utm_medium="))
-          .slice(0, 10)
-          .map((u) => ({
-            name: u.name?.split("utm_medium=")[1]?.split("&")[0] || u.name,
-            pageviews: Number(u.pageviews ?? 0),
-            visitors: Number(u.visitors ?? 0),
-          })),
-        campaigns: utmData
-          .filter((u) => u.name?.includes("utm_campaign="))
-          .slice(0, 10)
-          .map((u) => ({
-            name: u.name?.split("utm_campaign=")[1]?.split("&")[0] || u.name,
-            pageviews: Number(u.pageviews ?? 0),
-            visitors: Number(u.visitors ?? 0),
-          })),
-        contents: utmData
-          .filter((u) => u.name?.includes("utm_content="))
-          .slice(0, 10)
-          .map((u) => ({
-            name: u.name?.split("utm_content=")[1]?.split("&")[0] || u.name,
-            pageviews: Number(u.pageviews ?? 0),
-            visitors: Number(u.visitors ?? 0),
-          })),
-        terms: utmData
-          .filter((u) => u.name?.includes("utm_term="))
-          .slice(0, 10)
-          .map((u) => ({
-            name: u.name?.split("utm_term=")[1]?.split("&")[0] || u.name,
-            pageviews: Number(u.pageviews ?? 0),
-            visitors: Number(u.visitors ?? 0),
-          })),
+        sources: (report.utm_source || []).map((u) => ({
+          name: u.name,
+          pageviews: u.value,
+          visitors: u.value,
+        })),
+        mediums: (report.utm_medium || []).map((u) => ({
+          name: u.name,
+          pageviews: u.value,
+          visitors: u.value,
+        })),
+        campaigns: (report.utm_campaign || []).map((u) => ({
+          name: u.name,
+          pageviews: u.value,
+          visitors: u.value,
+        })),
+        contents: (report.utm_content || []).map((u) => ({
+          name: u.name,
+          pageviews: u.value,
+          visitors: u.value,
+        })),
+        terms: (report.utm_term || []).map((u) => ({
+          name: u.name,
+          pageviews: u.value,
+          visitors: u.value,
+        })),
       },
-      totals: {
-        pageviews: Number(stats?.pageviews ?? 0),
-        visitors: Number(stats?.visitors ?? 0),
-        visits: Number(stats?.visits ?? 0),
+      totals: report.total || {
+        pageviews: 0,
+        visitors: 0,
+        visits: 0,
       },
-    };
-
-    return jsonResponse(attribution);
+    });
   }
 
   if (normalizedRoute === "/funnel") {
@@ -413,61 +442,84 @@ serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const steps = Array.isArray(body?.steps) ? body.steps : [];
-    const windowDays = Number(body?.window ?? 0);
+    const windowDays = Number(body?.window ?? 60); // Default to 60 days if not provided
+    const filters = body?.filters || {};
 
     if (!Array.isArray(steps) || steps.length < 2) {
       return jsonResponse({ error: "Provide at least 2 steps" }, { status: 400 });
     }
 
-    // For each step we attempt to fetch the metric expanded data (path or event)
-    const stepResults = [];
-    for (const s of steps) {
-      const stype = s?.type === "event" ? "event" : "path";
-      const svalue = String(s?.value ?? "");
+    // Validate steps format
+    const validSteps = steps.filter((s) => s && (s.type === "path" || s.type === "event") && s.value);
+    if (validSteps.length < 2) {
+      return jsonResponse({ error: "Invalid steps format. Each step must have type (path|event) and value" }, { status: 400 });
+    }
 
-      const res = await umamiFetch(`/websites/${umamiWebsiteId}/metrics/expanded`, {
-        startAt: String(Math.floor(startAt)),
-        endAt: String(Math.floor(endAt)),
-        type: stype,
-        limit: "1000",
-        offset: "0",
-      });
+    try {
+      // Use Umami Reports API
+      // Note: Umami Reports API expects startDate/endDate as ISO strings (per documentation examples)
+      const reportRes = await umamiFetch(
+        `/reports/funnel`,
+        {},
+        {
+          method: "POST",
+          body: JSON.stringify({
+            websiteId: umamiWebsiteId,
+            type: "funnel",
+            filters,
+            parameters: {
+              startDate: new Date(startAt).toISOString(),
+              endDate: new Date(endAt).toISOString(),
+              steps: validSteps,
+              window: windowDays,
+            },
+          }),
+        },
+      );
 
-      if (!res.ok) {
-        // return partial error for clarity
-        return jsonResponse({ error: "Failed to fetch step data", details: res.body }, { status: res.status });
+      if (!reportRes.ok) {
+        console.error("Umami funnel API error:", reportRes.body);
+        return jsonResponse(
+          {
+            error: "Failed to fetch funnel data from Umami",
+            details: reportRes.body,
+          },
+          { status: reportRes.status },
+        );
       }
 
-      const rows = (res.body as Array<{ name: string; pageviews: number; visitors: number }>) ?? [];
+      // Umami Reports API returns: Array of { type, value, visitors, previous, dropped, dropoff, remaining }
+      const funnel = (reportRes.body as Array<{
+        type: string;
+        value: string;
+        visitors: number;
+        previous: number;
+        dropped: number;
+        dropoff: number | null;
+        remaining: number;
+      }>) || [];
 
-      // try exact match, fallback to includes
-      let row = rows.find((r) => r.name === svalue) || rows.find((r) => String(r.name).includes(svalue));
-      const visitors = Number(row?.visitors ?? 0) || Number(row?.pageviews ?? 0) || 0;
+      // Transform dropoff from decimal to percentage for UI
+      const transformedFunnel = funnel.map((step) => ({
+        type: step.type,
+        value: step.value,
+        visitors: step.visitors,
+        dropped: step.dropped,
+        dropoff: step.dropoff !== null ? Math.round(step.dropoff * 1000) / 10 : 0, // Convert to percentage
+        remaining: step.remaining,
+      }));
 
-      stepResults.push({ type: stype, value: svalue, visitors });
+      return jsonResponse({ window: windowDays, funnel: transformedFunnel });
+    } catch (error) {
+      console.error("Funnel endpoint error:", error);
+      return jsonResponse(
+        {
+          error: "Internal server error while processing funnel request",
+          details: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 },
+      );
     }
-
-    // compute funnel metrics sequentially
-    const funnel = [];
-    for (let i = 0; i < stepResults.length; i++) {
-      const current = stepResults[i];
-      const prev = i === 0 ? null : stepResults[i - 1];
-      const visitors = current.visitors;
-      const dropped = prev ? Math.max(0, prev.visitors - visitors) : 0;
-      const dropoff = prev && prev.visitors > 0 ? Math.round((dropped / prev.visitors) * 1000) / 10 : 0;
-      const remaining = visitors;
-
-      funnel.push({
-        type: current.type,
-        value: current.value,
-        visitors,
-        dropped,
-        dropoff,
-        remaining,
-      });
-    }
-
-    return jsonResponse({ windowDays, funnel });
   }
 
   if (normalizedRoute === "/goals") {
@@ -478,54 +530,38 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const valueType = body?.valueType === "event" ? "event" : "path";
     const value = String(body?.value ?? "");
+    const filters = body?.filters || {};
 
     if (!value) {
       return jsonResponse({ error: "Missing goal value" }, { status: 400 });
     }
 
-    // event-based goal
-    if (valueType === "event") {
-      const eventsRes = await umamiFetch(`/websites/${umamiWebsiteId}/events/series`, {
-        startAt: String(Math.floor(startAt)),
-        endAt: String(Math.floor(endAt)),
-      });
-      if (!eventsRes.ok) return jsonResponse(eventsRes.body, { status: eventsRes.status });
+    // Use Umami Reports API
+    const reportRes = await umamiFetch(
+      `/reports/goals`,
+      {},
+      {
+        method: "POST",
+        body: JSON.stringify({
+          websiteId: umamiWebsiteId,
+          type: "goal",
+          filters,
+          parameters: {
+            startDate: new Date(startAt).toISOString(),
+            endDate: new Date(endAt).toISOString(),
+            type: valueType,
+            value,
+          },
+        }),
+      },
+    );
 
-      const series = (eventsRes.body as Array<{ x: string; t: string; y: number }>) ?? [];
-      const num = series.filter((s) => s.x === value).reduce((sum, s) => sum + Number(s.y ?? 0), 0);
+    if (!reportRes.ok) return jsonResponse(reportRes.body, { status: reportRes.status });
 
-      const statsRes = await umamiFetch(`/websites/${umamiWebsiteId}/stats`, {
-        startAt: String(Math.floor(startAt)),
-        endAt: String(Math.floor(endAt)),
-      });
-      if (!statsRes.ok) return jsonResponse(statsRes.body, { status: statsRes.status });
-      const stats = statsRes.body as { visitors: number };
+    // Umami Reports API returns: { num, total }
+    const goal = reportRes.body as { num: number; total: number };
 
-      return jsonResponse({ num, total: Number(stats?.visitors ?? 0) });
-    }
-
-    // path-based goal
-    const goalRes = await umamiFetch(`/websites/${umamiWebsiteId}/metrics/expanded`, {
-      startAt: String(Math.floor(startAt)),
-      endAt: String(Math.floor(endAt)),
-      type: "path",
-      limit: "1000",
-      offset: "0",
-    });
-    if (!goalRes.ok) return jsonResponse(goalRes.body, { status: goalRes.status });
-
-    const goalRows = (goalRes.body as Array<{ name: string; pageviews: number; visitors: number }>) ?? [];
-    const match = goalRows.find((r) => r.name === value) || goalRows.find((r) => String(r.name).includes(value));
-    const num = Number(match?.visitors ?? match?.pageviews ?? 0);
-
-    const statsRes = await umamiFetch(`/websites/${umamiWebsiteId}/stats`, {
-      startAt: String(Math.floor(startAt)),
-      endAt: String(Math.floor(endAt)),
-    });
-    if (!statsRes.ok) return jsonResponse(statsRes.body, { status: statsRes.status });
-    const stats = statsRes.body as { visitors: number };
-
-    return jsonResponse({ num, total: Number(stats?.visitors ?? 0) });
+    return jsonResponse({ num: Number(goal?.num ?? 0), total: Number(goal?.total ?? 0) });
   }
 
   if (normalizedRoute === "/breakdown") {
@@ -535,60 +571,54 @@ serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const field = body?.field ?? "path";
+    const filters = body?.filters || {};
 
-    // Map field to Umami metric type
-    const fieldToType: Record<string, string> = {
-      path: "path",
-      title: "title",
-      query: "query",
-      referrer: "referrer",
-      browser: "browser",
-      os: "os",
-      device: "device",
-      country: "country",
-      region: "region",
-      city: "city",
-      hostname: "hostname",
-      tag: "tag",
-      event: "event",
-    };
+    // Use Umami Reports API
+    const reportRes = await umamiFetch(
+      `/reports/breakdown`,
+      {},
+      {
+        method: "POST",
+        body: JSON.stringify({
+          websiteId: umamiWebsiteId,
+          type: "breakdown",
+          filters,
+          parameters: {
+            startDate: new Date(startAt).toISOString(),
+            endDate: new Date(endAt).toISOString(),
+            fields: [field],
+          },
+        }),
+      },
+    );
 
-    const metricType = fieldToType[field] || "path";
+    if (!reportRes.ok) return jsonResponse(reportRes.body, { status: reportRes.status });
 
-    // Fetch metrics breakdown
-    const metricsRes = await umamiFetch(`/websites/${umamiWebsiteId}/metrics/expanded`, {
-      startAt: String(Math.floor(startAt)),
-      endAt: String(Math.floor(endAt)),
-      type: metricType,
-      limit: "100",
-      offset: "0",
-    });
-
-    if (!metricsRes.ok) return jsonResponse(metricsRes.body, { status: metricsRes.status });
-
-    const rows = (metricsRes.body as Array<{
-      name: string;
-      pageviews: number;
+    // Umami Reports API returns: Array of objects with views, visitors, visits, bounces, totaltime, and field values
+    const rows = (reportRes.body as Array<{
+      views: number;
       visitors: number;
       visits: number;
       bounces: number;
       totaltime: number;
-    }>) ?? [];
+      [key: string]: any; // field values like os, country, etc.
+    }>) || [];
 
     // Calculate totals
     const totals = {
-      views: rows.reduce((sum, r) => sum + Number(r.pageviews ?? 0), 0),
+      views: rows.reduce((sum, r) => sum + Number(r.views ?? 0), 0),
       visitors: rows.reduce((sum, r) => sum + Number(r.visitors ?? 0), 0),
       visits: rows.reduce((sum, r) => sum + Number(r.visits ?? 0), 0),
       bounces: rows.reduce((sum, r) => sum + Number(r.bounces ?? 0), 0),
       totaltime: rows.reduce((sum, r) => sum + Number(r.totaltime ?? 0), 0),
     };
 
+    // Transform to match existing UI format
     const breakdownData = {
       field,
       rows: rows.map((r) => ({
-        name: r.name || "Direct",
-        views: Number(r.pageviews ?? 0),
+        name: String(r[field] || "Unknown"),
+        views: Number(r.views ?? 0),
         visitors: Number(r.visitors ?? 0),
         visits: Number(r.visits ?? 0),
         bounces: Number(r.bounces ?? 0),
@@ -596,57 +626,6 @@ serve(async (req: Request) => {
       })),
       totals,
     };
-
-    // Goals: support POST /analytics/goals via the same handler when client sends
-    // { type: 'goal', value: '<step>', valueType: 'path'|'event' }
-    const maybeGoal = body;
-    if (maybeGoal?.type === "goal" && maybeGoal?.value) {
-      const valueType = maybeGoal?.valueType === "event" ? "event" : "path";
-      const value = String(maybeGoal.value);
-
-      if (valueType === "event") {
-        const eventsRes = await umamiFetch(`/websites/${umamiWebsiteId}/events/series`, {
-          startAt: String(Math.floor(startAt)),
-          endAt: String(Math.floor(endAt)),
-        });
-        if (!eventsRes.ok) return jsonResponse(eventsRes.body, { status: eventsRes.status });
-
-        const series = (eventsRes.body as Array<{ x: string; t: string; y: number }>) ?? [];
-        const num = series.filter((s) => s.x === value).reduce((sum, s) => sum + Number(s.y ?? 0), 0);
-
-        const statsRes = await umamiFetch(`/websites/${umamiWebsiteId}/stats`, {
-          startAt: String(Math.floor(startAt)),
-          endAt: String(Math.floor(endAt)),
-        });
-        if (!statsRes.ok) return jsonResponse(statsRes.body, { status: statsRes.status });
-        const stats = statsRes.body as { visitors: number };
-
-        return jsonResponse({ num, total: Number(stats?.visitors ?? 0) });
-      }
-
-      // path-based goal
-      const goalRes = await umamiFetch(`/websites/${umamiWebsiteId}/metrics/expanded`, {
-        startAt: String(Math.floor(startAt)),
-        endAt: String(Math.floor(endAt)),
-        type: "path",
-        limit: "1000",
-        offset: "0",
-      });
-      if (!goalRes.ok) return jsonResponse(goalRes.body, { status: goalRes.status });
-
-      const goalRows = (goalRes.body as Array<{ name: string; pageviews: number; visitors: number }>) ?? [];
-      const match = goalRows.find((r) => r.name === value) || goalRows.find((r) => String(r.name).includes(value));
-      const num = Number(match?.visitors ?? match?.pageviews ?? 0);
-
-      const statsRes = await umamiFetch(`/websites/${umamiWebsiteId}/stats`, {
-        startAt: String(Math.floor(startAt)),
-        endAt: String(Math.floor(endAt)),
-      });
-      if (!statsRes.ok) return jsonResponse(statsRes.body, { status: statsRes.status });
-      const stats = statsRes.body as { visitors: number };
-
-      return jsonResponse({ num, total: Number(stats?.visitors ?? 0) });
-    }
 
     return jsonResponse(breakdownData);
   }
@@ -660,92 +639,46 @@ serve(async (req: Request) => {
     const startStep = String(body?.startStep ?? "");
     const endStep = body?.endStep ? String(body.endStep) : null;
     const maxSteps = Number(body?.maxSteps ?? 7);
+    const filters = body?.filters || {};
 
     if (!startStep) {
       return jsonResponse({ error: "Missing startStep" }, { status: 400 });
     }
 
-    // Fetch page paths and their frequency
-    const pathRes = await umamiFetch(`/websites/${umamiWebsiteId}/metrics/expanded`, {
-      startAt: String(Math.floor(startAt)),
-      endAt: String(Math.floor(endAt)),
-      type: "path",
-      limit: "1000",
-      offset: "0",
-    });
-
-    if (!pathRes.ok) return jsonResponse(pathRes.body, { status: pathRes.status });
-
-    const allPaths = (pathRes.body as Array<{ name: string; visitors: number; pageviews: number }>) ?? [];
-
-    // Find paths matching or containing the startStep
-    const startingPaths = allPaths.filter(
-      (p) => p.name === startStep || String(p.name).includes(startStep),
+    // Use Umami Reports API
+    const reportRes = await umamiFetch(
+      `/reports/journey`,
+      {},
+      {
+        method: "POST",
+        body: JSON.stringify({
+          websiteId: umamiWebsiteId,
+          type: "journey",
+          filters,
+          parameters: {
+            startDate: new Date(startAt).toISOString(),
+            endDate: new Date(endAt).toISOString(),
+            steps: Math.max(3, Math.min(7, maxSteps)),
+            startStep,
+            ...(endStep ? { endStep } : {}),
+          },
+        }),
+      },
     );
 
-    if (startingPaths.length === 0) {
-      return jsonResponse({ items: [], count: 0 });
-    }
+    if (!reportRes.ok) return jsonResponse(reportRes.body, { status: reportRes.status });
 
-    // Build a simple journey map: for each starting path, infer common "next" pages
-    // Since Umami doesn't provide session-level sequences, we'll approximate by:
-    // 1. Finding pages visited within the time range
-    // 2. Building synthetic journeys based on common paths
-    const journeys: Array<{ path: string[]; count: number }> = [];
-    const journeyMap = new Map<string, number>();
+    // Umami Reports API returns: Array of { items: string[], count: number }
+    const journeys = (reportRes.body as Array<{
+      items: (string | null)[];
+      count: number;
+    }>) || [];
 
-    // For simplification, treat each starting page as a journey seed
-    // and add related pages as likely followers (pages with similar visitor segments)
-    startingPaths.forEach((startPath) => {
-      const journeyKey = JSON.stringify([startPath.name]);
-      const existing = journeyMap.get(journeyKey) || 0;
-      journeyMap.set(journeyKey, existing + Number(startPath.visitors ?? startPath.pageviews ?? 0));
-
-      // Add paths that might follow (top pages by traffic, excluding the start)
-      const relatedPages = allPaths
-        .filter((p) => p.name !== startPath.name && Number(p.visitors ?? 0) > 0)
-        .sort((a, b) => Number(b.visitors ?? 0) - Number(a.visitors ?? 0))
-        .slice(0, 3); // Take top 3 related pages as potential next steps
-
-      relatedPages.forEach((nextPage) => {
-        if (endStep && !nextPage.name.includes(endStep)) {
-          return; // Skip if endStep filter is specified and not matched
-        }
-
-        const multiStepJourney = JSON.stringify([startPath.name, nextPage.name]);
-        const count = Math.round(
-          Number(startPath.visitors ?? startPath.pageviews ?? 0) * 0.3, // Estimate ~30% of start visitors continue
-        );
-        journeyMap.set(multiStepJourney, count);
-
-        // Add one more step for longer journeys (if maxSteps > 2)
-        if (maxSteps > 2) {
-          const thirdPages = allPaths
-            .filter((p) => p.name !== startPath.name && p.name !== nextPage.name)
-            .slice(0, 2);
-
-          thirdPages.forEach((thirdPage) => {
-            const threeStepJourney = JSON.stringify([startPath.name, nextPage.name, thirdPage.name]);
-            const count3 = Math.round(count * 0.5); // ~50% of 2-step journeys continue to step 3
-            journeyMap.set(threeStepJourney, count3);
-          });
-        }
-      });
-    });
-
-    // Convert map to sorted items array
-    const items = Array.from(journeyMap.entries())
-      .map(([journeyJson, count]) => {
-        try {
-          const path = JSON.parse(journeyJson) as string[];
-          return { path, count };
-        } catch {
-          return null;
-        }
-      })
-      .filter((item): item is { path: string[]; count: number } => item !== null)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 50); // Top 50 journeys
+    // Transform to match existing UI format
+    const items = journeys.map((j) => ({
+      path: j.items.filter((item): item is string => item !== null),
+      count: j.count,
+    }));
 
     const totalCount = items.reduce((sum, item) => sum + item.count, 0);
 
@@ -759,44 +692,47 @@ serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const timezone = body?.timezone ?? "UTC";
+    const filters = body?.filters || {};
 
-    // Fetch timeseries pageviews to infer retention (visitors per day, then cross-day repeats)
-    const timeseriesRes = await umamiFetch(`/websites/${umamiWebsiteId}/pageviews`, {
-      startAt: String(Math.floor(startAt)),
-      endAt: String(Math.floor(endAt)),
-      unit: "day",
-      timezone,
-    });
+    // Use Umami Reports API
+    const reportRes = await umamiFetch(
+      `/reports/retention`,
+      {},
+      {
+        method: "POST",
+        body: JSON.stringify({
+          websiteId: umamiWebsiteId,
+          type: "retention",
+          filters,
+          parameters: {
+            startDate: new Date(startAt).toISOString(),
+            endDate: new Date(endAt).toISOString(),
+            timezone,
+          },
+        }),
+      },
+    );
 
-    if (!timeseriesRes.ok) return jsonResponse(timeseriesRes.body, { status: timeseriesRes.status });
+    if (!reportRes.ok) return jsonResponse(reportRes.body, { status: reportRes.status });
 
-    const timeseriesData = timeseriesRes.body as {
-      pageviews: Array<{ x: string; y: number }>;
-      sessions: Array<{ x: string; y: number }>;
-    };
+    // Umami Reports API returns: Array of { date, day, visitors, returnVisitors, percentage }
+    const retention = (reportRes.body as Array<{
+      date: string;
+      day: number;
+      visitors: number;
+      returnVisitors: number;
+      percentage: number;
+    }>) || [];
 
-    const pageviewsByDate = new Map((timeseriesData.pageviews ?? []).map((p) => [p.x, p.y]));
-    const sessionsByDate = new Map((timeseriesData.sessions ?? []).map((s) => [s.x, s.y]));
-    const allDates = Array.from(new Set([...pageviewsByDate.keys(), ...sessionsByDate.keys()])).sort();
-
-    // Build retention data: assume returning visitors ~30% of daily visitors
-    const retentionData = allDates.map((date, idx) => {
-      const visitors = Number(pageviewsByDate.get(date) ?? 0);
-      const returnVisitors = Math.round(visitors * 0.3); // Approximate 30% as returning
-      const percentage = visitors > 0 ? Math.round((returnVisitors / visitors) * 1000) / 10 : 0;
-
-      // Parse date to get day of week
-      const dateObj = new Date(date);
-      const dayOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dateObj.getDay()];
-
-      return {
-        date,
-        day: dayOfWeek,
-        visitors,
-        returnVisitors,
-        percentage,
-      };
-    });
+    // Transform day number to day name for UI compatibility
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const retentionData = retention.map((r) => ({
+      date: r.date,
+      day: dayNames[r.day] || String(r.day),
+      visitors: Number(r.visitors ?? 0),
+      returnVisitors: Number(r.returnVisitors ?? 0),
+      percentage: Number(r.percentage ?? 0),
+    }));
 
     return jsonResponse(retentionData);
   }
@@ -809,64 +745,50 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const timezone = body?.timezone ?? "UTC";
     const currency = body?.currency ?? "USD";
+    const filters = body?.filters || {};
 
-    // Fetch timeseries data (as revenue proxy: pageviews * estimated value)
-    const timeseriesRes = await umamiFetch(`/websites/${umamiWebsiteId}/pageviews`, {
-      startAt: String(Math.floor(startAt)),
-      endAt: String(Math.floor(endAt)),
-      unit: "day",
-      timezone,
-    });
+    // Use Umami Reports API
+    const reportRes = await umamiFetch(
+      `/reports/revenue`,
+      {},
+      {
+        method: "POST",
+        body: JSON.stringify({
+          websiteId: umamiWebsiteId,
+          type: "revenue",
+          filters,
+          parameters: {
+            startDate: new Date(startAt).toISOString(),
+            endDate: new Date(endAt).toISOString(),
+            timezone,
+            currency,
+          },
+        }),
+      },
+    );
 
-    if (!timeseriesRes.ok) return jsonResponse(timeseriesRes.body, { status: timeseriesRes.status });
+    if (!reportRes.ok) return jsonResponse(reportRes.body, { status: reportRes.status });
 
-    const timeseriesData = timeseriesRes.body as {
-      pageviews: Array<{ x: string; y: number }>;
-      sessions: Array<{ x: string; y: number }>;
+    // Umami Reports API returns: { chart, country, total }
+    const revenue = reportRes.body as {
+      chart: Array<{ x: string; t: string; y: number }>;
+      country: Array<{ name: string; value: number }>;
+      total: {
+        sum: number;
+        count: number;
+        unique_count: number;
+        average: number;
+      };
     };
 
-    // Build chart data (estimated revenue per day: pageviews * $0.50 avg)
-    const chart = (timeseriesData.pageviews ?? []).map((p) => ({
-      x: p.x,
-      t: p.x,
-      y: Math.round(Number(p.y ?? 0) * 0.5 * 100) / 100, // $0.50 per pageview estimate
-    }));
-
-    const totalPageviews = chart.reduce((sum, item) => sum + item.y, 0);
-    const totalSessions = (timeseriesData.sessions ?? []).reduce((sum, s) => sum + Number(s.y ?? 0), 0);
-
-    // Fetch country data via metrics
-    const countryRes = await umamiFetch(`/websites/${umamiWebsiteId}/metrics`, {
-      startAt: String(Math.floor(startAt)),
-      endAt: String(Math.floor(endAt)),
-      type: "country",
-      limit: "50",
-      offset: "0",
-    });
-
-    const countryData = countryRes.ok
-      ? ((countryRes.body as Array<{ name: string; pageviews: number }>) ?? [])
-          .map((c) => ({
-            name: c.name || "Unknown",
-            value: Math.round(Number(c.pageviews ?? 0) * 0.5 * 100) / 100,
-          }))
-          .sort((a, b) => b.value - a.value)
-          .slice(0, 10)
-      : [];
-
-    const revenueData = {
-      chart,
-      country: countryData,
+    return jsonResponse({
+      chart: revenue.chart || [],
+      country: revenue.country || [],
       total: {
-        sum: Math.round(totalPageviews * 100) / 100,
-        count: chart.length,
-        unique_count: totalSessions,
-        average: chart.length > 0 ? Math.round((totalPageviews / chart.length) * 100) / 100 : 0,
+        ...revenue.total,
         currency,
       },
-    };
-
-    return jsonResponse(revenueData);
+    });
   }
 
   if (normalizedRoute === "/utm") {
@@ -874,126 +796,67 @@ serve(async (req: Request) => {
       return jsonResponse({ error: "Method not allowed" }, { status: 405 });
     }
 
-    // Fetch query string metrics (contains UTM params)
-    const queryRes = await umamiFetch(`/websites/${umamiWebsiteId}/metrics`, {
-      startAt: String(Math.floor(startAt)),
-      endAt: String(Math.floor(endAt)),
-      type: "query",
-      limit: "500",
-      offset: "0",
-    });
+    const body = await req.json().catch(() => ({}));
+    const filters = body?.filters || {};
 
-    if (!queryRes.ok) return jsonResponse(queryRes.body, { status: queryRes.status });
+    // Use Umami Reports API
+    const reportRes = await umamiFetch(
+      `/reports/utm`,
+      {},
+      {
+        method: "POST",
+        body: JSON.stringify({
+          websiteId: umamiWebsiteId,
+          type: "utm",
+          filters,
+          parameters: {
+            startDate: new Date(startAt).toISOString(),
+            endDate: new Date(endAt).toISOString(),
+          },
+        }),
+      },
+    );
 
-    const queryData = (queryRes.body as Array<{ name: string; pageviews: number; visitors: number }>) ?? [];
+    if (!reportRes.ok) return jsonResponse(reportRes.body, { status: reportRes.status });
 
-    // Parse UTM parameters from query strings
-    const utmMap: Record<
-      string,
-      { name: string; views: number; visitors: number }[]
-    > = {
-      utm_source: [],
-      utm_medium: [],
-      utm_campaign: [],
-      utm_term: [],
-      utm_content: [],
+    // Umami Reports API returns: { utm_source, utm_medium, utm_campaign, utm_term, utm_content }
+    // Each is an array of { utm: string, views: number }
+    const utm = reportRes.body as {
+      utm_source?: Array<{ utm: string; views: number }>;
+      utm_medium?: Array<{ utm: string; views: number }>;
+      utm_campaign?: Array<{ utm: string; views: number }>;
+      utm_term?: Array<{ utm: string; views: number }>;
+      utm_content?: Array<{ utm: string; views: number }>;
     };
 
-    queryData.forEach((q) => {
-      const queryStr = q.name || "";
-
-      // Extract utm_source
-      const sourceMatch = queryStr.match(/utm_source=([^&]+)/);
-      if (sourceMatch) {
-        const source = decodeURIComponent(sourceMatch[1]);
-        const existing = utmMap.utm_source.find((u) => u.name === source);
-        if (existing) {
-          existing.views += Number(q.pageviews ?? 0);
-          existing.visitors += Number(q.visitors ?? 0);
-        } else {
-          utmMap.utm_source.push({ name: source, views: Number(q.pageviews ?? 0), visitors: Number(q.visitors ?? 0) });
-        }
-      }
-
-      // Extract utm_medium
-      const mediumMatch = queryStr.match(/utm_medium=([^&]+)/);
-      if (mediumMatch) {
-        const medium = decodeURIComponent(mediumMatch[1]);
-        const existing = utmMap.utm_medium.find((u) => u.name === medium);
-        if (existing) {
-          existing.views += Number(q.pageviews ?? 0);
-          existing.visitors += Number(q.visitors ?? 0);
-        } else {
-          utmMap.utm_medium.push({
-            name: medium,
-            views: Number(q.pageviews ?? 0),
-            visitors: Number(q.visitors ?? 0),
-          });
-        }
-      }
-
-      // Extract utm_campaign
-      const campaignMatch = queryStr.match(/utm_campaign=([^&]+)/);
-      if (campaignMatch) {
-        const campaign = decodeURIComponent(campaignMatch[1]);
-        const existing = utmMap.utm_campaign.find((u) => u.name === campaign);
-        if (existing) {
-          existing.views += Number(q.pageviews ?? 0);
-          existing.visitors += Number(q.visitors ?? 0);
-        } else {
-          utmMap.utm_campaign.push({
-            name: campaign,
-            views: Number(q.pageviews ?? 0),
-            visitors: Number(q.visitors ?? 0),
-          });
-        }
-      }
-
-      // Extract utm_term
-      const termMatch = queryStr.match(/utm_term=([^&]+)/);
-      if (termMatch) {
-        const term = decodeURIComponent(termMatch[1]);
-        const existing = utmMap.utm_term.find((u) => u.name === term);
-        if (existing) {
-          existing.views += Number(q.pageviews ?? 0);
-          existing.visitors += Number(q.visitors ?? 0);
-        } else {
-          utmMap.utm_term.push({
-            name: term,
-            views: Number(q.pageviews ?? 0),
-            visitors: Number(q.visitors ?? 0),
-          });
-        }
-      }
-
-      // Extract utm_content
-      const contentMatch = queryStr.match(/utm_content=([^&]+)/);
-      if (contentMatch) {
-        const content = decodeURIComponent(contentMatch[1]);
-        const existing = utmMap.utm_content.find((u) => u.name === content);
-        if (existing) {
-          existing.views += Number(q.pageviews ?? 0);
-          existing.visitors += Number(q.visitors ?? 0);
-        } else {
-          utmMap.utm_content.push({
-            name: content,
-            views: Number(q.pageviews ?? 0),
-            visitors: Number(q.visitors ?? 0),
-          });
-        }
-      }
+    // Transform to match existing UI format
+    return jsonResponse({
+      utm_source: (utm.utm_source || []).map((u) => ({
+        name: u.utm,
+        views: u.views,
+        visitors: u.views, // Use views as proxy for visitors
+      })),
+      utm_medium: (utm.utm_medium || []).map((u) => ({
+        name: u.utm,
+        views: u.views,
+        visitors: u.views,
+      })),
+      utm_campaign: (utm.utm_campaign || []).map((u) => ({
+        name: u.utm,
+        views: u.views,
+        visitors: u.views,
+      })),
+      utm_term: (utm.utm_term || []).map((u) => ({
+        name: u.utm,
+        views: u.views,
+        visitors: u.views,
+      })),
+      utm_content: (utm.utm_content || []).map((u) => ({
+        name: u.utm,
+        views: u.views,
+        visitors: u.views,
+      })),
     });
-
-    // Sort each by views descending and limit
-    const utmReport = {
-      utm_source: utmMap.utm_source.sort((a, b) => b.views - a.views).slice(0, 20),
-      utm_medium: utmMap.utm_medium.sort((a, b) => b.views - a.views).slice(0, 20),
-      utm_campaign: utmMap.utm_campaign.sort((a, b) => b.views - a.views).slice(0, 20),
-      utm_term: utmMap.utm_term.sort((a, b) => b.views - a.views).slice(0, 20),
-      utm_content: utmMap.utm_content.sort((a, b) => b.views - a.views).slice(0, 20),
-    };
-
-    return jsonResponse(utmReport);
   }
 
   // Session endpoints: check /sessions routes using normalizedRoute
@@ -1009,126 +872,88 @@ serve(async (req: Request) => {
       const sessionsRes = await umamiFetch(`/websites/${umamiWebsiteId}/sessions`, {
         startAt: String(Math.floor(startAt)),
         endAt: String(Math.floor(endAt)),
-        limit: String(pageSize),
-        offset: String((page - 1) * pageSize),
+        page: String(page),
+        pageSize: String(pageSize),
+        ...(search ? { search } : {}),
       });
 
       if (!sessionsRes.ok) return jsonResponse(sessionsRes.body, { status: sessionsRes.status });
 
-      // Handle Umami response - it might be an array or wrapped in an object
-      let sessions: any[] = [];
-      if (Array.isArray(sessionsRes.body)) {
-        sessions = sessionsRes.body;
-      } else if (sessionsRes.body && typeof sessionsRes.body === "object" && Array.isArray(sessionsRes.body.data)) {
-        sessions = sessionsRes.body.data;
-      } else {
-        // If it's not an array, return empty sessions
-        sessions = [];
-      }
+      // Handle Umami response - should be { data: [], count, page, pageSize }
+      const sessionsData = sessionsRes.body as {
+        data?: Array<{
+          id: string;
+          browser: string;
+          os: string;
+          device: string;
+          screen: string;
+          language: string;
+          country: string;
+          region: string;
+          city: string;
+          firstAt: string;
+          lastAt: string;
+          visits: number;
+          views: number;
+        }>;
+        count?: number;
+        page?: number;
+        pageSize?: number;
+      };
 
-      // Mock additional fields
-      const sessionList = sessions.map((s: any) => ({
-        id: s.sessionId,
-        browser: s.browser || "Unknown",
-        os: s.os || "Unknown",
-        device: s.device || "Unknown",
-        screen: "1920x1080",
-        language: "en-US",
-        country: s.country || "Unknown",
-        region: "N/A",
-        city: "N/A",
-        firstAt: s.firstAt,
-        lastAt: s.lastAt,
-        visits: 1,
-        views: s.views ?? 0,
-      }));
+      const sessions = sessionsData?.data || [];
+      const count = sessionsData?.count || sessions.length;
 
+      // Return sessions as-is from Umami (already in correct format)
       return jsonResponse({
-        data: search
-          ? sessionList.filter(
-              (s) =>
-                s.id.includes(search) ||
-                s.browser.toLowerCase().includes(search.toLowerCase()) ||
-                s.country.toLowerCase().includes(search.toLowerCase()),
-            )
-          : sessionList,
-        page,
-        pageSize,
-        total: sessionList.length,
+        data: sessions,
+        count,
+        page: sessionsData?.page || page,
+        pageSize: sessionsData?.pageSize || pageSize,
       });
     }
 
     // GET /websites/:websiteId/sessions/stats
     if (sessionsPath === "/stats") {
-      const statsRes = await umamiFetch(`/websites/${umamiWebsiteId}/stats`, {
+      const statsRes = await umamiFetch(`/websites/${umamiWebsiteId}/sessions/stats`, {
         startAt: String(Math.floor(startAt)),
         endAt: String(Math.floor(endAt)),
       });
 
       if (!statsRes.ok) return jsonResponse(statsRes.body, { status: statsRes.status });
 
+      // Umami returns: { pageviews: {value}, visitors: {value}, visits: {value}, countries: {value}, events: {value} }
       const stats = statsRes.body as {
-        visitors: number;
-        pageviews: number;
-        visits: number;
+        pageviews?: { value: number };
+        visitors?: { value: number };
+        visits?: { value: number };
+        countries?: { value: number };
+        events?: { value: number };
       };
 
-      const eventsRes = await umamiFetch(`/websites/${umamiWebsiteId}/events/series`, {
-        startAt: String(Math.floor(startAt)),
-        endAt: String(Math.floor(endAt)),
-      });
-
-      const eventCount = eventsRes.ok
-        ? ((eventsRes.body as Array<{ y: number }>) ?? []).reduce((sum, e) => sum + Number(e.y ?? 0), 0)
-        : 0;
-
       return jsonResponse({
-        pageviews: Number(stats?.pageviews ?? 0),
-        visitors: Number(stats?.visitors ?? 0),
-        visits: Number(stats?.visits ?? 0),
-        countries: 1, // placeholder
-        events: eventCount,
+        pageviews: { value: Number(stats?.pageviews?.value ?? 0) },
+        visitors: { value: Number(stats?.visitors?.value ?? 0) },
+        visits: { value: Number(stats?.visits?.value ?? 0) },
+        countries: { value: Number(stats?.countries?.value ?? 0) },
+        events: { value: Number(stats?.events?.value ?? 0) },
       });
     }
 
     // GET /websites/:websiteId/sessions/weekly
     if (sessionsPath === "/weekly") {
-      const timeseriesRes = await umamiFetch(`/websites/${umamiWebsiteId}/pageviews`, {
+      const weeklyRes = await umamiFetch(`/websites/${umamiWebsiteId}/sessions/weekly`, {
         startAt: String(Math.floor(startAt)),
         endAt: String(Math.floor(endAt)),
-        unit: "hour",
         timezone: url.searchParams.get("timezone") ?? "UTC",
       });
 
-      if (!timeseriesRes.ok) return jsonResponse(timeseriesRes.body, { status: timeseriesRes.status });
+      if (!weeklyRes.ok) return jsonResponse(weeklyRes.body, { status: weeklyRes.status });
 
-      const timeseriesData = timeseriesRes.body as Array<{ x: string; y: number }>;
+      // Umami returns: Array of 7 arrays (Sun-Sat), each with 24 numbers (hours 0-23)
+      const weeklyData = weeklyRes.body as number[][];
 
-      // Group by weekday and hour
-      const weeklyMap: Record<string, Array<{ hour: number; count: number }>> = {
-        Sun: Array(24).fill(0).map((_, h) => ({ hour: h, count: 0 })),
-        Mon: Array(24).fill(0).map((_, h) => ({ hour: h, count: 0 })),
-        Tue: Array(24).fill(0).map((_, h) => ({ hour: h, count: 0 })),
-        Wed: Array(24).fill(0).map((_, h) => ({ hour: h, count: 0 })),
-        Thu: Array(24).fill(0).map((_, h) => ({ hour: h, count: 0 })),
-        Fri: Array(24).fill(0).map((_, h) => ({ hour: h, count: 0 })),
-        Sat: Array(24).fill(0).map((_, h) => ({ hour: h, count: 0 })),
-      };
-
-      (timeseriesData ?? []).forEach((point) => {
-        try {
-          const dateObj = new Date(point.x);
-          const dayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dateObj.getDay()];
-          const hour = dateObj.getHours();
-          if (weeklyMap[dayName] && weeklyMap[dayName][hour]) {
-            weeklyMap[dayName][hour].count += Number(point.y ?? 0);
-          }
-        } catch {
-          // skip
-        }
-      });
-
-      return jsonResponse(weeklyMap);
+      return jsonResponse(weeklyData || []);
     }
 
     // GET /websites/:websiteId/sessions/:sessionId
@@ -1136,46 +961,30 @@ serve(async (req: Request) => {
     if (sessionIdMatch && !sessionsPath.includes("/activity") && !sessionsPath.includes("/properties")) {
       const sessionId = sessionIdMatch[1];
 
-      const sessionsRes = await umamiFetch(`/websites/${umamiWebsiteId}/sessions`, {
-        startAt: String(Math.floor(startAt)),
-        endAt: String(Math.floor(endAt)),
-      });
+      const sessionRes = await umamiFetch(`/websites/${umamiWebsiteId}/sessions/${sessionId}`, {});
 
-      if (!sessionsRes.ok) return jsonResponse(sessionsRes.body, { status: sessionsRes.status });
+      if (!sessionRes.ok) return jsonResponse(sessionRes.body, { status: sessionRes.status });
 
-      const sessions = (sessionsRes.body as Array<{
-        sessionId: string;
+      // Umami returns session directly
+      const session = sessionRes.body as {
+        id: string;
         browser: string;
         os: string;
         device: string;
+        screen: string;
+        language: string;
         country: string;
-        firstAt: number;
-        lastAt: number;
+        region: string;
+        city: string;
+        firstAt: string;
+        lastAt: string;
+        visits: number;
         views: number;
-      }>) ?? [];
+        events: number;
+        totaltime: number;
+      };
 
-      const session = sessions.find((s) => s.sessionId === sessionId);
-      if (!session) {
-        return jsonResponse({ error: "Session not found" }, { status: 404 });
-      }
-
-      return jsonResponse({
-        id: session.sessionId,
-        browser: session.browser || "Unknown",
-        os: session.os || "Unknown",
-        device: session.device || "Unknown",
-        screen: "1920x1080",
-        language: "en-US",
-        country: session.country || "Unknown",
-        region: "N/A",
-        city: "N/A",
-        firstAt: session.firstAt,
-        lastAt: session.lastAt,
-        visits: 1,
-        views: session.views ?? 0,
-        events: 0,
-        totaltime: Math.round((session.lastAt - session.firstAt) / 1000),
-      });
+      return jsonResponse(session);
     }
 
     // GET /websites/:websiteId/sessions/:sessionId/activity
@@ -1183,30 +992,27 @@ serve(async (req: Request) => {
     if (activityMatch) {
       const sessionId = activityMatch[1];
 
-      const pageviewsRes = await umamiFetch(`/websites/${umamiWebsiteId}/pageviews`, {
+      const activityRes = await umamiFetch(`/websites/${umamiWebsiteId}/sessions/${sessionId}/activity`, {
         startAt: String(Math.floor(startAt)),
         endAt: String(Math.floor(endAt)),
-        limit: "100",
-        offset: "0",
       });
 
-      const pageviews = pageviewsRes.ok
-        ? ((pageviewsRes.body as Array<{ createdAt: number; urlPath: string; referrerDomain: string }>) ?? [])
-            .slice(0, 10)
-            .map((pv) => ({
-              createdAt: new Date(pv.createdAt).toISOString(),
-              urlPath: pv.urlPath || "/",
-              urlQuery: "",
-              referrerDomain: pv.referrerDomain || "Direct",
-              eventId: null,
-              eventType: "pageview",
-              eventName: null,
-              visitId: sessionId,
-              hasData: false,
-            }))
-        : [];
+      if (!activityRes.ok) return jsonResponse(activityRes.body, { status: activityRes.status });
 
-      return jsonResponse(pageviews);
+      // Umami returns activity array directly
+      const activity = activityRes.body as Array<{
+        createdAt: string;
+        urlPath: string;
+        urlQuery: string;
+        referrerDomain: string;
+        eventId: string;
+        eventType: number;
+        eventName: string;
+        visitId: string;
+        hasData: number;
+      }>;
+
+      return jsonResponse(activity || []);
     }
 
     // GET /websites/:websiteId/sessions/:sessionId/properties
@@ -1214,53 +1020,67 @@ serve(async (req: Request) => {
     if (propsMatch) {
       const sessionId = propsMatch[1];
 
-      // Mock session properties
-      return jsonResponse([
-        {
-          dataKey: "campaign",
-          dataType: "string",
-          stringValue: "summer_sale",
-          numberValue: null,
-          dateValue: null,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          dataKey: "user_value",
-          dataType: "number",
-          stringValue: null,
-          numberValue: 150,
-          dateValue: null,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+      const propsRes = await umamiFetch(`/websites/${umamiWebsiteId}/sessions/${sessionId}/properties`, {});
+
+      if (!propsRes.ok) return jsonResponse(propsRes.body, { status: propsRes.status });
+
+      // Umami returns properties array directly
+      const properties = propsRes.body as Array<{
+        websiteId: string;
+        sessionId: string;
+        dataKey: string;
+        dataType: number;
+        stringValue: string | null;
+        numberValue: number | null;
+        dateValue: string | null;
+        createdAt: string;
+      }>;
+
+      return jsonResponse(properties || []);
     }
 
     // GET /websites/:websiteId/session-data/properties
     if (sessionsPath === "-data/properties" || sessionsPath === "/session-data/properties") {
-      return jsonResponse([
-        { propertyName: "campaign", total: 45 },
-        { propertyName: "user_value", total: 32 },
-        { propertyName: "source", total: 28 },
-      ]);
+      const propsRes = await umamiFetch(`/websites/${umamiWebsiteId}/session-data/properties`, {
+        startAt: String(Math.floor(startAt)),
+        endAt: String(Math.floor(endAt)),
+      });
+
+      if (!propsRes.ok) return jsonResponse(propsRes.body, { status: propsRes.status });
+
+      // Umami returns: [{ propertyName, total }]
+      const properties = propsRes.body as Array<{
+        propertyName: string;
+        total: number;
+      }>;
+
+      return jsonResponse(properties || []);
     }
 
     // GET /websites/:websiteId/session-data/values
     const valuesMatch = sessionsPath.match(/\/session-data\/values/);
     if (valuesMatch) {
-      const propertyName = url.searchParams.get("propertyName") ?? "campaign";
+      const propertyName = url.searchParams.get("propertyName") ?? "";
 
-      const mockValues: Record<string, Array<{ value: string; total: number }>> = {
-        campaign: [
-          { value: "summer_sale", total: 25 },
-          { value: "winter_special", total: 20 },
-        ],
-        source: [
-          { value: "google", total: 18 },
-          { value: "direct", total: 10 },
-        ],
-      };
+      if (!propertyName) {
+        return jsonResponse({ error: "Missing propertyName parameter" }, { status: 400 });
+      }
 
-      return jsonResponse(mockValues[propertyName] ?? []);
+      const valuesRes = await umamiFetch(`/websites/${umamiWebsiteId}/session-data/values`, {
+        startAt: String(Math.floor(startAt)),
+        endAt: String(Math.floor(endAt)),
+        propertyName,
+      });
+
+      if (!valuesRes.ok) return jsonResponse(valuesRes.body, { status: valuesRes.status });
+
+      // Umami returns: [{ value, total }]
+      const values = valuesRes.body as Array<{
+        value: string;
+        total: number;
+      }>;
+
+      return jsonResponse(values || []);
     }
   }
 
@@ -1307,6 +1127,67 @@ serve(async (req: Request) => {
       topCountries: formatGeoData(countries, totalCountryViews),
       topCities: formatGeoData(cities, totalCityViews),
     });
+  }
+
+  // GET /analytics/active - Get active users (last 5 minutes)
+  if (normalizedRoute === "/active") {
+    if (req.method !== "GET") {
+      return jsonResponse({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const res = await umamiFetch(`/websites/${umamiWebsiteId}/active`, {});
+
+    if (!res.ok) return jsonResponse(res.body, { status: res.status });
+
+    const active = res.body as { visitors: number };
+
+    return jsonResponse({
+      visitors: Number(active?.visitors ?? 0),
+      timestamp: Date.now(),
+    });
+  }
+
+  // GET /analytics/realtime - Get realtime data (last 30 minutes)
+  if (normalizedRoute === "/realtime") {
+    if (req.method !== "GET") {
+      return jsonResponse({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const res = await umamiFetch(`/realtime/${umamiWebsiteId}`, {});
+
+    if (!res.ok) return jsonResponse(res.body, { status: res.status });
+
+    // Umami returns: { countries, urls, referrers, events, series, totals, timestamp }
+    const realtime = res.body as {
+      countries: Record<string, number>;
+      urls: Record<string, number>;
+      referrers: Record<string, number>;
+      events: Array<{
+        __type: string;
+        sessionId: string;
+        eventName: string;
+        createdAt: string;
+        browser: string;
+        os: string;
+        device: string;
+        country: string;
+        urlPath: string;
+        referrerDomain: string;
+      }>;
+      series: {
+        views: Array<{ x: string; y: number }>;
+        visitors: Array<{ x: string; y: number }>;
+      };
+      totals: {
+        views: number;
+        visitors: number;
+        events: number;
+        countries: number;
+      };
+      timestamp: number;
+    };
+
+    return jsonResponse(realtime);
   }
 
   return jsonResponse({ error: "Not found" }, { status: 404 });

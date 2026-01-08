@@ -81,6 +81,10 @@ const AdminAnalytics = () => {
   // Report chunk states
   const [attribution, setAttribution] = useState<any>(null);
   const [breakdown, setBreakdown] = useState<any>(null);
+  const [breakdownDevice, setBreakdownDevice] = useState<any>(null);
+  const [breakdownOs, setBreakdownOs] = useState<any>(null);
+  const [breakdownCountry, setBreakdownCountry] = useState<any>(null);
+  const [breakdownCity, setBreakdownCity] = useState<any>(null);
   const [funnel, setFunnel] = useState<any>(null);
   const [goal, setGoal] = useState<any>(null);
   const [journey, setJourney] = useState<any>(null);
@@ -131,7 +135,6 @@ const AdminAnalytics = () => {
         const body = await res.json().catch(() => ({}));
 
         if (!res.ok) {
-          console.error("Analytics function error:", { status: res.status, body, url });
           throw new Error(body?.details || body?.error || `Request failed (${res.status})`);
         }
 
@@ -160,30 +163,50 @@ const AdminAnalytics = () => {
         const startDate = new Date(startAt).toISOString().split("T")[0];
         const endDate = new Date(now).toISOString().split("T")[0];
 
-        const [attrData, breakData, funnelData, goalData, journeyData, retData, revData, utmData, sessData] = await Promise.all(
-          [
-            fetchAttributionReport({ websiteId, startDate, endDate }).catch(() => null),
-            fetchBreakdownReport({ websiteId, startDate, endDate, field: "browser" }).catch(() => null),
-            fetchFunnelReport({
-              websiteId,
-              startDate,
-              endDate,
-              steps: [
-                { type: "path", value: "/" },
-                { type: "path", value: "/contact" },
-              ],
-            }).catch(() => null),
-            fetchGoalReport({ websiteId, startDate, endDate, value: "/thank-you", valueType: "path" }).catch(() => null),
-            fetchJourneyReport({ websiteId, startDate, endDate, startStep: "/" }).catch(() => null),
-            fetchRetentionReport({ websiteId, startDate, endDate }).catch(() => null),
-            fetchRevenueReport({ websiteId, startDate, endDate, currency: "USD" }).catch(() => null),
-            fetchUtmReport({ websiteId, startDate, endDate }).catch(() => null),
-            fetchSessions({ websiteId, startDate, endDate, pageSize: 10 }).catch(() => null),
-          ],
-        );
+        const [
+          attrData,
+          breakData,
+          breakDeviceData,
+          breakOsData,
+          breakCountryData,
+          breakCityData,
+          funnelData,
+          goalData,
+          journeyData,
+          retData,
+          revData,
+          utmData,
+          sessData,
+        ] = await Promise.all([
+          fetchAttributionReport({ websiteId, startDate, endDate }).catch(() => null),
+          fetchBreakdownReport({ websiteId, startDate, endDate, field: "browser" }).catch(() => null),
+          fetchBreakdownReport({ websiteId, startDate, endDate, field: "device" }).catch(() => null),
+          fetchBreakdownReport({ websiteId, startDate, endDate, field: "os" }).catch(() => null),
+          fetchBreakdownReport({ websiteId, startDate, endDate, field: "country" }).catch(() => null),
+          fetchBreakdownReport({ websiteId, startDate, endDate, field: "city" }).catch(() => null),
+          fetchFunnelReport({
+            websiteId,
+            startDate,
+            endDate,
+            steps: [
+              { type: "path", value: "/" },
+              { type: "path", value: "/contact" },
+            ],
+          }).catch(() => null),
+          fetchGoalReport({ websiteId, startDate, endDate, value: "/thank-you", valueType: "path" }).catch(() => null),
+          fetchJourneyReport({ websiteId, startDate, endDate, startStep: "/" }).catch(() => null),
+          fetchRetentionReport({ websiteId, startDate, endDate }).catch(() => null),
+          fetchRevenueReport({ websiteId, startDate, endDate, currency: "USD" }).catch(() => null),
+          fetchUtmReport({ websiteId, startDate, endDate }).catch(() => null),
+          fetchSessions({ websiteId, startDate, endDate, pageSize: 20 }).catch(() => null),
+        ]);
 
         setAttribution(attrData);
         setBreakdown(breakData);
+        setBreakdownDevice(breakDeviceData);
+        setBreakdownOs(breakOsData);
+        setBreakdownCountry(breakCountryData);
+        setBreakdownCity(breakCityData);
         setFunnel(funnelData);
         setGoal(goalData);
         setJourney(journeyData);
@@ -192,10 +215,8 @@ const AdminAnalytics = () => {
         setUtm(utmData);
         setSessions(sessData);
       } catch (reportError) {
-        console.error("Error fetching report chunks:", reportError);
       }
     } catch (error) {
-      console.error("Unexpected analytics error:", error);
       toast({
         title: "Analytics Error",
         description: error instanceof Error ? error.message : "Failed to load analytics",
@@ -236,6 +257,38 @@ const AdminAnalytics = () => {
     const minutes = Math.round((analytics.pageviews / analytics.visits) * 2);
     return minutes;
   }, [analytics]);
+
+  // Calculate new vs returning visitors from retention data
+  const newVsReturning = useMemo(() => {
+    if (!retention || !Array.isArray(retention) || retention.length === 0) {
+      return { new: 0, returning: 0, newPercent: 0, returningPercent: 0 };
+    }
+    const totalVisitors = retention.reduce((sum, r) => sum + (r.visitors || 0), 0);
+    const totalReturning = retention.reduce((sum, r) => sum + (r.returnVisitors || 0), 0);
+    const totalNew = totalVisitors - totalReturning;
+    return {
+      new: totalNew,
+      returning: totalReturning,
+      newPercent: totalVisitors > 0 ? Math.round((totalNew / totalVisitors) * 1000) / 10 : 0,
+      returningPercent: totalVisitors > 0 ? Math.round((totalReturning / totalVisitors) * 1000) / 10 : 0,
+    };
+  }, [retention]);
+
+  // Calculate traffic sources from attribution data
+  const trafficSources = useMemo(() => {
+    if (!attribution || !attribution.referrers) {
+      return [];
+    }
+    const total = attribution.totals?.visitors || attribution.totals?.pageviews || 1;
+    return attribution.referrers
+      .slice(0, 10)
+      .map((ref: any) => ({
+        name: ref.name || "Direct",
+        visitors: ref.visitors || ref.pageviews || 0,
+        percent: total > 0 ? Math.round(((ref.visitors || ref.pageviews || 0) / total) * 1000) / 10 : 0,
+      }))
+      .sort((a: any, b: any) => b.visitors - a.visitors);
+  }, [attribution]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
@@ -312,7 +365,7 @@ const AdminAnalytics = () => {
           <p className="text-sm text-slate-600 mb-4">
             How many people visited and what they did
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
             {/* Visitors */}
             <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
               <div className="flex items-center justify-between mb-2">
@@ -381,6 +434,22 @@ const AdminAnalytics = () => {
                 {loading ? "—" : `${avgVisitDuration}m`}
               </div>
               <p className="text-xs text-slate-500 mt-1">Average time spent</p>
+            </div>
+
+            {/* New vs Returning */}
+            <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-indigo-600" />
+                </div>
+                <span className="text-xs font-semibold text-slate-500 uppercase">Returning</span>
+              </div>
+              <div className="text-3xl font-bold text-slate-900">
+                {loading ? "—" : `${newVsReturning.returningPercent}%`}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {newVsReturning.newPercent}% new, {newVsReturning.returningPercent}% returning
+              </p>
             </div>
           </div>
         </section>
@@ -522,60 +591,7 @@ const AdminAnalytics = () => {
           </div>
         </section>
 
-        {/* 4️⃣ Entry & Exit Pages */}
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Entry Pages */}
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-900 mb-1">Where People Start</h2>
-            <p className="text-sm text-slate-600 mb-4">
-              First pages people visit
-            </p>
-            <div className="space-y-2">
-              {sortedPages.slice(0, 5).length > 0 ? (
-                sortedPages.slice(0, 5).map((p, i) => (
-                  <div key={p.path} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded">
-                    <div className="text-sm">
-                      <span className="text-slate-500 mr-2">{i + 1}.</span>
-                      <code className="bg-white px-2 py-1 rounded text-xs text-slate-700">{p.path}</code>
-                    </div>
-                    <span className="text-sm font-semibold text-slate-900">{p.pageviews}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-slate-500 text-sm py-4">No entry data</p>
-              )}
-            </div>
-          </div>
-
-          {/* Exit Pages */}
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-900 mb-1">Where People Leave</h2>
-            <p className="text-sm text-slate-600 mb-4">
-              Last pages before leaving
-            </p>
-            <div className="space-y-2">
-              {sortedPages.slice(0, 5).length > 0 ? (
-                sortedPages
-                  .slice()
-                  .reverse()
-                  .slice(0, 5)
-                  .map((p, i) => (
-                    <div key={p.path} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded">
-                      <div className="text-sm">
-                        <span className="text-slate-500 mr-2">{i + 1}.</span>
-                        <code className="bg-white px-2 py-1 rounded text-xs text-slate-700">{p.path}</code>
-                      </div>
-                      <span className="text-sm font-semibold text-slate-900">{p.pageviews}</span>
-                    </div>
-                  ))
-              ) : (
-                <p className="text-slate-500 text-sm py-4">No exit data</p>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* 5️⃣ Visitor Sources & 6️⃣ Technology */}
+        {/* 4️⃣ Visitor Sources & 5️⃣ Technology */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Visitor Sources */}
           <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
@@ -584,34 +600,37 @@ const AdminAnalytics = () => {
               Direct, Search, Referrals, Social, etc.
             </p>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">🔗</span>
-                  <span className="font-medium text-slate-900">Direct Visit</span>
-                </div>
-                <span className="text-sm font-bold text-blue-600">60%</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-green-100 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">🔍</span>
-                  <span className="font-medium text-slate-900">Search Engines</span>
-                </div>
-                <span className="text-sm font-bold text-green-600">25%</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">🌐</span>
-                  <span className="font-medium text-slate-900">Referral Links</span>
-                </div>
-                <span className="text-sm font-bold text-purple-600">12%</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-pink-50 to-pink-100 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">📱</span>
-                  <span className="font-medium text-slate-900">Social Media</span>
-                </div>
-                <span className="text-sm font-bold text-pink-600">3%</span>
-              </div>
+              {loading ? (
+                <p className="text-slate-500 text-sm py-4">Loading sources...</p>
+              ) : trafficSources.length > 0 ? (
+                trafficSources.slice(0, 6).map((source, idx) => {
+                  const colors = [
+                    "from-blue-50 to-blue-100 text-blue-600",
+                    "from-green-50 to-green-100 text-green-600",
+                    "from-purple-50 to-purple-100 text-purple-600",
+                    "from-pink-50 to-pink-100 text-pink-600",
+                    "from-orange-50 to-orange-100 text-orange-600",
+                    "from-indigo-50 to-indigo-100 text-indigo-600",
+                  ];
+                  const icons = ["🔗", "🔍", "🌐", "📱", "📧", "🔖"];
+                  const colorClass = colors[idx % colors.length];
+                  const icon = icons[idx % icons.length];
+                  return (
+                    <div
+                      key={source.name}
+                      className={`flex items-center justify-between p-3 bg-gradient-to-r ${colorClass} rounded-lg`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{icon}</span>
+                        <span className="font-medium text-slate-900 truncate">{source.name}</span>
+                      </div>
+                      <span className="text-sm font-bold ml-2 whitespace-nowrap">{source.percent}%</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-slate-500 text-sm py-4">No source data available</p>
+              )}
             </div>
           </div>
 
@@ -625,37 +644,44 @@ const AdminAnalytics = () => {
               <div>
                 <h3 className="text-sm font-semibold text-slate-700 mb-2">🌐 Browsers</h3>
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center text-sm">
-                    <span>Chrome</span>
-                    <span className="font-semibold">65%</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span>Safari</span>
-                    <span className="font-semibold">20%</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span>Firefox</span>
-                    <span className="font-semibold">10%</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span>Other</span>
-                    <span className="font-semibold">5%</span>
-                  </div>
+                  {loading ? (
+                    <p className="text-slate-500 text-xs py-2">Loading...</p>
+                  ) : breakdown?.rows && breakdown.rows.length > 0 ? (
+                    breakdown.rows.slice(0, 5).map((row: any) => {
+                      const total = breakdown.totals?.visitors || breakdown.totals?.views || 1;
+                      const percent = total > 0 ? Math.round(((row.visitors || row.views || 0) / total) * 1000) / 10 : 0;
+                      return (
+                        <div key={row.name} className="flex justify-between items-center text-sm">
+                          <span className="truncate">{row.name || "Unknown"}</span>
+                          <span className="font-semibold ml-2 whitespace-nowrap">{percent}%</span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-slate-500 text-xs py-2">No browser data</p>
+                  )}
                 </div>
               </div>
               <div className="pt-3 border-t border-slate-200">
                 <h3 className="text-sm font-semibold text-slate-700 mb-2">📱 Devices</h3>
-                <div className="flex gap-2">
-                  <div className="flex-1 bg-blue-100 text-blue-700 rounded p-2 text-center text-xs font-semibold">
-                    Desktop 55%
+                {loading ? (
+                  <p className="text-slate-500 text-xs py-2">Loading...</p>
+                ) : breakdownDevice?.rows && breakdownDevice.rows.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {breakdownDevice.rows.slice(0, 3).map((row: any, idx: number) => {
+                      const total = breakdownDevice.totals?.visitors || breakdownDevice.totals?.views || 1;
+                      const percent = total > 0 ? Math.round(((row.visitors || row.views || 0) / total) * 1000) / 10 : 0;
+                      const colors = ["bg-blue-100 text-blue-700", "bg-purple-100 text-purple-700", "bg-green-100 text-green-700"];
+                      return (
+                        <div key={row.name} className={`flex-1 ${colors[idx % colors.length]} rounded p-2 text-center text-xs font-semibold`}>
+                          {row.name || "Unknown"} {percent}%
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="flex-1 bg-purple-100 text-purple-700 rounded p-2 text-center text-xs font-semibold">
-                    Mobile 40%
-                  </div>
-                  <div className="flex-1 bg-green-100 text-green-700 rounded p-2 text-center text-xs font-semibold">
-                    Tablet 5%
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-slate-500 text-xs py-2">No device data</p>
+                )}
               </div>
             </div>
           </div>
@@ -671,41 +697,59 @@ const AdminAnalytics = () => {
             <div>
               <h3 className="text-sm font-semibold text-slate-700 mb-3">🌍 Top Countries</h3>
               <div className="space-y-2">
-                {[
-                  { name: "United States", visitors: 1240, percent: 28 },
-                  { name: "Canada", visitors: 580, percent: 13 },
-                  { name: "United Kingdom", visitors: 420, percent: 9 },
-                  { name: "Australia", visitors: 320, percent: 7 },
-                  { name: "Pakistan", visitors: 280, percent: 6 },
-                ].map((country) => (
-                  <div key={country.name} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded hover:bg-slate-100 transition">
-                    <span className="text-sm text-slate-700">{country.name}</span>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold text-slate-900">{country.visitors}</div>
-                      <div className="text-xs text-slate-500">{country.percent}%</div>
-                    </div>
-                  </div>
-                ))}
+                {loading ? (
+                  <p className="text-slate-500 text-sm py-4">Loading countries...</p>
+                ) : breakdownCountry?.rows && breakdownCountry.rows.length > 0 ? (
+                  breakdownCountry.rows.slice(0, 5).map((row: any) => {
+                    const total = breakdownCountry.totals?.visitors || breakdownCountry.totals?.views || 1;
+                    const percent = total > 0 ? Math.round(((row.visitors || row.views || 0) / total) * 1000) / 10 : 0;
+                    return (
+                      <div
+                        key={row.name}
+                        className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded hover:bg-slate-100 transition"
+                      >
+                        <span className="text-sm text-slate-700 truncate">{row.name || "Unknown"}</span>
+                        <div className="text-right ml-2">
+                          <div className="text-sm font-semibold text-slate-900">
+                            {(row.visitors || row.views || 0).toLocaleString()}
+                          </div>
+                          <div className="text-xs text-slate-500">{percent}%</div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-slate-500 text-sm py-4">No country data available</p>
+                )}
               </div>
             </div>
             <div>
               <h3 className="text-sm font-semibold text-slate-700 mb-3">🏙️ Top Cities</h3>
               <div className="space-y-2">
-                {[
-                  { name: "New York, USA", visitors: 380, percent: 9 },
-                  { name: "Los Angeles, USA", visitors: 290, percent: 7 },
-                  { name: "Toronto, Canada", visitors: 185, percent: 4 },
-                  { name: "London, UK", visitors: 160, percent: 4 },
-                  { name: "Karachi, Pakistan", visitors: 150, percent: 3 },
-                ].map((city) => (
-                  <div key={city.name} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded hover:bg-slate-100 transition">
-                    <span className="text-sm text-slate-700">{city.name}</span>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold text-slate-900">{city.visitors}</div>
-                      <div className="text-xs text-slate-500">{city.percent}%</div>
-                    </div>
-                  </div>
-                ))}
+                {loading ? (
+                  <p className="text-slate-500 text-sm py-4">Loading cities...</p>
+                ) : breakdownCity?.rows && breakdownCity.rows.length > 0 ? (
+                  breakdownCity.rows.slice(0, 5).map((row: any) => {
+                    const total = breakdownCity.totals?.visitors || breakdownCity.totals?.views || 1;
+                    const percent = total > 0 ? Math.round(((row.visitors || row.views || 0) / total) * 1000) / 10 : 0;
+                    return (
+                      <div
+                        key={row.name}
+                        className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded hover:bg-slate-100 transition"
+                      >
+                        <span className="text-sm text-slate-700 truncate">{row.name || "Unknown"}</span>
+                        <div className="text-right ml-2">
+                          <div className="text-sm font-semibold text-slate-900">
+                            {(row.visitors || row.views || 0).toLocaleString()}
+                          </div>
+                          <div className="text-xs text-slate-500">{percent}%</div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-slate-500 text-sm py-4">No city data available</p>
+                )}
               </div>
             </div>
           </div>
@@ -718,31 +762,45 @@ const AdminAnalytics = () => {
             Recent visitor actions
           </p>
           <div className="space-y-2 max-h-64 overflow-y-auto">
-            {[
-              { country: "Pakistan", city: "Karachi", page: "/retreats", browser: "Chrome", device: "Mobile", timeAgo: "2m" },
-              { country: "USA", city: "New York", page: "/about", browser: "Safari", device: "Desktop", timeAgo: "5m" },
-              { country: "Canada", city: "Toronto", page: "/contact", browser: "Chrome", device: "Mobile", timeAgo: "8m" },
-              { country: "UK", city: "London", page: "/events", browser: "Firefox", device: "Desktop", timeAgo: "12m" },
-              { country: "Australia", city: "Sydney", page: "/blog", browser: "Safari", device: "Mobile", timeAgo: "15m" },
-            ].map((activity, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded text-xs hover:bg-slate-100 transition"
-              >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <span className="text-lg">👤</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-slate-900 font-medium">
-                      {activity.country} ({activity.city})
-                    </p>
-                    <p className="text-slate-500 truncate">
-                      viewed <code className="bg-white px-1 rounded">{activity.page}</code> on {activity.browser} / {activity.device}
-                    </p>
+            {loading ? (
+              <p className="text-slate-500 text-sm py-4 text-center">Loading recent activity...</p>
+            ) : sessions?.data && sessions.data.length > 0 ? (
+              sessions.data.slice(0, 10).map((sess: any, i: number) => {
+                const lastAt = sess.lastAt ? new Date(sess.lastAt) : new Date();
+                const now = new Date();
+                const diffMs = now.getTime() - lastAt.getTime();
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMins / 60);
+                const diffDays = Math.floor(diffHours / 24);
+                let timeAgo = "";
+                if (diffMins < 1) timeAgo = "Just now";
+                else if (diffMins < 60) timeAgo = `${diffMins}m`;
+                else if (diffHours < 24) timeAgo = `${diffHours}h`;
+                else timeAgo = `${diffDays}d`;
+
+                return (
+                  <div
+                    key={sess.id || i}
+                    className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded text-xs hover:bg-slate-100 transition"
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-lg">👤</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-slate-900 font-medium">
+                          {sess.country || "Unknown"} {sess.city ? `(${sess.city})` : ""}
+                        </p>
+                        <p className="text-slate-500 truncate">
+                          {sess.views || 0} views on {sess.browser || "Unknown"} / {sess.device || "Unknown"}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-slate-500 ml-2 whitespace-nowrap">{timeAgo}</span>
                   </div>
-                </div>
-                <span className="text-slate-500 ml-2 whitespace-nowrap">{activity.timeAgo}</span>
-              </div>
-            ))}
+                );
+              })
+            ) : (
+              <p className="text-slate-500 text-sm py-4 text-center">No recent activity</p>
+            )}
           </div>
         </section>
 
@@ -776,38 +834,6 @@ const AdminAnalytics = () => {
           </div>
         </section>
 
-        {/* 9️⃣ Attribution Report (Chunk 2) */}
-        {attribution && (
-          <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-1">📍 Attribution Sources</h2>
-            <p className="text-sm text-slate-600 mb-4">How visitors arrive (referrers & UTM)</p>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-700 mb-3">Referrers</h3>
-                <div className="space-y-2">
-                  {(attribution.referrers || []).slice(0, 5).map((ref: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center py-2 px-3 bg-slate-50 rounded">
-                      <span className="text-sm text-slate-700">{ref.name}</span>
-                      <span className="text-sm font-semibold text-slate-900">{ref.visitors}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-700 mb-3">UTM Sources</h3>
-                <div className="space-y-2">
-                  {(attribution.utm?.sources || []).slice(0, 5).map((src: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center py-2 px-3 bg-slate-50 rounded">
-                      <span className="text-sm text-slate-700">{src.name}</span>
-                      <span className="text-sm font-semibold text-slate-900">{src.visitors}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
         {/* 1️⃣0️⃣ Breakdown Report (Chunk 3) */}
         {breakdown && (
           <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 mb-8">
@@ -836,53 +862,6 @@ const AdminAnalytics = () => {
                   ))}
                 </tbody>
               </table>
-            </div>
-          </section>
-        )}
-
-        {/* 1️⃣1️⃣ Funnel Report (Chunk 4) */}
-        {funnel && (
-          <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-1">📊 Conversion Funnel</h2>
-            <p className="text-sm text-slate-600 mb-4">User journey from start to goal</p>
-            <div className="space-y-3">
-              {(funnel.funnel || []).map((step: any, i: number) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center font-bold text-blue-700">
-                    {i + 1}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-900">{step.value}</p>
-                    <p className="text-xs text-slate-600">
-                      {step.visitors} visitors · {step.dropped} dropped ({step.dropoff}%)
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-slate-900">{step.visitors}</div>
-                    <div className="text-xs text-slate-500">visitors</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* 1️⃣2️⃣ Goal Report (Chunk 5) */}
-        {goal && (
-          <section className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200 shadow-sm p-6 mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-1">🎯 Goal Achievement</h2>
-            <p className="text-sm text-slate-600 mb-4">Conversions to thank you page</p>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-600">Total Conversions</p>
-                <p className="text-4xl font-bold text-green-600 mt-2">{goal.num}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-slate-600">Conversion Rate</p>
-                <p className="text-4xl font-bold text-emerald-600 mt-2">
-                  {goal.total > 0 ? Math.round((goal.num / goal.total) * 100) : 0}%
-                </p>
-              </div>
             </div>
           </section>
         )}
@@ -942,68 +921,6 @@ const AdminAnalytics = () => {
           </section>
         )}
 
-        {/* 1️⃣5️⃣ Revenue Report (Chunk 8) */}
-        {revenue && (
-          <section className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg border border-yellow-200 shadow-sm p-6 mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-1">💰 Revenue Estimate</h2>
-            <p className="text-sm text-slate-600 mb-4">Estimated revenue based on traffic</p>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded p-4">
-                <p className="text-xs text-slate-600">Total Revenue</p>
-                <p className="text-3xl font-bold text-amber-600 mt-1">
-                  ${revenue.total?.sum?.toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-white rounded p-4">
-                <p className="text-xs text-slate-600">Days</p>
-                <p className="text-3xl font-bold text-slate-900 mt-1">{revenue.total?.count}</p>
-              </div>
-              <div className="bg-white rounded p-4">
-                <p className="text-xs text-slate-600">Sessions</p>
-                <p className="text-3xl font-bold text-slate-900 mt-1">{revenue.total?.unique_count}</p>
-              </div>
-              <div className="bg-white rounded p-4">
-                <p className="text-xs text-slate-600">Daily Avg</p>
-                <p className="text-3xl font-bold text-amber-600 mt-1">
-                  ${revenue.total?.average?.toLocaleString()}
-                </p>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* 1️⃣6️⃣ UTM Report (Chunk 9) */}
-        {utm && (
-          <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 mb-8">
-            <h2 className="text-lg font-bold text-slate-900 mb-1">🏷️ UTM Parameters</h2>
-            <p className="text-sm text-slate-600 mb-4">Campaign tracking metrics</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-700 mb-3">Top Sources</h3>
-                <div className="space-y-2">
-                  {(utm.utm_source || []).slice(0, 5).map((src: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center py-2 px-3 bg-slate-50 rounded">
-                      <span className="text-sm text-slate-700">{src.name}</span>
-                      <span className="text-sm font-semibold text-slate-900">{src.views}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-700 mb-3">Top Campaigns</h3>
-                <div className="space-y-2">
-                  {(utm.utm_campaign || []).slice(0, 5).map((camp: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center py-2 px-3 bg-slate-50 rounded">
-                      <span className="text-sm text-slate-700">{camp.name}</span>
-                      <span className="text-sm font-semibold text-slate-900">{camp.views}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
         {/* 1️⃣7️⃣ Sessions Report (Chunk 10) */}
         {sessions && (
           <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 mb-8">
@@ -1034,11 +951,6 @@ const AdminAnalytics = () => {
           </section>
         )}
 
-        {/* Footer */}
-        <div className="text-center py-8 text-slate-600 text-sm">
-          <p>Data powered by Umami Analytics • All 10 Report Chunks Integrated ✅</p>
-          <p className="text-xs mt-2">Last updated: {new Date().toLocaleString()}</p>
-        </div>
       </div>
     </div>
   );
