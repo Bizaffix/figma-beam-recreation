@@ -212,6 +212,8 @@ const InstructorDashboard = () => {
     type: 'percentage' | 'fixed';
     value: number;
   } | null>(null);
+  const [isFirstEvent, setIsFirstEvent] = useState(false);
+  const [referredByVenueManager, setReferredByVenueManager] = useState(false);
   
   // Auto-save state
   const [autoSaving, setAutoSaving] = useState(false);
@@ -325,6 +327,63 @@ const InstructorDashboard = () => {
 
     fetchData();
   }, [user, toast]);
+
+  // Check if organizer was referred by venue manager and if this is their first event
+  useEffect(() => {
+    const checkVenueManagerReferral = async () => {
+      if (!user) {
+        setIsFirstEvent(false);
+        setReferredByVenueManager(false);
+        return;
+      }
+
+      try {
+        // Check if organizer was referred by a venue manager
+        const { data: referral, error: referralError } = await supabase
+          .from('affiliate_referrals')
+          .select(`
+            id,
+            affiliate:affiliates!inner(affiliate_type)
+          `)
+          .eq('referred_user_id', user.id)
+          .eq('referral_type', 'organizer')
+          .eq('affiliates.affiliate_type', 'venue_partner')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (referralError || !referral) {
+          setReferredByVenueManager(false);
+          setIsFirstEvent(false);
+          return;
+        }
+
+        setReferredByVenueManager(true);
+
+        // Check if this is their first published event
+        const { data: existingEvents, error: eventsError } = await supabase
+          .from('retreats')
+          .select('id')
+          .eq('instructor_id', user.id)
+          .eq('published', true)
+          .neq('id', editingId === null ? '00000000-0000-0000-0000-000000000000' : editingId);
+
+        if (eventsError) {
+          console.error('Error checking existing events:', eventsError);
+          setIsFirstEvent(false);
+          return;
+        }
+
+        setIsFirstEvent(!existingEvents || existingEvents.length === 0);
+      } catch (error) {
+        console.error('Error checking venue manager referral:', error);
+        setIsFirstEvent(false);
+        setReferredByVenueManager(false);
+      }
+    };
+
+    checkVenueManagerReferral();
+  }, [user, editingId]);
 
   // Fetch unread messages count
   useEffect(() => {
@@ -1523,9 +1582,11 @@ const InstructorDashboard = () => {
                   const revenue = (formData.price || 0) * (formData.totalSpots || 0);
                   const basePlatformFee = revenue * 0.124; // 12.4% base fee
                   
-                  // Calculate platform fee with discount
+                  // FIRST EVENT FREE: If organizer was referred by venue manager and this is their first event
                   let platformFee = basePlatformFee;
-                  if (instructorDiscount?.type === 'percentage') {
+                  if (referredByVenueManager && isFirstEvent && editingId === null) {
+                    platformFee = 0; // 100% platform fee waiver for first event
+                  } else if (instructorDiscount?.type === 'percentage') {
                     const discountValue = instructorDiscount.value;
                     if (discountValue >= 100) {
                       platformFee = 0; // 100% discount = no platform fee
@@ -1544,9 +1605,13 @@ const InstructorDashboard = () => {
                         <span className="text-sm font-medium">
                           {hasDiscount ? `Platform Fee (${discountPercent}% Discount Applied)` : '-12.4% Platform Fee'}
                         </span>
-                        {hasDiscount && instructorDiscount && (
+                        {hasDiscount && (
                           <span className="text-xs text-muted-foreground mt-0.5">
-                            Organizer: {instructorDiscount.value}% discount
+                            {referredByVenueManager && isFirstEvent && editingId === null
+                              ? 'First Event Free (Referred by Venue Manager)'
+                              : instructorDiscount
+                              ? `Organizer: ${instructorDiscount.value}% discount`
+                              : ''}
                           </span>
                         )}
                       </div>
@@ -1614,9 +1679,13 @@ const InstructorDashboard = () => {
                 {(() => {
                   const revenue = (formData.price || 0) * (formData.totalSpots || 0);
                   const basePlatformFee = revenue * 0.124; // 12.4% base fee
-                  const platformFee = (instructorDiscount?.type === 'percentage' && instructorDiscount.value >= 100) 
-                    ? 0 
-                    : basePlatformFee;
+                  // FIRST EVENT FREE: If organizer was referred by venue manager and this is their first event
+                  let platformFee = basePlatformFee;
+                  if (referredByVenueManager && isFirstEvent && editingId === null) {
+                    platformFee = 0; // 100% platform fee waiver for first event
+                  } else if (instructorDiscount?.type === 'percentage' && instructorDiscount.value >= 100) {
+                    platformFee = 0;
+                  }
                   const totalPayout = revenue - platformFee - venueFees - foodBudget;
                   
                   return (

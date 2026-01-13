@@ -13,8 +13,6 @@ Make sure your Edge Functions include the following fixes:
 ### 1. `create-payment-intent` Function
 
 **Make sure it includes the `amount` parameter:**
-
-```typescript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno"
 
@@ -29,7 +27,7 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests - THIS IS CRITICAL!
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
   }
@@ -37,9 +35,8 @@ serve(async (req) => {
   try {
     const { retreatId, amount, bookingDetails } = await req.json()
 
-    // IMPORTANT: amount is already in cents from the frontend
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount, // Already in cents
+      amount: amount, // Already in cents from frontend
       currency: "usd",
       metadata: {
         retreatId: retreatId.toString(),
@@ -66,7 +63,6 @@ serve(async (req) => {
     )
   }
 })
-```
 
 ### 2. `confirm-payment` Function
 

@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Calendar } from "@/components/ui/calendar";
@@ -32,7 +34,10 @@ import {
   Home,
   Shield,
   DollarSign,
-  CalendarDays
+  CalendarDays,
+  Link as LinkIcon,
+  Copy,
+  Check
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { format, isWithinInterval, parseISO } from "date-fns";
@@ -96,11 +101,35 @@ const LocationOwnerDashboard = () => {
     publishedProperties: 0,
     pendingRequests: 0
   });
+  
+  // Affiliate data
+  const [affiliateLink, setAffiliateLink] = useState<{
+    id: string;
+    full_url: string;
+    link_code: string;
+    clicks: number;
+    campaign?: { name: string; active_commission_value: number; active_commission_type: string };
+  } | null>(null);
+  const [referredUsers, setReferredUsers] = useState<Array<{
+    id: string;
+    referral_id: string;
+    user_id: string;
+    referral_type: string;
+    created_at: string;
+    converted: boolean;
+    converted_at: string | null;
+    profile?: { full_name: string; email: string; role: string };
+    commissions?: Array<{ amount: number; status: string; created_at: string }>;
+    campaign?: { active_commission_value: number; active_commission_type: string; active_commission_base: string };
+  }>>([]);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [loadingAffiliate, setLoadingAffiliate] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchProperties();
       fetchUnreadMessages();
+      fetchAffiliateData();
     }
   }, [user]);
 
@@ -229,6 +258,134 @@ const LocationOwnerDashboard = () => {
     }
   };
 
+  const fetchAffiliateData = async () => {
+    if (!user) return;
+    setLoadingAffiliate(true);
+    
+    try {
+      // Get affiliate record for this venue manager
+      const { data: affiliate, error: affiliateError } = await supabase
+        .from('affiliates')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('affiliate_type', 'venue_partner')
+        .single();
+
+      if (affiliateError || !affiliate) {
+        console.log('No affiliate record found for venue manager');
+        setLoadingAffiliate(false);
+        return;
+      }
+
+      // Get affiliate link for organizer referral campaign
+      const { data: links, error: linksError } = await supabase
+        .from('affiliate_links')
+        .select(`
+          id,
+          full_url,
+          link_code,
+          clicks,
+          campaign:affiliate_campaigns(
+            name,
+            active_commission_value,
+            active_commission_type,
+            active_commission_base
+          )
+        `)
+        .eq('affiliate_id', affiliate.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (linksError) throw linksError;
+
+      if (links && links.length > 0) {
+        setAffiliateLink(links[0] as any);
+      }
+
+      // Get referred users
+      const { data: referrals, error: referralsError } = await supabase
+        .from('affiliate_referrals')
+        .select(`
+          id,
+          referral_id:id,
+          referred_user_id,
+          referral_type,
+          created_at,
+          converted,
+          converted_at,
+          campaign:affiliate_campaigns(
+            active_commission_value,
+            active_commission_type,
+            active_commission_base
+          )
+        `)
+        .eq('affiliate_id', affiliate.id)
+        .order('created_at', { ascending: false });
+
+      if (referralsError) throw referralsError;
+
+      // Fetch profile data for referred users
+      if (referrals && referrals.length > 0) {
+        const userIds = referrals
+          .map(r => r.referred_user_id)
+          .filter(Boolean) as string[];
+
+        let profilesMap = new Map();
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, role')
+            .in('id', userIds);
+
+          if (profiles) {
+            profilesMap = new Map(profiles.map(p => [p.id, p]));
+          }
+        }
+
+        // Fetch commissions for each referral
+        const referralIds = referrals.map(r => r.id);
+        const commissionsMap = new Map();
+        if (referralIds.length > 0) {
+          const { data: commissions } = await supabase
+            .from('affiliate_commissions')
+            .select('referral_id, amount, status, created_at')
+            .in('referral_id', referralIds);
+
+          if (commissions) {
+            commissions.forEach(c => {
+              if (!commissionsMap.has(c.referral_id)) {
+                commissionsMap.set(c.referral_id, []);
+              }
+              commissionsMap.get(c.referral_id).push(c);
+            });
+          }
+        }
+
+        const referralsWithData = referrals.map(ref => ({
+          ...ref,
+          profile: ref.referred_user_id ? profilesMap.get(ref.referred_user_id) : null,
+          commissions: commissionsMap.get(ref.id) || []
+        }));
+
+        setReferredUsers(referralsWithData as any);
+      } else {
+        setReferredUsers([]);
+      }
+    } catch (error) {
+      console.error('Error fetching affiliate data:', error);
+    } finally {
+      setLoadingAffiliate(false);
+    }
+  };
+
+  const copyAffiliateLink = () => {
+    if (affiliateLink?.full_url) {
+      navigator.clipboard.writeText(affiliateLink.full_url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }
+  };
+
 
   const handleEventRequest = async (requestId: string, action: 'approve' | 'decline') => {
     try {
@@ -353,6 +510,157 @@ const LocationOwnerDashboard = () => {
               variant="default"
             />
           </div>
+
+          {/* Affiliate Program Section */}
+          {affiliateLink && (
+            <Card className="mb-8">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <LinkIcon className="w-5 h-5" />
+                  Your Affiliate Program
+                </CardTitle>
+                <CardDescription>
+                  Share your link to invite organizers and earn revenue share
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Affiliate Link */}
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Your Affiliate Link</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={affiliateLink.full_url}
+                      readOnly
+                      className="flex-1 font-mono text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={copyAffiliateLink}
+                      className="flex-shrink-0"
+                    >
+                      {linkCopied ? (
+                        <>
+                          <Check className="w-4 h-4 mr-2" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 mr-2" />
+                          Copy
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                    <span>{affiliateLink.clicks} clicks</span>
+                    {affiliateLink.campaign && (
+                      <span>
+                        Commission: {
+                          affiliateLink.campaign.active_commission_type === 'percentage'
+                            ? `${affiliateLink.campaign.active_commission_value}%`
+                            : `$${affiliateLink.campaign.active_commission_value}`
+                        }
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Referred Users List */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <Label className="text-sm font-medium">Referred Users</Label>
+                    <Badge variant="outline">{referredUsers.length} total</Badge>
+                  </div>
+                  
+                  {loadingAffiliate ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
+                      <p className="text-sm text-muted-foreground">Loading...</p>
+                    </div>
+                  ) : referredUsers.length === 0 ? (
+                    <div className="text-center py-8 border rounded-lg">
+                      <Users className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">No referred users yet</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Share your affiliate link to start earning
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {referredUsers.map((refUser) => {
+                        const accountTypeLabel = refUser.referral_type === 'organizer' 
+                          ? 'Organizer' 
+                          : refUser.referral_type === 'student'
+                          ? 'Student'
+                          : 'Venue';
+                        
+                        const totalCommissions = refUser.commissions?.reduce(
+                          (sum, c) => sum + Number(c.amount || 0), 
+                          0
+                        ) || 0;
+                        
+                        const commissionRate = refUser.campaign?.active_commission_type === 'percentage'
+                          ? `${refUser.campaign.active_commission_value}%`
+                          : refUser.campaign?.active_commission_type === 'fixed'
+                          ? `$${refUser.campaign.active_commission_value}`
+                          : 'N/A';
+
+                        return (
+                          <Card key={refUser.id} className="p-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Badge variant="outline">{accountTypeLabel}</Badge>
+                                  {refUser.converted && (
+                                    <Badge variant="default" className="text-xs">
+                                      Converted
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="space-y-1 text-sm">
+                                  <p className="font-medium">
+                                    {refUser.profile?.full_name || refUser.profile?.email || 'Unknown User'}
+                                  </p>
+                                  <p className="text-muted-foreground">
+                                    {refUser.profile?.email || 'No email'}
+                                  </p>
+                                  <div className="flex gap-4 text-xs text-muted-foreground mt-2">
+                                    <span>
+                                      Signed up: {new Date(refUser.created_at).toLocaleDateString()}
+                                    </span>
+                                    {refUser.converted_at && (
+                                      <span>
+                                        Converted: {new Date(refUser.converted_at).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-2 text-sm">
+                                <div className="text-right">
+                                  <p className="text-xs text-muted-foreground">Revenue Share Rate</p>
+                                  <p className="font-semibold">{commissionRate}</p>
+                                </div>
+                                {totalCommissions > 0 && (
+                                  <div className="text-right">
+                                    <p className="text-xs text-muted-foreground">Total Earned</p>
+                                    <p className="font-semibold text-green-600">
+                                      ${totalCommissions.toFixed(2)}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Venue Feed and Calendar View */}
           {properties.length > 0 && (

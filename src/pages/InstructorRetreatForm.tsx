@@ -262,6 +262,8 @@ const InstructorRetreatForm = () => {
     type: 'percentage' | 'fixed';
     value: number;
   } | null>(null);
+  const [isFirstEvent, setIsFirstEvent] = useState(false);
+  const [referredByVenueManager, setReferredByVenueManager] = useState(false);
 
   // Only show this page to instructors
   if (role !== 'instructor') {
@@ -367,6 +369,63 @@ const InstructorRetreatForm = () => {
 
     fetchVenueOwnerDiscount();
   }, [selectedVenue]);
+
+  // Check if organizer was referred by venue manager and if this is their first event
+  useEffect(() => {
+    const checkVenueManagerReferral = async () => {
+      if (!user) {
+        setIsFirstEvent(false);
+        setReferredByVenueManager(false);
+        return;
+      }
+
+      try {
+        // Check if organizer was referred by a venue manager
+        const { data: referral, error: referralError } = await supabase
+          .from('affiliate_referrals')
+          .select(`
+            id,
+            affiliate:affiliates!inner(affiliate_type)
+          `)
+          .eq('referred_user_id', user.id)
+          .eq('referral_type', 'organizer')
+          .eq('affiliates.affiliate_type', 'venue_partner')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (referralError || !referral) {
+          setReferredByVenueManager(false);
+          setIsFirstEvent(false);
+          return;
+        }
+
+        setReferredByVenueManager(true);
+
+        // Check if this is their first published event
+        const { data: existingEvents, error: eventsError } = await supabase
+          .from('retreats')
+          .select('id')
+          .eq('instructor_id', user.id)
+          .eq('published', true)
+          .neq('id', editingId === 'new' ? '00000000-0000-0000-0000-000000000000' : editingId);
+
+        if (eventsError) {
+          console.error('Error checking existing events:', eventsError);
+          setIsFirstEvent(false);
+          return;
+        }
+
+        setIsFirstEvent(!existingEvents || existingEvents.length === 0);
+      } catch (error) {
+        console.error('Error checking venue manager referral:', error);
+        setIsFirstEvent(false);
+        setReferredByVenueManager(false);
+      }
+    };
+
+    checkVenueManagerReferral();
+  }, [user, editingId]);
 
   // Handle duplicate data from navigation state
   useEffect(() => {
@@ -1071,6 +1130,12 @@ const InstructorRetreatForm = () => {
   // Calculate platform fee based on discounts
   const calculatePlatformFee = (revenue: number): number => {
     const basePlatformFee = revenue * 0.124; // 12.4% base fee
+    
+    // FIRST EVENT FREE: If organizer was referred by venue manager and this is their first event
+    if (referredByVenueManager && isFirstEvent && editingId === 'new') {
+      return 0; // 100% platform fee waiver for first event
+    }
+    
     let discountMultiplier = 1; // Start with no discount
     
     // Check if organizer has percentage discount
@@ -3690,9 +3755,12 @@ const InstructorRetreatForm = () => {
                   const revenue = (formData.price || 0) * (formData.totalSpots || 0);
                   const basePlatformFee = revenue * 0.124;
                   const platformFee = calculatePlatformFee(revenue);
-                  
+
                   // Determine discount info for display
                   let discountInfo = '';
+                  if (referredByVenueManager && isFirstEvent && editingId === 'new') {
+                    discountInfo = 'First Event Free (Referred by Venue Manager)';
+                  }
                   if (instructorProfile?.discount && instructorProfile.discount.type === 'percentage') {
                     discountInfo = `Organizer: ${instructorProfile.discount.value}% discount`;
                   }
