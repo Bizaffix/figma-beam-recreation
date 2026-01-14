@@ -213,7 +213,9 @@ const InstructorDashboard = () => {
     value: number;
   } | null>(null);
   const [isFirstEvent, setIsFirstEvent] = useState(false);
-  const [referredByVenueManager, setReferredByVenueManager] = useState(false);
+  const [firstEventFreeEligible, setFirstEventFreeEligible] = useState(false);
+  const [firstEventFreeUsed, setFirstEventFreeUsed] = useState(false);
+  const [firstEventFreeCampaignActive, setFirstEventFreeCampaignActive] = useState(false);
   
   // Auto-save state
   const [autoSaving, setAutoSaving] = useState(false);
@@ -328,45 +330,60 @@ const InstructorDashboard = () => {
     fetchData();
   }, [user, toast]);
 
-  // Check if organizer was referred by venue manager and if this is their first event
+  // Check if organizer is eligible for first event free and if this is their first event
   useEffect(() => {
-    const checkVenueManagerReferral = async () => {
+    const checkFirstEventFree = async () => {
       if (!user) {
         setIsFirstEvent(false);
-        setReferredByVenueManager(false);
+        setFirstEventFreeEligible(false);
+        setFirstEventFreeUsed(false);
         return;
       }
 
       try {
-        // Check if organizer was referred by a venue manager
-        const { data: referral, error: referralError } = await supabase
-          .from('affiliate_referrals')
-          .select(`
-            id,
-            affiliate:affiliates!inner(affiliate_type)
-          `)
-          .eq('referred_user_id', user.id)
-          .eq('referral_type', 'organizer')
-          .eq('affiliates.affiliate_type', 'venue_partner')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .single();
+        // Check if "First Event Free Program" campaign is active
+        const { data: campaign, error: campaignError } = await supabase
+          .from('affiliate_campaigns')
+          .select('is_active')
+          .eq('name', 'First Event Free Program')
+          .maybeSingle();
 
-        if (referralError || !referral) {
-          setReferredByVenueManager(false);
-          setIsFirstEvent(false);
-          return;
+        if (!campaignError && campaign) {
+          setFirstEventFreeCampaignActive(campaign.is_active);
+        } else if (campaignError) {
+          console.error('Error fetching First Event Free campaign:', campaignError);
+          setFirstEventFreeCampaignActive(false);
         }
 
-        setReferredByVenueManager(true);
+        // Get organizer profile to check first_event_free_eligible
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('first_event_free_eligible, first_event_free_used')
+          .eq('id', user.id)
+          .single();
+
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+          setFirstEventFreeEligible(false);
+          setFirstEventFreeUsed(false);
+        } else if (profile) {
+          setFirstEventFreeEligible(profile.first_event_free_eligible || false);
+          setFirstEventFreeUsed(profile.first_event_free_used || false);
+        }
 
         // Check if this is their first published event
-        const { data: existingEvents, error: eventsError } = await supabase
+        let query = supabase
           .from('retreats')
           .select('id')
           .eq('instructor_id', user.id)
-          .eq('published', true)
-          .neq('id', editingId === null ? '00000000-0000-0000-0000-000000000000' : editingId);
+          .eq('published', true);
+        
+        // Only exclude current event if editingId is a number (existing event)
+        if (typeof editingId === 'number') {
+          query = query.neq('id', editingId);
+        }
+        
+        const { data: existingEvents, error: eventsError } = await query;
 
         if (eventsError) {
           console.error('Error checking existing events:', eventsError);
@@ -376,13 +393,14 @@ const InstructorDashboard = () => {
 
         setIsFirstEvent(!existingEvents || existingEvents.length === 0);
       } catch (error) {
-        console.error('Error checking venue manager referral:', error);
+        console.error('Error checking first event free:', error);
         setIsFirstEvent(false);
-        setReferredByVenueManager(false);
+        setFirstEventFreeEligible(false);
+        setFirstEventFreeUsed(false);
       }
     };
 
-    checkVenueManagerReferral();
+    checkFirstEventFree();
   }, [user, editingId]);
 
   // Fetch unread messages count
@@ -974,6 +992,36 @@ const InstructorDashboard = () => {
               variant: "destructive",
             });
           } else {
+            // Mark first_event_free_used if this was their first event and they were eligible
+            if (retreatData.published && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
+              await supabase
+                .from('profiles')
+                .update({ first_event_free_used: true })
+                .eq('id', user.id);
+              setFirstEventFreeUsed(true);
+            }
+
+            // Create passive commission when event is published (for organizer referrals)
+            if (retreatData.published && user.id) {
+              const revenue = (retreatData.price || 0) * (retreatData.total_spots || 0);
+              const basePlatformFee = revenue * 0.124;
+              let platformFee = basePlatformFee;
+              if (firstEventFreeCampaignActive && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
+                platformFee = 0;
+              } else if (instructorDiscount?.type === 'percentage' && instructorDiscount.value >= 100) {
+                platformFee = 0;
+              }
+              
+              const { createPassiveCommission } = await import('@/lib/affiliate-tracking');
+              createPassiveCommission(
+                user.id,
+                'event_published',
+                revenue,
+                platformFee,
+                autoSaveDraftId?.toString() || ''
+              ).catch(err => console.error('Error creating passive commission:', err));
+            }
+
             // Send email notifications if retreat is published
             if (retreatData.published) {
               const updatedRetreat = allRetreats.find(r => r.id === autoSaveDraftId);
@@ -1018,6 +1066,36 @@ const InstructorDashboard = () => {
               variant: "destructive",
             });
           } else {
+            // Mark first_event_free_used if this was their first event and they were eligible
+            if (data.published && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
+              await supabase
+                .from('profiles')
+                .update({ first_event_free_used: true })
+                .eq('id', user.id);
+              setFirstEventFreeUsed(true);
+            }
+
+            // Create passive commission when event is published (for organizer referrals)
+            if (data.published && user.id) {
+              const revenue = (retreatData.price || 0) * (retreatData.total_spots || 0);
+              const basePlatformFee = revenue * 0.124;
+              let platformFee = basePlatformFee;
+              if (firstEventFreeCampaignActive && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
+                platformFee = 0;
+              } else if (instructorDiscount?.type === 'percentage' && instructorDiscount.value >= 100) {
+                platformFee = 0;
+              }
+              
+              const { createPassiveCommission } = await import('@/lib/affiliate-tracking');
+              createPassiveCommission(
+                user.id,
+                'event_published',
+                revenue,
+                platformFee,
+                data.id.toString()
+              ).catch(err => console.error('Error creating passive commission:', err));
+            }
+
             // Send email notifications if retreat is published
             if (data.published) {
               // Call email notification in background (don't wait for it)
@@ -1066,6 +1144,36 @@ const InstructorDashboard = () => {
           // Check if retreat was just published (update from draft to published)
           const wasDraft = allRetreats.find(r => r.id === editingId)?.published === false;
           const isNowPublished = retreatData.published;
+          
+          // Mark first_event_free_used if this was their first event and they were eligible
+          if (isNowPublished && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
+            await supabase
+              .from('profiles')
+              .update({ first_event_free_used: true })
+              .eq('id', user.id);
+            setFirstEventFreeUsed(true);
+          }
+
+          // Create passive commission when event is published (for organizer referrals)
+          if (isNowPublished && user.id) {
+            const revenue = (retreatData.price || 0) * (retreatData.total_spots || 0);
+            const basePlatformFee = revenue * 0.124;
+            let platformFee = basePlatformFee;
+            if (firstEventFreeCampaignActive && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
+              platformFee = 0;
+            } else if (instructorDiscount?.type === 'percentage' && instructorDiscount.value >= 100) {
+              platformFee = 0;
+            }
+            
+            const { createPassiveCommission } = await import('@/lib/affiliate-tracking');
+            createPassiveCommission(
+              user.id,
+              'event_published',
+              revenue,
+              platformFee,
+              editingId.toString()
+            ).catch(err => console.error('Error creating passive commission:', err));
+          }
           
           // Send email notifications if retreat was just published
           if (wasDraft && isNowPublished) {
@@ -1582,9 +1690,9 @@ const InstructorDashboard = () => {
                   const revenue = (formData.price || 0) * (formData.totalSpots || 0);
                   const basePlatformFee = revenue * 0.124; // 12.4% base fee
                   
-                  // FIRST EVENT FREE: If organizer was referred by venue manager and this is their first event
+                  // FIRST EVENT FREE: If organizer is eligible, campaign is active, and this is their first event
                   let platformFee = basePlatformFee;
-                  if (referredByVenueManager && isFirstEvent && editingId === null) {
+                  if (firstEventFreeCampaignActive && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent && editingId === null) {
                     platformFee = 0; // 100% platform fee waiver for first event
                   } else if (instructorDiscount?.type === 'percentage') {
                     const discountValue = instructorDiscount.value;
@@ -1607,8 +1715,8 @@ const InstructorDashboard = () => {
                         </span>
                         {hasDiscount && (
                           <span className="text-xs text-muted-foreground mt-0.5">
-                            {referredByVenueManager && isFirstEvent && editingId === null
-                              ? 'First Event Free (Referred by Venue Manager)'
+                            {firstEventFreeCampaignActive && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent && editingId === null
+                              ? 'First Event Free (Admin Granted)'
                               : instructorDiscount
                               ? `Organizer: ${instructorDiscount.value}% discount`
                               : ''}
@@ -1679,9 +1787,9 @@ const InstructorDashboard = () => {
                 {(() => {
                   const revenue = (formData.price || 0) * (formData.totalSpots || 0);
                   const basePlatformFee = revenue * 0.124; // 12.4% base fee
-                  // FIRST EVENT FREE: If organizer was referred by venue manager and this is their first event
+                  // FIRST EVENT FREE: If organizer is eligible, campaign is active, and this is their first event
                   let platformFee = basePlatformFee;
-                  if (referredByVenueManager && isFirstEvent && editingId === null) {
+                  if (firstEventFreeCampaignActive && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent && editingId === null) {
                     platformFee = 0; // 100% platform fee waiver for first event
                   } else if (instructorDiscount?.type === 'percentage' && instructorDiscount.value >= 100) {
                     platformFee = 0;

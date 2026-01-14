@@ -309,3 +309,75 @@ export const convertReferral = async (
   }
 };
 
+/**
+ * Create passive commission for ongoing revenue share
+ * Call this when trigger events occur (event published, booking completed, etc.)
+ */
+export const createPassiveCommission = async (
+  referredUserId: string,
+  eventType: 'event_published' | 'booking_completed' | 'venue_booking' | 'event_at_venue',
+  transactionAmount: number,
+  platformFee: number = 0,
+  transactionId?: string
+): Promise<string | null> => {
+  try {
+    // Find active referrals for this user
+    const { data: referrals, error: referralsError } = await supabase
+      .from('affiliate_referrals')
+      .select(`
+        id,
+        affiliate_id,
+        campaign_id,
+        campaign:affiliate_campaigns(
+          passive_commission_enabled,
+          passive_commission_events,
+          is_active
+        )
+      `)
+      .eq('referred_user_id', referredUserId)
+      .eq('converted', true);
+
+    if (referralsError || !referrals || referrals.length === 0) {
+      return null;
+    }
+
+    // Process each referral
+    const commissionIds: string[] = [];
+    for (const referral of referrals) {
+      const campaign = referral.campaign as any;
+      
+      // Check if campaign is active and has passive commission enabled
+      if (!campaign?.is_active || !campaign?.passive_commission_enabled) {
+        continue;
+      }
+
+      // Check if this event type triggers passive commission
+      const triggerEvents = campaign.passive_commission_events || [];
+      if (!triggerEvents.includes(eventType)) {
+        continue;
+      }
+
+      // Call database function to create passive commission
+      const { data: commissionId, error: commissionError } = await supabase.rpc(
+        'create_passive_commission',
+        {
+          p_referral_id: referral.id,
+          p_event_type: eventType,
+          p_transaction_amount: transactionAmount,
+          p_platform_fee: platformFee,
+          p_transaction_id: transactionId || null,
+        }
+      );
+
+      if (!commissionError && commissionId) {
+        commissionIds.push(commissionId);
+      }
+    }
+
+    return commissionIds.length > 0 ? commissionIds[0] : null;
+  } catch (error) {
+    console.error('Error creating passive commission:', error);
+    return null;
+  }
+};
+

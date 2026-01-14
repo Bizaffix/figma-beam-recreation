@@ -269,7 +269,7 @@ const LocationOwnerDashboard = () => {
         .select('id')
         .eq('user_id', user.id)
         .eq('affiliate_type', 'venue_partner')
-        .single();
+        .maybeSingle();
 
       if (affiliateError || !affiliate) {
         console.log('No affiliate record found for venue manager');

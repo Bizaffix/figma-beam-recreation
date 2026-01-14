@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar, Link as LinkIcon, Percent, Tag } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar, Link as LinkIcon, Percent, Tag, Gift } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -41,6 +41,8 @@ interface UserProfile {
     type: 'percentage' | 'fixed';
     value: number;
   } | null;
+  first_event_free_eligible?: boolean;
+  first_event_free_used?: boolean;
 }
 
 interface EmailTemplate {
@@ -359,7 +361,7 @@ const AdminDashboard = () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email, created_at, discount')
+        .select('id, full_name, email, created_at, discount, first_event_free_eligible, first_event_free_used')
         .eq('role', 'instructor')
         .order('created_at', { ascending: false });
 
@@ -390,7 +392,7 @@ const AdminDashboard = () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email, created_at, discount')
+        .select('id, full_name, email, created_at, discount, first_event_free_eligible, first_event_free_used')
         .eq('role', 'location_owner')
         .order('created_at', { ascending: false });
 
@@ -631,6 +633,82 @@ const AdminDashboard = () => {
       toast({
         title: "Error",
         description: error.message || "Failed to remove discount",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAssignFirstEventFree = async (recipientType: 'instructors' | 'location_owners') => {
+    const selected = recipientType === 'instructors' ? selectedInstructors : selectedLocationOwners;
+    if (selected.size === 0) {
+      toast({
+        title: "No recipients selected",
+        description: `Please select at least one ${recipientType === 'instructors' ? 'organizer' : 'venue'} to grant first event free`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ first_event_free_eligible: true, first_event_free_used: false })
+        .in('id', Array.from(selected));
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Success",
+        description: `First Event Free granted to ${selected.size} ${recipientType === 'instructors' ? 'organizer(s)' : 'venue(s)'}`,
+      });
+
+      // Refresh the lists
+      if (recipientType === 'instructors') {
+        fetchInstructorsList();
+        setSelectedInstructors(new Set());
+      } else {
+        fetchLocationOwnersList();
+        setSelectedLocationOwners(new Set());
+      }
+    } catch (error: any) {
+      console.error('Error assigning first event free:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to assign first event free",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRemoveFirstEventFree = async (userId: string, recipientType: 'instructors' | 'location_owners') => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ first_event_free_eligible: false })
+        .eq('id', userId);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Success",
+        description: "First Event Free benefit removed successfully",
+      });
+
+      // Refresh the lists
+      if (recipientType === 'instructors') {
+        fetchInstructorsList();
+      } else {
+        fetchLocationOwnersList();
+      }
+    } catch (error: any) {
+      console.error('Error removing first event free:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove first event free",
         variant: "destructive",
       });
     }
@@ -1581,6 +1659,16 @@ const AdminDashboard = () => {
                   <span className="hidden sm:inline">Discount</span>
                 </Button>
                 <Button
+                  onClick={() => handleAssignFirstEventFree('instructors')}
+                  size="sm"
+                  variant="outline"
+                  className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2"
+                  disabled={selectedInstructors.size === 0}
+                >
+                  <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">First Event Free</span>
+                </Button>
+                <Button
                   onClick={() => handleNotificationClick('organizers')}
                   size="sm"
                   className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2"
@@ -1664,6 +1752,25 @@ const AdminDashboard = () => {
                               <span className="text-xs text-muted-foreground">None</span>
                             )}
                           </td>
+                          <td className="p-3">
+                            {instructor.first_event_free_eligible ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant={instructor.first_event_free_used ? "outline" : "default"} className="text-xs">
+                                  {instructor.first_event_free_used ? "Used" : "Eligible"}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => handleRemoveFirstEventFree(instructor.id, 'instructors')}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">None</span>
+                            )}
+                          </td>
                           <td className="p-3 text-muted-foreground">
                             {new Date(instructor.created_at).toLocaleDateString()}
                           </td>
@@ -1704,6 +1811,26 @@ const AdminDashboard = () => {
                                   size="sm"
                                   className="h-5 w-5 p-0"
                                   onClick={() => handleRemoveDiscount(instructor.id, 'instructors')}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">None</span>
+                            )}
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">First Event Free:</span>
+                            {instructor.first_event_free_eligible ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant={instructor.first_event_free_used ? "outline" : "default"} className="text-xs">
+                                  {instructor.first_event_free_used ? "Used" : "Eligible"}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 w-5 p-0"
+                                  onClick={() => handleRemoveFirstEventFree(instructor.id, 'instructors')}
                                 >
                                   <X className="w-3 h-3" />
                                 </Button>
@@ -1769,6 +1896,16 @@ const AdminDashboard = () => {
                   <Percent className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span className="hidden sm:inline">Discount</span>
                 </Button>
+                <Button
+                  onClick={() => handleAssignFirstEventFree('location_owners')}
+                  size="sm"
+                  variant="outline"
+                  className="h-8 px-2 sm:px-3 text-xs sm:text-sm gap-1 sm:gap-2"
+                  disabled={selectedLocationOwners.size === 0}
+                >
+                  <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">First Event Free</span>
+                </Button>
                 <DialogClose asChild>
                   <Button
                     variant="ghost"
@@ -1809,6 +1946,7 @@ const AdminDashboard = () => {
                         <th className="text-left p-3 font-semibold">Name</th>
                         <th className="text-left p-3 font-semibold">Email</th>
                         <th className="text-left p-3 font-semibold">Discount</th>
+                        <th className="text-left p-3 font-semibold">First Event Free</th>
                         <th className="text-left p-3 font-semibold">Signed Up</th>
                       </tr>
                     </thead>
@@ -1836,6 +1974,25 @@ const AdminDashboard = () => {
                                   size="sm"
                                   className="h-6 w-6 p-0"
                                   onClick={() => handleRemoveDiscount(locationOwner.id, 'location_owners')}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">None</span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {locationOwner.first_event_free_eligible ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant={locationOwner.first_event_free_used ? "outline" : "default"} className="text-xs">
+                                  {locationOwner.first_event_free_used ? "Used" : "Eligible"}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => handleRemoveFirstEventFree(locationOwner.id, 'location_owners')}
                                 >
                                   <X className="w-3 h-3" />
                                 </Button>
@@ -1884,6 +2041,26 @@ const AdminDashboard = () => {
                                   size="sm"
                                   className="h-5 w-5 p-0"
                                   onClick={() => handleRemoveDiscount(locationOwner.id, 'location_owners')}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">None</span>
+                            )}
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">First Event Free:</span>
+                            {locationOwner.first_event_free_eligible ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant={locationOwner.first_event_free_used ? "outline" : "default"} className="text-xs">
+                                  {locationOwner.first_event_free_used ? "Used" : "Eligible"}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 w-5 p-0"
+                                  onClick={() => handleRemoveFirstEventFree(locationOwner.id, 'location_owners')}
                                 >
                                   <X className="w-3 h-3" />
                                 </Button>

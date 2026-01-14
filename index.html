@@ -17,11 +17,16 @@
     <link rel="shortcut icon" href="/favicon1.png" />
     <link rel="apple-touch-icon" href="/favicon1.png" />
     <meta name="theme-color" content="#ffffff" />
-<!-- Umami Analytics -->
-    <script
-      defer
-      src="https://cloud.umami.is/script.js"
-      data-website-id="cc158ec8-91a3-4cdb-99f1-b4b7bc448d7e">
+<!-- Umami Analytics - Only load in production -->
+    <script>
+      // Only load Umami in production to avoid CORS issues in development
+      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        const script = document.createElement('script');
+        script.defer = true;
+        script.src = 'https://cloud.umami.is/script.js';
+        script.setAttribute('data-website-id', 'cc158ec8-91a3-4cdb-99f1-b4b7bc448d7e');
+        document.head.appendChild(script);
+      }
     </script>
   </head>
 

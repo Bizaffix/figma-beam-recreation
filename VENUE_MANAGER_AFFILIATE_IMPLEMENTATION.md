@@ -104,9 +104,10 @@ Run `VENUE_MANAGER_AFFILIATE_AUTO_SETUP.sql` in Supabase SQL Editor to:
 ## Commission Structure
 
 The commission structure is defined in the "Organizer Referral Program" campaign:
-- **Active Commission**: One-time commission when organizer verifies and publishes first event
-- **Commission Type**: Can be percentage or fixed amount
-- **Commission Base**: Can be based on platform fee, transaction amount, etc.
+- **Active Commission**: None (no one-time commission)
+- **Passive Commission**: 20% of Event Fee for 1 year (12 months)
+- **Commission Triggers**: When organizer publishes events or gets bookings
+- **First Event Benefit**: 100% platform fee waiver (separate from commission)
 
 ## Important Notes
 
@@ -119,7 +120,8 @@ The commission structure is defined in the "Organizer Referral Program" campaign
    - First listing is published
    - Commission is calculated and created
 
-4. **Revenue Share**: The revenue share rate is determined by the campaign settings, not a fixed 30%. Check the "Organizer Referral Program" campaign in the Affiliate Program Manager to see the actual rate.
+4. **Revenue Share**: The revenue share rate is 20% of Event Fees for 1 year. This is configured in the "Organizer Referral Program" campaign and can be adjusted by admins.
+5. **Campaign Control**: Admins can enable/disable campaigns via the toggle in the Affiliate Program Manager. When paused, no new referrals are created.
 
 ## Testing Checklist
 

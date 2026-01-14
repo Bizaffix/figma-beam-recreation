@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Clock } from "lucide-react";
 import calendar, { createGoogleCalendarUrl } from "@/lib/calendar";
-import { convertReferral, getCurrentAffiliate } from "@/lib/affiliate-tracking";
+import { convertReferral, getCurrentAffiliate, createPassiveCommission } from "@/lib/affiliate-tracking";
 import { supabase } from "@/lib/supabase";
 
 const Confirmation = () => {
@@ -52,6 +52,30 @@ const Confirmation = () => {
           transactionAmount,
           platformFee
         );
+
+        // Create passive commission for organizer referrals when booking is completed
+        // Find organizer referral for this retreat's instructor
+        if (retreat?.instructor_id) {
+          const { data: organizerReferrals } = await supabase
+            .from('affiliate_referrals')
+            .select('id')
+            .eq('referred_user_id', retreat.instructor_id)
+            .eq('referral_type', 'organizer')
+            .eq('converted', true);
+
+          if (organizerReferrals && organizerReferrals.length > 0) {
+            // Create passive commission for each organizer referral
+            for (const referral of organizerReferrals) {
+              await createPassiveCommission(
+                retreat.instructor_id,
+                'booking_completed',
+                transactionAmount,
+                platformFee,
+                bookingId
+              );
+            }
+          }
+        }
       } catch (error) {
         console.error('Error converting affiliate referral:', error);
         // Don't show error to user

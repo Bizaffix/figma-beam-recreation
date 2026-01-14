@@ -11,9 +11,21 @@ DECLARE
   v_link_code TEXT;
   v_base_url TEXT;
   v_full_url TEXT;
+  v_user_role TEXT;
 BEGIN
+  -- Determine role based on which table the trigger fired from
+  -- If trigger is on auth.users, check raw_user_meta_data
+  -- If trigger is on profiles, check role column directly
+  IF TG_TABLE_NAME = 'users' THEN
+    v_user_role := COALESCE(NEW.raw_user_meta_data->>'role', 'student');
+  ELSIF TG_TABLE_NAME = 'profiles' THEN
+    v_user_role := COALESCE(NEW.role, 'student');
+  ELSE
+    RETURN NEW;
+  END IF;
+
   -- Only process location_owner role
-  IF NEW.raw_user_meta_data->>'role' != 'location_owner' THEN
+  IF v_user_role != 'location_owner' THEN
     RETURN NEW;
   END IF;
 
@@ -44,7 +56,7 @@ BEGIN
   VALUES (
     NEW.id,
     COALESCE(v_profile.full_name, v_profile.first_name || ' ' || v_profile.last_name, 'Venue Manager'),
-    NEW.email,
+    COALESCE(v_profile.email, NEW.email),
     'venue_partner',
     'approved', -- Auto-approve venue managers
     'manual' -- Default payout method

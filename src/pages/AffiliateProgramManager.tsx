@@ -1161,22 +1161,33 @@ const AffiliateProgramManager = () => {
                             <p className="text-sm text-muted-foreground mt-1">{campaign.description || 'No description'}</p>
                             <div className="flex flex-wrap gap-2 mt-2">
                               <Badge variant="outline">{campaign.target_type}</Badge>
-                              <Badge variant="secondary">
-                                {campaign.active_commission_type === 'percentage' 
-                                  ? `${campaign.active_commission_value}%`
-                                  : campaign.active_commission_type === 'fixed'
-                                  ? `$${campaign.active_commission_value}`
-                                  : 'No commission'}
-                              </Badge>
+                              {campaign.active_commission_type && campaign.active_commission_type !== 'none' ? (
+                                <Badge variant="secondary">
+                                  {campaign.active_commission_type === 'percentage' 
+                                    ? `${campaign.active_commission_value}%`
+                                    : `$${campaign.active_commission_value}`}
+                                  {' '}Active
+                                </Badge>
+                              ) : null}
+                              {campaign.passive_commission_enabled && (
+                                <Badge variant="default">
+                                  {campaign.passive_commission_rate}% for {campaign.passive_commission_duration_months}mo
+                                </Badge>
+                              )}
                               {campaign.is_active ? (
-                                <Badge variant="default">Active</Badge>
+                                <Badge variant="default" className="bg-green-600">Active</Badge>
                               ) : (
-                                <Badge variant="outline">Inactive</Badge>
+                                <Badge variant="destructive">Paused</Badge>
                               )}
                             </div>
                             <div className="mt-2 text-xs text-muted-foreground">
                               <p>Conversion: {campaign.conversion_event}</p>
                               <p>Cookie Window: {campaign.cookie_window_days} days</p>
+                              {campaign.passive_commission_enabled && (
+                                <p className="text-green-600 font-medium">
+                                  Passive: {campaign.passive_commission_rate}% for {campaign.passive_commission_duration_months} months
+                                </p>
+                              )}
                             </div>
                           </div>
                           <Button
@@ -1625,21 +1636,86 @@ const AffiliateProgramManager = () => {
                 </Select>
               </div>
               <div>
-                <Label>Commission Value</Label>
+                <Label>Active Commission Value</Label>
                 <Input
                   type="number"
                   value={campaignForm.active_commission_value}
                   onChange={(e) => setCampaignForm({ ...campaignForm, active_commission_value: parseFloat(e.target.value) || 0 })}
+                  disabled={campaignForm.active_commission_type === 'none'}
                 />
               </div>
             </div>
-            <div>
-              <Label>Cookie Window (days)</Label>
-              <Input
-                type="number"
-                value={campaignForm.cookie_window_days}
-                onChange={(e) => setCampaignForm({ ...campaignForm, cookie_window_days: parseInt(e.target.value) || 30 })}
-              />
+            
+            {/* Passive Commission Section */}
+            <div className="border-t pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Passive Commission (Recurring)</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Ongoing commission for a set duration (e.g., 20% for 1 year)
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="passive-enabled" className="text-sm">Enable</Label>
+                  <input
+                    id="passive-enabled"
+                    type="checkbox"
+                    checked={campaignForm.passive_commission_enabled}
+                    onChange={(e) => setCampaignForm({ ...campaignForm, passive_commission_enabled: e.target.checked })}
+                    className="w-4 h-4"
+                  />
+                </div>
+              </div>
+              
+              {campaignForm.passive_commission_enabled && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Passive Commission Rate (%)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={campaignForm.passive_commission_rate}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, passive_commission_rate: parseFloat(e.target.value) || 0 })}
+                      placeholder="20"
+                    />
+                  </div>
+                  <div>
+                    <Label>Duration (months)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={campaignForm.passive_commission_duration_months}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, passive_commission_duration_months: parseInt(e.target.value) || 12 })}
+                      placeholder="12"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Cookie Window (days)</Label>
+                <Input
+                  type="number"
+                  value={campaignForm.cookie_window_days}
+                  onChange={(e) => setCampaignForm({ ...campaignForm, cookie_window_days: parseInt(e.target.value) || 30 })}
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-6">
+                <input
+                  type="checkbox"
+                  id="campaign-active"
+                  checked={campaignForm.is_active}
+                  onChange={(e) => setCampaignForm({ ...campaignForm, is_active: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="campaign-active" className="cursor-pointer">
+                  Campaign Active (Enable/Disable)
+                </Label>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setCampaignDialogOpen(false)}>
