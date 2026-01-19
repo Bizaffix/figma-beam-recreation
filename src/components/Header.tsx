@@ -75,7 +75,7 @@ export const Header = () => {
                       to="/browse"
                       className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      Browse Retreats
+                      Browse Events
                     </Link>
                     <Link
                       to="/home"
