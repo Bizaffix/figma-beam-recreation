@@ -72,12 +72,6 @@ export const Header = () => {
                 {role === 'student' && (
                   <>
                     <Link
-                      to="/browse"
-                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      Browse Events
-                    </Link>
-                    <Link
                       to="/home"
                       className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                     >
@@ -134,12 +128,6 @@ export const Header = () => {
               </>
             ) : (
               <>
-                <Link
-                  to="/browse"
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Browse Retreats
-                </Link>
                 <a
                   href="/#how-it-works"
                   onClick={handleHowItWorksClick}
@@ -240,13 +228,6 @@ export const Header = () => {
                     {role === 'student' && (
                       <>
                         <Link
-                          to="/browse"
-                          className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
-                          onClick={() => setMobileMenuOpen(false)}
-                        >
-                          Browse Retreats
-                        </Link>
-                        <Link
                           to="/home"
                           className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
                           onClick={() => setMobileMenuOpen(false)}
@@ -297,13 +278,6 @@ export const Header = () => {
                 ) : (
                   <>
                     <div className="space-y-1">
-                      <Link
-                        to="/"
-                        onClick={() => setMobileMenuOpen(false)}
-                        className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
-                      >
-                        Browse Retreats
-                      </Link>
                       <a
                         href="/#how-it-works"
                         onClick={handleHowItWorksClick}
