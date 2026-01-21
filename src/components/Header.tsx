@@ -1,7 +1,7 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { Menu, X, LogOut, User, LayoutDashboard, Compass, Home, ChevronDown } from "lucide-react";
+import { Menu, X, LogOut, User, LayoutDashboard, Compass, Home } from "lucide-react";
 import { useState } from "react";
 import {
   DropdownMenu,
@@ -53,7 +53,7 @@ export const Header = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-50 w-full border-b bg-white shadow-sm">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
@@ -71,25 +71,25 @@ export const Header = () => {
               <>
                 {role === 'student' && (
                   <>
-                    <Link
-                      to="/home"
-                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      My Dashboard
-                    </Link>
+                <Link
+                  to="/home"
+                  className="text-sm font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
+                >
+                  My Dashboard
+                </Link>
                   </>
                 )}
                 {role === 'instructor' && (
                   <>
                     <Link
                       to="/instructor/browse"
-                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-sm font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
                     >
                       Browse
                     </Link>
                     <Link
                       to="/instructor/dashboard"
-                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-sm font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
                     >
                       Dashboard
                     </Link>
@@ -97,7 +97,7 @@ export const Header = () => {
                 )}
                 <Link
                   to="/profile"
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-sm font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
                 >
                   Profile
                 </Link>
@@ -131,7 +131,7 @@ export const Header = () => {
                 <a
                   href="/#how-it-works"
                   onClick={handleHowItWorksClick}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  className="text-sm font-medium text-[#387C7F] hover:text-[#459394] transition-colors cursor-pointer"
                 >
                   How It Works
                 </a>
@@ -142,28 +142,12 @@ export const Header = () => {
           {/* Auth Buttons - Always Visible */}
           {!user && (
             <div className="flex items-center space-x-3">
-              <Button asChild variant="ghost" size="sm">
+              <Button asChild variant="ghost" size="sm" className="text-[#387C7F] hover:text-[#459394] hover:bg-[#459394]/10">
                 <Link to="/login">Sign In</Link>
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" className="flex items-center">
-                    Sign Up
-                    <ChevronDown className="w-4 h-4 ml-2" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={() => navigate('/signup?role=student')}>
-                    As Attendee
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/signup?role=instructor')}>
-                    As Organizer
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/signup?role=location_owner')}>
-                    As Venue
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button asChild size="sm" className="bg-[#459394] hover:bg-[#387C7F] text-white">
+                <Link to="/signup">Sign Up</Link>
+              </Button>
             </div>
           )}
 
@@ -229,7 +213,7 @@ export const Header = () => {
                       <>
                         <Link
                           to="/home"
-                          className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                          className="block py-3 text-base font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
                           onClick={() => setMobileMenuOpen(false)}
                         >
                           My Dashboard
@@ -240,14 +224,14 @@ export const Header = () => {
                       <>
                         <Link
                           to="/instructor/browse"
-                          className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                          className="block py-3 text-base font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
                           onClick={() => setMobileMenuOpen(false)}
                         >
                           Browse
                         </Link>
                         <Link
                           to="/instructor/dashboard"
-                          className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                          className="block py-3 text-base font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
                           onClick={() => setMobileMenuOpen(false)}
                         >
                           Dashboard
@@ -256,7 +240,7 @@ export const Header = () => {
                     )}
                     <Link
                       to="/profile"
-                      className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                      className="block py-3 text-base font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       Profile
@@ -281,7 +265,7 @@ export const Header = () => {
                       <a
                         href="/#how-it-works"
                         onClick={handleHowItWorksClick}
-                        className="block py-3 text-base font-medium text-foreground hover:text-primary transition-colors"
+                        className="block py-3 text-base font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
                       >
                         How It Works
                       </a>

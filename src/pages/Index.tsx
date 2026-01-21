@@ -82,7 +82,7 @@ const Index = () => {
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("upcoming"); // upcoming, newest, price-low, price-high
-
+  
   // Fetch published retreats from Supabase
   useEffect(() => {
     const fetchRetreats = async () => {
@@ -472,19 +472,15 @@ const Index = () => {
       {!user && <Header />}
       
       {/* Hero Section */}
-      <div className="bg-gradient-primary text-white px-4 sm:px-6 py-6 sm:py-8 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full blur-3xl"></div>
-        </div>
+      <div className={`bg-white px-4 sm:px-6 py-6 sm:py-8 relative overflow-hidden ${!user ? 'pt-20' : ''}`}>
         <div className="relative z-10">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Browse Events</h1>
-          <p className="text-white/90 text-base sm:text-lg">Discover Events & Venues</p>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-[#387C7F]">Browse Events</h1>
+          <p className="text-[#459394] text-base sm:text-lg">Discover Events & Venues</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="px-4 sm:px-6 -mt-4 mb-4 sm:mb-6">
+      <div className="px-4 sm:px-6 mb-4 sm:mb-6">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "events" | "venues")} className="w-full">
           <TabsList className="grid w-full grid-cols-2 bg-card shadow-lg h-10 sm:h-11">
             <TabsTrigger value="events" className="text-sm sm:text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
@@ -533,10 +529,10 @@ const Index = () => {
         <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
           <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary flex-shrink-0" />
           <span className="font-medium truncate">
-            {loading ? (
-              "Loading..."
-            ) : (
-              <>
+              {loading ? (
+                "Loading..."
+              ) : (
+                <>
                 <span className="text-foreground font-semibold">
                   {activeTab === "events" ? filteredAndSortedEvents.length : filteredAndSortedVenues.length}
                 </span>{" "}
@@ -544,12 +540,12 @@ const Index = () => {
                   ? (filteredAndSortedEvents.length === 1 ? "event" : "events")
                   : (filteredAndSortedVenues.length === 1 ? "venue" : "venues")
                 } found
-              </>
-            )}
-          </span>
+                </>
+              )}
+            </span>
         </div>
-      </div>
-
+          </div>
+          
       {/* Feed Content */}
       <div className="px-4 sm:px-6 max-w-7xl mx-auto">
         {loading ? (
@@ -632,9 +628,9 @@ const Index = () => {
                       <Button variant="outline" onClick={clearFilters} className="gap-2">
                         <X className="w-4 h-4" />
                         Clear Filters
-                      </Button>
-                    )}
-                  </div>
+            </Button>
+          )}
+        </div>
                 )}
               </TabsContent>
 
@@ -656,7 +652,7 @@ const Index = () => {
                             />
                             <Badge className="absolute top-2 right-2 sm:top-3 sm:right-3 text-xs bg-green-100 text-green-700">
                               {venue.status}
-                            </Badge>
+              </Badge>
                           </div>
                           <CardContent className="p-4 sm:p-5 flex-1">
                             <h3 className="text-lg sm:text-xl font-semibold text-card-foreground mb-2 line-clamp-2">{venue.property_name}</h3>
@@ -668,40 +664,40 @@ const Index = () => {
                             <div className="flex flex-wrap gap-2 mb-3 sm:mb-4">
                               <Badge variant="outline" className="text-xs">
                                 Sleeps {venue.sleeps}
-                              </Badge>
+              </Badge>
                               <Badge variant="outline" className="text-xs">
                                 Max {venue.max_quilters} quilters
-                              </Badge>
-                            </div>
+              </Badge>
+          </div>
                             <div className="flex items-center justify-between pt-2 border-t gap-2">
                               <span className="text-xs sm:text-sm text-muted-foreground">View venue details</span>
                               <Button variant="link" className="text-primary text-xs sm:text-sm p-0 h-auto">
                                 View Details →
                               </Button>
-                            </div>
+      </div>
                           </CardContent>
-                        </div>
+            </div>
                       </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-16 px-4">
-                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-6">
-                      <Search className="w-10 h-10 text-muted-foreground" />
-                    </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-16 px-4">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-6">
+              <Search className="w-10 h-10 text-muted-foreground" />
+            </div>
                     <h3 className="text-xl font-semibold text-foreground mb-2">No venues found</h3>
-                    <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                      {searchQuery || hasActiveFilters 
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              {searchQuery || hasActiveFilters 
                         ? "Try adjusting your search or filters to find more venues." 
                         : "Check back soon for new venues!"}
-                    </p>
-                    {(searchQuery || hasActiveFilters) && (
+            </p>
+            {(searchQuery || hasActiveFilters) && (
                       <Button variant="outline" onClick={clearFilters} className="gap-2">
-                        <X className="w-4 h-4" />
-                        Clear Filters
-                      </Button>
-                    )}
-                  </div>
+                <X className="w-4 h-4" />
+                Clear Filters
+              </Button>
+            )}
+          </div>
                 )}
               </TabsContent>
             </Tabs>
@@ -725,7 +721,7 @@ const Index = () => {
                     alt={selectedEvent.title}
                     className="w-full h-full object-cover"
                   />
-                </div>
+              </div>
 
                 {/* Event Details */}
                 <div className="space-y-3 sm:space-y-4">
@@ -773,7 +769,7 @@ const Index = () => {
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-3 sm:pt-4 border-t gap-3">
-                    <div>
+              <div>
                       <p className="text-xl sm:text-2xl font-bold text-primary">${selectedEvent.price}</p>
                       <p className="text-xs sm:text-sm text-muted-foreground">per person</p>
                     </div>
@@ -917,67 +913,67 @@ const Index = () => {
             {/* Date Range Filters - Only for events */}
             {activeTab === "events" && (
               <div className="space-y-3 sm:space-y-4">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
                   <CalendarIcon className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
                   <Label className="text-base sm:text-lg font-semibold">Date Range</Label>
-                </div>
+              </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="space-y-2">
+                <div className="space-y-2">
                     <Label className="text-xs sm:text-sm font-medium text-muted-foreground">From Date</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
                           className={`w-full justify-start text-left font-normal h-11 sm:h-12 border-2 transition-all text-sm sm:text-base ${
-                            dateFrom ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
-                          }`}
-                        >
+                          dateFrom ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
+                        }`}
+                      >
                           <CalendarIcon className="mr-2 sm:mr-3 h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary flex-shrink-0" />
                           <span className={`truncate ${dateFrom ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
-                            {dateFrom ? format(dateFrom, "PPP") : "Select start date"}
-                          </span>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={dateFrom}
-                          onSelect={setDateFrom}
-                          initialFocus
-                          className="rounded-md border"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-2">
+                          {dateFrom ? format(dateFrom, "PPP") : "Select start date"}
+                        </span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dateFrom}
+                        onSelect={setDateFrom}
+                        initialFocus
+                        className="rounded-md border"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
                     <Label className="text-xs sm:text-sm font-medium text-muted-foreground">To Date</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
                           className={`w-full justify-start text-left font-normal h-11 sm:h-12 border-2 transition-all text-sm sm:text-base ${
-                            dateTo ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
-                          }`}
-                        >
+                          dateTo ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
+                        }`}
+                      >
                           <CalendarIcon className="mr-2 sm:mr-3 h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary flex-shrink-0" />
                           <span className={`truncate ${dateTo ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
-                            {dateTo ? format(dateTo, "PPP") : "Select end date"}
-                          </span>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={dateTo}
-                          onSelect={setDateTo}
-                          initialFocus
-                          disabled={(date) => dateFrom ? date < dateFrom : false}
-                          className="rounded-md border"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                          {dateTo ? format(dateTo, "PPP") : "Select end date"}
+                        </span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dateTo}
+                        onSelect={setDateTo}
+                        initialFocus
+                        disabled={(date) => dateFrom ? date < dateFrom : false}
+                        className="rounded-md border"
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
+              </div>
               </div>
             )}
 
@@ -987,7 +983,7 @@ const Index = () => {
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
                   <Label className="text-base sm:text-lg font-semibold">Number of Days</Label>
-                </div>
+            </div>
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-2">
                     <Label className="text-xs sm:text-sm font-medium text-muted-foreground">Min Days</Label>
@@ -1027,8 +1023,8 @@ const Index = () => {
 
             {/* Event Type Filter - Only for events */}
             {activeTab === "events" && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
                   <Monitor className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
                   <Label className="text-base sm:text-lg font-semibold">Event Type</Label>
                 </div>

@@ -85,6 +85,8 @@ export const BrowseSection = () => {
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
+  const [zipCode, setZipCode] = useState<string>("");
+  const [radius, setRadius] = useState<string>("all");
   const [minDays, setMinDays] = useState<string>("all");
   const [maxDays, setMaxDays] = useState<string>("all");
   const [eventType, setEventType] = useState<string>("all");
@@ -197,6 +199,33 @@ export const BrowseSection = () => {
     return lower.includes('online') || lower.includes('virtual') || lower.includes('zoom');
   };
 
+  // Extract zip code from location string
+  const extractZipCode = (location: string): string | null => {
+    const zipMatch = location.match(/\b\d{5}(-\d{4})?\b/);
+    return zipMatch ? zipMatch[0] : null;
+  };
+
+  // Check if location matches zip code filter (basic implementation)
+  const matchesZipCodeFilter = (location: string, searchZip: string, radiusMiles: string): boolean => {
+    if (!searchZip) return true;
+    
+    const locationZip = extractZipCode(location);
+    if (!locationZip) {
+      // If location doesn't have a zip code, check if location string contains the zip code
+      return location.includes(searchZip);
+    }
+    
+    // For now, exact match. Proper radius calculation would require geocoding API
+    // This is a placeholder - in production, you'd use coordinates and calculate distance
+    if (radiusMiles === "all") {
+      return locationZip.startsWith(searchZip.substring(0, 3)) || locationZip === searchZip;
+    }
+    
+    // Basic implementation: if radius is specified, we'd need coordinates
+    // For now, we'll do a prefix match for same area code
+    return locationZip.startsWith(searchZip.substring(0, 3));
+  };
+
   // Parse date string
   const parseDate = (dateStr: string): Date | null => {
     if (!dateStr) return null;
@@ -228,6 +257,11 @@ export const BrowseSection = () => {
 
     if (selectedLocation !== "all") {
       filtered = filtered.filter((retreat) => retreat.location === selectedLocation);
+    }
+
+    // Filter by zip code and radius
+    if (zipCode) {
+      filtered = filtered.filter((retreat) => matchesZipCodeFilter(retreat.location, zipCode, radius));
     }
 
     if (dateFrom) {
@@ -290,7 +324,7 @@ export const BrowseSection = () => {
     });
 
     return filtered;
-  }, [retreats, searchQuery, selectedLocation, dateFrom, dateTo, minDays, maxDays, eventType, minPrice, maxPrice, sortBy]);
+  }, [retreats, searchQuery, selectedLocation, zipCode, radius, dateFrom, dateTo, minDays, maxDays, eventType, minPrice, maxPrice, sortBy]);
 
   // Filter and sort venues
   const filteredAndSortedVenues = useMemo(() => {
@@ -309,12 +343,17 @@ export const BrowseSection = () => {
       filtered = filtered.filter((venue) => venue.location === selectedLocation);
     }
 
+    // Filter by zip code and radius
+    if (zipCode) {
+      filtered = filtered.filter((venue) => matchesZipCodeFilter(venue.location, zipCode, radius));
+    }
+
     filtered.sort((a, b) => {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
     return filtered;
-  }, [venues, searchQuery, selectedLocation]);
+  }, [venues, searchQuery, selectedLocation, zipCode, radius]);
 
   // Fetch venue for selected event
   useEffect(() => {
@@ -404,12 +443,14 @@ export const BrowseSection = () => {
     fetchVenueEvents();
   }, [selectedVenue]);
 
-  const hasActiveFilters = dateFrom || dateTo || selectedLocation !== "all" || minDays !== "all" || maxDays !== "all" || eventType !== "all" || minPrice || maxPrice || sortBy !== "upcoming";
+  const hasActiveFilters = dateFrom || dateTo || selectedLocation !== "all" || zipCode || radius !== "all" || minDays !== "all" || maxDays !== "all" || eventType !== "all" || minPrice || maxPrice || sortBy !== "upcoming";
 
   const clearFilters = () => {
     setDateFrom(undefined);
     setDateTo(undefined);
     setSelectedLocation("all");
+    setZipCode("");
+    setRadius("all");
     setMinDays("all");
     setMaxDays("all");
     setEventType("all");
@@ -433,7 +474,7 @@ export const BrowseSection = () => {
         {/* Section Header - Craft-inspired */}
         <div className="mb-8 sm:mb-10 text-center">
           <h2 className="text-3xl sm:text-4xl font-semibold text-foreground mb-3 text-craft-heading">
-            Discover Your Next Quilting Adventure
+            Discover Your Next Crafting Adventure
           </h2>
           <p className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto text-craft-body">
             Explore upcoming retreats and beautiful venues where creativity comes to life
@@ -445,11 +486,11 @@ export const BrowseSection = () => {
           <TabsList className="grid w-full grid-cols-2 bg-[#FAFAFA] border border-gray-200/60 rounded-2xl p-1.5 h-auto shadow-craft max-w-md mx-auto">
             <TabsTrigger 
               value="events" 
-              className="data-[state=active]:bg-[#459394] data-[state=active]:text-white data-[state=active]:shadow-craft rounded-xl py-3 px-5 transition-craft"
+              className="group data-[state=active]:bg-[#459394] data-[state=active]:text-white data-[state=active]:shadow-craft rounded-xl py-3 px-5 transition-craft"
             >
               <div className="flex items-center gap-2.5 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-[#459394]/10 data-[state=active]:bg-white/20 transition-craft">
-                  <Scissors className="w-4 h-4 sm:w-5 sm:h-5 text-[#387C7F] data-[state=active]:text-white transition-craft" />
+                <div className="p-1.5 sm:p-2 rounded-lg bg-[#459394]/10 group-data-[state=active]:bg-white/20 transition-craft">
+                  <Scissors className={`w-4 h-4 sm:w-5 sm:h-5 transition-craft ${activeTab === "events" ? "text-white" : "text-[#387C7F]"}`} />
                 </div>
                 <span className="font-medium text-sm sm:text-base">Events</span>
               </div>
@@ -812,22 +853,24 @@ export const BrowseSection = () => {
 
       {/* Filter Sheet - Simplified for Home Page */}
       <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
-        <SheetContent side="bottom" className="h-[85vh] max-h-[700px] rounded-t-3xl p-4 sm:p-6">
-          <SheetHeader className="text-left pb-3 sm:pb-4 border-b">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="p-1.5 sm:p-2 rounded-lg bg-[#FAB130]/10">
-                <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-[#FAB130]" />
+        <SheetContent side="bottom" className="h-[85vh] max-h-[700px] rounded-t-3xl p-0 flex flex-col">
+          <div className="p-4 sm:p-6 pb-3 sm:pb-4 border-b">
+            <SheetHeader className="text-left">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-[#FAB130]/10">
+                  <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-[#FAB130]" />
+                </div>
+                <div>
+                  <SheetTitle className="text-xl sm:text-2xl">Filter & Sort</SheetTitle>
+                  <SheetDescription className="text-sm sm:text-base mt-1">
+                    Refine your search
+                  </SheetDescription>
+                </div>
               </div>
-              <div>
-                <SheetTitle className="text-xl sm:text-2xl">Filter & Sort</SheetTitle>
-                <SheetDescription className="text-sm sm:text-base mt-1">
-                  Refine your search
-                </SheetDescription>
-              </div>
-            </div>
-          </SheetHeader>
+            </SheetHeader>
+          </div>
           
-          <div className="mt-4 sm:mt-6 space-y-6 sm:space-y-8 overflow-y-auto pb-20 sm:pb-24 max-h-[calc(85vh-180px)]">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 space-y-6 sm:space-y-8">
             {activeTab === "events" && (
               <>
                 <div className="space-y-3 sm:space-y-4">
@@ -859,20 +902,30 @@ export const BrowseSection = () => {
                 </div>
 
                 <div className="space-y-3">
-                  <Label className="text-base sm:text-lg font-semibold">Location</Label>
-                  <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                    <SelectTrigger className="h-11 sm:h-12 text-sm sm:text-base">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Locations</SelectItem>
-                      {uniqueLocations.map((location) => (
-                        <SelectItem key={location} value={location}>
-                          {location}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-base sm:text-lg font-semibold">Search by Zip Code</Label>
+                  <div className="space-y-3">
+                    <Input
+                      type="text"
+                      placeholder="Enter zip code"
+                      value={zipCode}
+                      onChange={(e) => setZipCode(e.target.value)}
+                      className="h-11 sm:h-12 text-sm sm:text-base"
+                    />
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Radius Within:</Label>
+                      <Select value={radius} onValueChange={setRadius}>
+                        <SelectTrigger className="h-11 sm:h-12 text-sm sm:text-base">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="10">10 Miles</SelectItem>
+                          <SelectItem value="50">50 Miles</SelectItem>
+                          <SelectItem value="200">200 Miles</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -899,25 +952,35 @@ export const BrowseSection = () => {
 
             {activeTab === "venues" && (
               <div className="space-y-3">
-                <Label className="text-base sm:text-lg font-semibold">Location</Label>
-                <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                  <SelectTrigger className="h-11 sm:h-12 text-sm sm:text-base">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Locations</SelectItem>
-                    {uniqueLocations.map((location) => (
-                      <SelectItem key={location} value={location}>
-                        {location}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-base sm:text-lg font-semibold">Search by Zip Code</Label>
+                <div className="space-y-3">
+                  <Input
+                    type="text"
+                    placeholder="Enter zip code"
+                    value={zipCode}
+                    onChange={(e) => setZipCode(e.target.value)}
+                    className="h-11 sm:h-12 text-sm sm:text-base"
+                  />
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-muted-foreground">Radius Within:</Label>
+                    <Select value={radius} onValueChange={setRadius}>
+                      <SelectTrigger className="h-11 sm:h-12 text-sm sm:text-base">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="10">10 Miles</SelectItem>
+                        <SelectItem value="50">50 Miles</SelectItem>
+                        <SelectItem value="200">200 Miles</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
             )}
           </div>
 
-          <SheetFooter className="flex-row gap-3 border-t border-gray-200/60 pt-4 mt-4">
+          <SheetFooter className="flex-row gap-3 border-t border-gray-200/60 pt-4 pb-4 px-4 sm:px-6 bg-background sticky bottom-0 z-10">
             <Button
               variant="outline"
               onClick={clearFilters}

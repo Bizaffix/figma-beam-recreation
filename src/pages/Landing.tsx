@@ -25,95 +25,6 @@ const Landing = () => {
       <Header />
       
       <main className="flex-1 w-full overflow-x-hidden">
-      {/* Primary CTA Buttons at Top */}
-      <section className="bg-gradient-primary text-white py-6 sm:py-8">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 justify-center items-center">
-            <Button 
-              asChild 
-              size="lg" 
-              className="bg-white text-[#387C7F] hover:bg-white/90 hover:text-[#387C7F] transition-all shadow-xl hover:shadow-2xl w-full sm:w-auto min-w-[200px]"
-            >
-              <Link to="/browse">
-                I'm a Quilter – Find a Retreat
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Link>
-            </Button>
-            <Button 
-              asChild 
-              size="lg" 
-              className="border-2 border-white bg-white/10 backdrop-blur-sm text-white hover:bg-white hover:text-[#387C7F] transition-all shadow-xl hover:shadow-2xl w-full sm:w-auto min-w-[200px]"
-            >
-              <Link to="/signup?role=instructor">
-                I'm an Instructor/Host – List My Retreat
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Link>
-            </Button>
-            <Button 
-              asChild 
-              size="lg" 
-              className="border-2 border-white bg-white/10 backdrop-blur-sm text-white hover:bg-white hover:text-[#387C7F] transition-all shadow-xl hover:shadow-2xl w-full sm:w-auto min-w-[200px]"
-            >
-              <Link to="/signup?role=location_owner">
-                I Own a Property – Register My Location
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Hero Section */}
-      <section id="hero" className="relative text-white overflow-hidden min-h-[85vh] sm:min-h-[85vh] md:min-h-[70vh] lg:min-h-[65vh] flex items-center">
-        {/* Background Image with Overlay */}
-        <div className="absolute inset-0">
-          <img
-            src="/Image1.jpg"
-            alt="Quilt retreat"
-            className="w-full h-full object-cover"
-          />
-          {/* Warm gradient overlay - transparent white top to coral/golden yellow bottom */}
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#FD8865]/25"></div>
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#FAB130]/20"></div>
-          {/* Base overlay for contrast */}
-          <div className="absolute inset-0 bg-gradient-to-br from-[#459394]/90 via-[#387C7F]/85 to-[#FD8865]/90"></div>
-          <div className="absolute inset-0 bg-black/30"></div>
-        </div>
-        
-        {/* Content */}
-        <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 md:py-28 lg:py-32">
-          <div className="max-w-3xl mx-auto text-center space-y-4 sm:space-y-5 md:space-y-5 lg:space-y-6">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-5xl font-bold leading-tight tracking-tight" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.2)' }}>
-              Book Your Next Quilt Retreat, Anywhere Inspiration Strikes
-            </h1>
-            <p className="text-base sm:text-lg md:text-lg lg:text-xl text-white/95 leading-relaxed max-w-2xl mx-auto font-medium" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.2)' }}>
-              Cozy cabins, bustling studios, seaside inns, and hometown guild halls—BookMyQuiltRetreat.com connects passionate instructors with eager quilters for unforgettable, fully coordinated retreats and classes.
-            </p>
-            
-            {/* Key Bullets with Craft-inspired Icons */}
-            <div className="flex flex-col gap-3 sm:gap-3 md:gap-3.5 text-white/95 max-w-xl mx-auto pt-2 sm:pt-3">
-              <div className="relative flex items-start gap-3 sm:gap-3.5 bg-white/10 backdrop-blur-sm rounded-xl p-4 sm:p-4 md:p-5 border border-white/20">
-                {/* Subtle stitch motif decoration */}
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#FAB130]/30 via-transparent to-[#FD8865]/30 rounded-l-xl"></div>
-                <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 md:w-6 md:h-6 mt-0.5 flex-shrink-0 text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
-                <span className="text-sm sm:text-base md:text-base leading-relaxed text-left font-medium" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.15)' }}>Discover quilt retreats and classes across the country by date, location, theme, or skill level.</span>
-              </div>
-              <div className="relative flex items-start gap-3 sm:gap-3.5 bg-white/10 backdrop-blur-sm rounded-xl p-4 sm:p-4 md:p-5 border border-white/20">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#FAB130]/30 via-transparent to-[#FD8865]/30 rounded-l-xl"></div>
-                <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 md:w-6 md:h-6 mt-0.5 flex-shrink-0 text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
-                <span className="text-sm sm:text-base md:text-base leading-relaxed text-left font-medium" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.15)' }}>Host your own retreat or workshop and let students handle their own bookings and payments.</span>
-              </div>
-              <div className="relative flex items-start gap-3 sm:gap-3.5 bg-white/10 backdrop-blur-sm rounded-xl p-4 sm:p-4 md:p-5 border border-white/20">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#FAB130]/30 via-transparent to-[#FD8865]/30 rounded-l-xl"></div>
-                <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 md:w-6 md:h-6 mt-0.5 flex-shrink-0 text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
-                <span className="text-sm sm:text-base md:text-base leading-relaxed text-left font-medium" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.15)' }}>Offer or enjoy optional local food catering so no one has to worry about meals.</span>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </section>
-
       {/* Browse Section - Airbnb Style */}
       <BrowseSection />
 
@@ -123,7 +34,7 @@ const Landing = () => {
           <div className="text-center mb-8 sm:mb-10 md:mb-12">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 sm:mb-3">Choose Your Path</h2>
             <p className="text-sm sm:text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
-              Select the option that best describes you and start your quilting journey today
+              Select the option that best describes you and start your crafting journey today
             </p>
           </div>
           
@@ -170,7 +81,7 @@ const Landing = () => {
                 </div>
                 <h3 className="text-xl sm:text-2xl font-bold">For Instructors & Hosts</h3>
                 <p className="text-base sm:text-lg text-muted-foreground italic">
-                  "I teach, organize, or host quilting retreats and workshops"
+                  "I teach, organize, or host crafting retreats and workshops"
                 </p>
                 <p className="text-sm sm:text-base text-muted-foreground">
                   I need an easier way to fill seats and manage registrations
@@ -203,7 +114,7 @@ const Landing = () => {
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent z-10"></div>
               <img 
                 src="/Image3.jpg" 
-                alt="Quilting workshop" 
+                alt="Crafting workshop" 
                 className="w-full h-40 sm:h-56 md:h-72 lg:h-80 object-cover transition-transform duration-700 group-hover:scale-105"
               />
             </div>
