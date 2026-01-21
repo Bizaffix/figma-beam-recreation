@@ -418,76 +418,78 @@ export const BrowseSection = () => {
     setSortBy("upcoming");
   };
 
+  // Logo colors: Exact hex values converted to Tailwind
+  // #387C7F (dark teal), #459394 (light teal), #FAB130 (golden), #FD8865 (light coral), #EF684B (dark coral)
   const levelColors = {
-    Any: "bg-blue-100 text-blue-700",
-    Beginner: "bg-emerald-100 text-emerald-700",
-    Intermediate: "bg-amber-100 text-amber-700",
-    Advanced: "bg-rose-100 text-rose-700",
+    Any: "bg-[#459394] text-white",
+    Beginner: "bg-[#459394] text-white",
+    Intermediate: "bg-[#FAB130] text-white",
+    Advanced: "bg-[#EF684B] text-white",
   };
 
   return (
-    <section className="py-8 sm:py-12 bg-white">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
-        <div className="mb-6 sm:mb-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
+    <section className="py-12 sm:py-16 bg-white w-full overflow-x-hidden">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 w-full max-w-full">
+        {/* Section Header - Craft-inspired */}
+        <div className="mb-8 sm:mb-10 text-center">
+          <h2 className="text-3xl sm:text-4xl font-semibold text-foreground mb-3 text-craft-heading">
             Discover Your Next Quilting Adventure
           </h2>
-          <p className="text-muted-foreground text-sm sm:text-base">
+          <p className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto text-craft-body">
             Explore upcoming retreats and beautiful venues where creativity comes to life
           </p>
         </div>
 
-        {/* Tabs with Cute Icons */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "events" | "venues")} className="w-full mb-6">
-          <TabsList className="grid w-full grid-cols-2 bg-white border-2 border-primary/20 rounded-xl p-1 h-auto">
+        {/* Tabs with Cute Icons - Soft, craft-inspired */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "events" | "venues")} className="w-full mb-8">
+          <TabsList className="grid w-full grid-cols-2 bg-[#FAFAFA] border border-gray-200/60 rounded-2xl p-1.5 h-auto shadow-craft max-w-md mx-auto">
             <TabsTrigger 
               value="events" 
-              className="data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg py-3 px-4 transition-all"
+              className="data-[state=active]:bg-[#459394] data-[state=active]:text-white data-[state=active]:shadow-craft rounded-xl py-3 px-5 transition-craft"
             >
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 data-[state=active]:bg-white/20">
-                  <Scissors className="w-4 h-4 sm:w-5 sm:h-5" />
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-[#459394]/10 data-[state=active]:bg-white/20 transition-craft">
+                  <Scissors className="w-4 h-4 sm:w-5 sm:h-5 text-[#387C7F] data-[state=active]:text-white transition-craft" />
                 </div>
-                <span className="font-semibold text-sm sm:text-base">Events</span>
+                <span className="font-medium text-sm sm:text-base">Events</span>
               </div>
             </TabsTrigger>
             <TabsTrigger 
               value="venues" 
-              className="data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg py-3 px-4 transition-all"
+              className="data-[state=active]:bg-[#FD8865] data-[state=active]:text-white data-[state=active]:shadow-craft rounded-xl py-3 px-5 transition-craft"
             >
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 data-[state=active]:bg-white/20">
-                  <Home className="w-4 h-4 sm:w-5 sm:h-5" />
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-[#FD8865]/10 data-[state=active]:bg-white/20 transition-craft">
+                  <Home className="w-4 h-4 sm:w-5 sm:h-5 text-[#EF684B] data-[state=active]:text-white transition-craft" />
                 </div>
-                <span className="font-semibold text-sm sm:text-base">Venues</span>
+                <span className="font-medium text-sm sm:text-base">Venues</span>
               </div>
             </TabsTrigger>
           </TabsList>
 
-          {/* Search Bar */}
-          <div className="flex gap-2 sm:gap-3 mb-4 sm:mb-6 mt-6">
+          {/* Search Bar - Soft, welcoming */}
+          <div className="flex gap-3 sm:gap-4 mb-8 mt-8 max-w-2xl mx-auto">
             <div className="relative flex-1">
-              <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input
                 placeholder={activeTab === "events" ? "Search events..." : "Search venues..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 sm:pl-12 pr-4 bg-white border-2 border-primary/20 focus:border-primary h-12 sm:h-14 text-sm sm:text-base rounded-xl"
+                className="pl-12 pr-4 bg-white border border-gray-200/60 focus:border-[#459394] focus:ring-2 focus:ring-[#459394]/20 h-14 text-base rounded-2xl shadow-craft transition-craft"
               />
             </div>
             <Button 
               size="icon" 
-              className={`h-12 w-12 sm:h-14 sm:w-14 border-2 transition-all rounded-xl shadow-md hover:shadow-lg relative ${
+              className={`h-14 w-14 border transition-craft rounded-2xl shadow-craft hover:shadow-craft-hover relative ${
                 hasActiveFilters 
-                  ? 'bg-primary text-white border-primary shadow-lg' 
-                  : 'bg-primary/10 border-primary text-primary hover:bg-primary hover:text-white hover:border-primary'
+                  ? 'bg-[#FAB130] text-white border-[#FAB130]' 
+                  : 'bg-[#FAB130]/10 border-[#FAB130]/30 text-[#FAB130] hover:bg-[#FAB130] hover:text-white hover:border-[#FAB130]'
               }`}
               onClick={() => setFilterSheetOpen(true)}
             >
-              <SlidersHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
+              <SlidersHorizontal className="w-5 h-5" />
               {hasActiveFilters && (
-                <span className="absolute -top-1 -right-1 h-3 w-3 bg-accent rounded-full border-2 border-white"></span>
+                <span className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-[#EF684B] rounded-full border-2 border-white shadow-craft"></span>
               )}
             </Button>
           </div>
@@ -495,8 +497,8 @@ export const BrowseSection = () => {
           {/* Feed Content - Horizontal Scroll */}
           {loading ? (
             <div className="text-center py-12">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-4">
-                <Sparkles className="w-6 h-6 text-primary animate-pulse" />
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#459394]/10 mb-4">
+                <Sparkles className="w-6 h-6 text-[#459394] animate-pulse" />
               </div>
               <p className="text-muted-foreground">Loading...</p>
             </div>
@@ -510,7 +512,7 @@ export const BrowseSection = () => {
                       {filteredAndSortedEvents.map((event) => (
                         <CarouselItem key={event.id} className="pl-2 sm:pl-4 basis-full sm:basis-1/2 lg:basis-1/3 xl:basis-1/4">
                           <Card 
-                            className="overflow-hidden hover:shadow-2xl transition-all duration-300 cursor-pointer border border-border hover:border-primary/50 rounded-2xl bg-white group"
+                            className="overflow-hidden hover:shadow-craft-hover hover:scale-[1.02] transition-craft cursor-pointer border border-gray-200/60 hover:border-[#459394]/40 rounded-2xl bg-white group shadow-craft"
                             onClick={() => setSelectedEvent(event)}
                           >
                             {/* Image Section */}
@@ -524,68 +526,68 @@ export const BrowseSection = () => {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="absolute top-3 right-3 h-9 w-9 bg-white/90 hover:bg-white rounded-full shadow-md hover:shadow-lg z-10"
+                                className="absolute top-3 right-3 h-10 w-10 bg-white/95 hover:bg-white rounded-full shadow-craft hover:shadow-craft-hover z-10 transition-craft"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   // Handle save functionality
                                 }}
                               >
-                                <Heart className="w-4 h-4 text-gray-700 hover:text-primary hover:fill-primary transition-colors" />
+                                <Heart className="w-5 h-5 text-gray-600 hover:text-[#EF684B] hover:fill-[#EF684B] transition-craft" />
                               </Button>
-                              {/* Level Badge - Top Left */}
-                              <Badge className={`absolute top-3 left-3 text-xs font-semibold px-2.5 py-1 shadow-md ${levelColors[event.level] || levelColors.Beginner}`}>
+                              {/* Level Badge - Top Left - Pill-shaped, larger */}
+                              <Badge className={`absolute top-3 left-3 badge-pill font-semibold shadow-craft text-xs px-4 py-1.5 ${levelColors[event.level] || levelColors.Beginner}`}>
                                 {event.level}
                               </Badge>
                               {/* Guest Favorite Badge - Optional, can add logic later */}
                               {event.spots_available < event.total_spots * 0.3 && (
-                                <Badge className="absolute bottom-3 left-3 text-xs font-semibold px-2.5 py-1 bg-white/95 text-gray-800 shadow-md border border-gray-200">
+                                <Badge className="absolute bottom-3 left-3 badge-pill font-medium bg-white/95 text-gray-700 shadow-craft border border-gray-200/60">
                                   Popular
                                 </Badge>
                               )}
                             </div>
                             
-                            {/* Content Section */}
-                            <CardContent className="p-4 space-y-2.5">
+                            {/* Content Section - More breathing room */}
+                            <CardContent className="p-6 sm:p-7 space-y-4">
                               {/* Location */}
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <MapPin className="w-3 h-3 flex-shrink-0" />
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <MapPin className="w-4 h-4 flex-shrink-0 text-[#387C7F]" />
                                 <span className="line-clamp-1 font-medium">{event.location || "Location TBD"}</span>
                               </div>
                               
                               {/* Title */}
-                              <h3 className="font-semibold text-base leading-tight line-clamp-2 text-foreground group-hover:text-primary transition-colors min-h-[2.5rem]">
+                              <h3 className="font-semibold text-lg leading-snug line-clamp-2 text-foreground group-hover:text-[#387C7F] transition-craft min-h-[3rem] text-craft-heading">
                                 {event.title || "Untitled Event"}
                               </h3>
                               
                               {/* Instructor */}
-                              <p className="text-xs text-muted-foreground line-clamp-1">
+                              <p className="text-sm text-muted-foreground line-clamp-1 text-craft-body">
                                 with {event.instructor?.name || "Organizer"}
                               </p>
                               
                               {/* Date & Duration */}
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <CalendarIcon className="w-3 h-3 flex-shrink-0" />
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <CalendarIcon className="w-4 h-4 flex-shrink-0 text-[#387C7F]" />
                                 <span className="line-clamp-1">{event.date || "Date TBD"}</span>
                                 {event.duration && (
                                   <>
-                                    <span>•</span>
+                                    <span className="text-gray-300">•</span>
                                     <span>{event.duration}</span>
                                   </>
                                 )}
                               </div>
                               
-                              {/* Price & Availability */}
-                              <div className="flex items-center justify-between pt-2 border-t">
-                                <div className="flex flex-col">
-                                  <div className="flex items-baseline gap-1">
-                                    <span className="text-lg font-bold text-primary">
+                              {/* Price & Availability - Soft divider with more spacing */}
+                              <div className="flex items-center justify-between pt-4 border-t border-gray-200/60 mt-1">
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="flex items-baseline gap-1.5">
+                                    <span className="text-xl font-bold" style={{ color: '#FD8865' }}>
                                       ${event.price ? event.price.toLocaleString() : "0"}
                                     </span>
                                     <span className="text-xs text-muted-foreground">per person</span>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <Users className="w-3 h-3 flex-shrink-0" />
+                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                  <Users className="w-4 h-4 flex-shrink-0 text-[#387C7F]" />
                                   <span>
                                     {event.spots_available !== undefined && event.total_spots !== undefined
                                       ? `${event.spots_available} of ${event.total_spots} spots`
@@ -600,8 +602,8 @@ export const BrowseSection = () => {
                         </CarouselItem>
                       ))}
                     </CarouselContent>
-                    <CarouselPrevious className="left-0 sm:-left-12 bg-white border-2 border-primary/20 hover:bg-primary hover:text-white shadow-lg" />
-                    <CarouselNext className="right-0 sm:-right-12 bg-white border-2 border-primary/20 hover:bg-primary hover:text-white shadow-lg" />
+                    <CarouselPrevious className="left-0 sm:-left-12 bg-white border border-gray-200/60 hover:bg-[#459394] hover:text-white hover:border-[#459394] shadow-craft hover:shadow-craft-hover transition-craft rounded-2xl" />
+                    <CarouselNext className="right-0 sm:-right-12 bg-white border border-gray-200/60 hover:bg-[#459394] hover:text-white hover:border-[#459394] shadow-craft hover:shadow-craft-hover transition-craft rounded-2xl" />
                   </Carousel>
                 </div>
               ) : (
@@ -619,24 +621,24 @@ export const BrowseSection = () => {
                       {filteredAndSortedVenues.map((venue) => (
                         <CarouselItem key={venue.id} className="pl-2 sm:pl-4 basis-full sm:basis-1/2 lg:basis-1/3 xl:basis-1/4">
                           <Card 
-                            className="overflow-hidden hover:shadow-xl transition-all cursor-pointer border-2 border-transparent hover:border-primary/30 rounded-xl"
+                            className="overflow-hidden hover:shadow-craft-hover transition-craft cursor-pointer border border-gray-200/60 hover:border-[#FD8865]/40 rounded-2xl bg-white shadow-craft"
                             onClick={() => setSelectedVenue(venue)}
                           >
                             <div className="relative">
                               <img
                                 src={venue.photos?.[0] || "/placeholder.svg"}
                                 alt={venue.property_name}
-                                className="w-full h-48 sm:h-56 object-cover"
+                                className="w-full h-48 sm:h-56 object-cover rounded-t-2xl"
                               />
-                              <Badge className="absolute top-2 right-2 text-xs bg-green-100 text-green-700">
+                              <Badge className="absolute top-3 right-3 badge-pill font-medium bg-white/95 text-gray-700 shadow-craft border border-gray-200/60">
                                 {venue.status}
                               </Badge>
                             </div>
-                            <CardContent className="p-4">
-                              <h3 className="font-semibold text-sm sm:text-base mb-1 line-clamp-1">{venue.property_name}</h3>
-                              <p className="text-xs text-muted-foreground mb-2 line-clamp-1">{venue.location}</p>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Users className="w-3 h-3" />
+                            <CardContent className="p-5 sm:p-6 space-y-2">
+                              <h3 className="font-semibold text-base sm:text-lg mb-1 line-clamp-1 text-craft-heading">{venue.property_name}</h3>
+                              <p className="text-sm text-muted-foreground mb-2 line-clamp-1 text-craft-body">{venue.location}</p>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Users className="w-4 h-4 text-[#FD8865]" />
                                 <span>Sleeps {venue.sleeps} • Max {venue.max_quilters} quilters</span>
                               </div>
                             </CardContent>
@@ -644,8 +646,8 @@ export const BrowseSection = () => {
                         </CarouselItem>
                       ))}
                     </CarouselContent>
-                    <CarouselPrevious className="left-0 sm:-left-12 bg-white border-2 border-primary/20 hover:bg-primary hover:text-white" />
-                    <CarouselNext className="right-0 sm:-right-12 bg-white border-2 border-primary/20 hover:bg-primary hover:text-white" />
+                    <CarouselPrevious className="left-0 sm:-left-12 bg-white border border-gray-200/60 hover:bg-[#FD8865] hover:text-white hover:border-[#FD8865] shadow-craft hover:shadow-craft-hover transition-craft rounded-2xl" />
+                    <CarouselNext className="right-0 sm:-right-12 bg-white border border-gray-200/60 hover:bg-[#FD8865] hover:text-white hover:border-[#FD8865] shadow-craft hover:shadow-craft-hover transition-craft rounded-2xl" />
                   </Carousel>
                 </div>
               ) : (
@@ -658,11 +660,11 @@ export const BrowseSection = () => {
           )}
         </Tabs>
 
-        {/* View All Button */}
-        <div className="mt-6 text-center">
+        {/* View All Button - Pill-shaped */}
+        <div className="mt-10 text-center">
           <Button 
             variant="outline" 
-            className="border-2 border-primary text-primary hover:bg-primary hover:text-white rounded-xl px-6"
+            className="btn-pill border-2 border-[#459394] text-[#387C7F] hover:bg-[#459394] hover:text-white shadow-craft hover:shadow-craft-hover transition-craft px-8 py-6 text-base font-medium"
             onClick={() => navigate('/browse')}
           >
             View All {activeTab === "events" ? "Events" : "Venues"}
@@ -704,10 +706,10 @@ export const BrowseSection = () => {
                 </div>
                 <div className="flex items-center justify-between pt-4 border-t">
                   <div>
-                    <p className="text-xl sm:text-2xl font-bold text-primary">${selectedEvent.price}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-[#EF684B]">${selectedEvent.price}</p>
                     <p className="text-xs sm:text-sm text-muted-foreground">per person</p>
                   </div>
-                  <Button onClick={() => navigate(`/retreat/${selectedEvent.id}`)} className="rounded-xl">
+                  <Button onClick={() => navigate(`/retreat/${selectedEvent.id}`)} className="btn-pill bg-[#459394] hover:bg-[#387C7F] text-white shadow-craft hover:shadow-craft-hover transition-craft px-6 py-6 text-base font-medium">
                     View Full Details
                   </Button>
                 </div>
@@ -791,7 +793,7 @@ export const BrowseSection = () => {
                               <CardContent className="p-3">
                                 <h4 className="font-semibold text-xs sm:text-sm mb-1 line-clamp-1">{event.title}</h4>
                                 <p className="text-xs text-muted-foreground mb-2">{event.date}</p>
-                                <p className="text-base sm:text-lg font-bold text-primary">${event.price}</p>
+                                <p className="text-base sm:text-lg font-bold text-[#EF684B]">${event.price}</p>
                               </CardContent>
                             </Card>
                           </CarouselItem>
@@ -813,8 +815,8 @@ export const BrowseSection = () => {
         <SheetContent side="bottom" className="h-[85vh] max-h-[700px] rounded-t-3xl p-4 sm:p-6">
           <SheetHeader className="text-left pb-3 sm:pb-4 border-b">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10">
-                <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+              <div className="p-1.5 sm:p-2 rounded-lg bg-[#FAB130]/10">
+                <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-[#FAB130]" />
               </div>
               <div>
                 <SheetTitle className="text-xl sm:text-2xl">Filter & Sort</SheetTitle>
@@ -915,20 +917,20 @@ export const BrowseSection = () => {
             )}
           </div>
 
-          <SheetFooter className="flex-row gap-2 sm:gap-3 border-t pt-3 sm:pt-4 mt-3 sm:mt-4">
+          <SheetFooter className="flex-row gap-3 border-t border-gray-200/60 pt-4 mt-4">
             <Button
               variant="outline"
               onClick={clearFilters}
-              className="flex-1 sm:flex-initial h-11 sm:h-12 text-sm sm:text-base rounded-xl"
+              className="flex-1 sm:flex-initial h-12 text-base btn-pill border-gray-200/60 hover:bg-gray-50 transition-craft"
             >
-              <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
+              <X className="w-4 h-4 mr-2" />
               Clear All
             </Button>
             <Button
               onClick={() => setFilterSheetOpen(false)}
-              className="flex-1 sm:flex-initial h-11 sm:h-12 text-sm sm:text-base bg-primary hover:bg-primary/90 rounded-xl"
+              className="flex-1 sm:flex-initial h-12 text-base btn-pill bg-[#459394] hover:bg-[#387C7F] text-white shadow-craft hover:shadow-craft-hover transition-craft font-medium"
             >
-              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
+              <Sparkles className="w-4 h-4 mr-2" />
               Apply Filters
             </Button>
           </SheetFooter>

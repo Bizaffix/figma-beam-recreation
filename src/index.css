@@ -9,53 +9,68 @@ All colors MUST be HSL.
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 182 40% 15%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 250 20% 98%; /* Soft off-white #FAFAFA */
+    --card-foreground: 182 40% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 182 40% 15%;
 
-    --primary: 250 70% 60%;
+    /* Logo Colors - Teal as Primary */
+    --primary: 182 36% 45%; /* #459394 - Light Teal */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 182 20% 95%;
+    --secondary-foreground: 182 40% 20%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 182 10% 96%;
+    --muted-foreground: 182 15% 45%;
 
-    --accent: 262 83% 58%;
+    /* Coral as Accent */
+    --accent: 14 98% 70%; /* #FD8865 - Light Coral */
     --accent-foreground: 0 0% 100%;
+
+    /* Dark Coral for emphasis */
+    --accent-dark: 11 81% 58%; /* #EF684B - Dark Coral */
+
+    /* Golden Yellow for highlights */
+    --accent-warm: 38 95% 58%; /* #FAB130 - Golden Yellow */
+
+    /* Dark Teal for depth */
+    --teal-dark: 182 40% 35%; /* #387C7F - Dark Teal */
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 250 70% 60%;
+    --border: 182 15% 88%;
+    --input: 182 15% 88%;
+    --ring: 182 36% 45%;
 
     --radius: 1rem;
 
-    --gradient-primary: linear-gradient(135deg, hsl(250, 70%, 60%), hsl(262, 83%, 58%));
-    --gradient-hero: linear-gradient(180deg, hsl(250, 70%, 60%) 0%, hsl(262, 83%, 58%) 100%);
+    /* Professional Gradients using Logo Colors */
+    --gradient-primary: linear-gradient(135deg, hsl(182, 36%, 45%), hsl(182, 40%, 35%));
+    --gradient-hero: linear-gradient(180deg, hsl(182, 36%, 45%) 0%, hsl(182, 40%, 35%) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(38, 95%, 58%), hsl(14, 98%, 70%));
+    --gradient-coral: linear-gradient(135deg, hsl(14, 98%, 70%), hsl(11, 81%, 58%));
+    --gradient-teal-coral: linear-gradient(135deg, hsl(182, 36%, 45%), hsl(14, 98%, 70%));
 
-    --sidebar-background: 0 0% 98%;
+    --sidebar-background: 182 10% 98%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-foreground: 182 40% 15%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary: 182 40% 35%;
 
     --sidebar-primary-foreground: 0 0% 98%;
 
-    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent: 182 15% 95%;
 
-    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-accent-foreground: 182 40% 20%;
 
-    --sidebar-border: 220 13% 91%;
+    --sidebar-border: 182 15% 88%;
 
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 182 36% 45%;
   }
 
   .dark {
@@ -90,14 +105,14 @@ All colors MUST be HSL.
     --gradient-primary: linear-gradient(135deg, hsl(250, 70%, 60%), hsl(262, 83%, 58%));
     --gradient-hero: linear-gradient(180deg, hsl(250, 70%, 60%) 0%, hsl(262, 83%, 58%) 100%);
 
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-background: 182 40% 8%;
+    --sidebar-foreground: 182 10% 95%;
+    --sidebar-primary: 182 36% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 182 25% 18%;
+    --sidebar-accent-foreground: 182 10% 95%;
+    --sidebar-border: 182 25% 20%;
+    --sidebar-ring: 182 36% 55%;
   }
 }
 
@@ -113,24 +128,84 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Craft-inspired typography: soft, readable, warm */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+  }
+
+  html {
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
   }
 }
 
-/* Enhanced hover states and transitions */
+/* Craft-inspired design utilities */
 @layer utilities {
-  .transition-smooth {
+  /* Soft, warm transitions */
+  .transition-craft {
     transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 200ms;
+    transition-duration: 300ms;
   }
   
-  /* Subtle shadow utilities */
-  .shadow-soft {
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  /* Soft, cozy shadows - like fabric layers */
+  .shadow-craft {
+    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.04), 0 1px 3px 0 rgba(0, 0, 0, 0.06);
   }
   
-  .shadow-soft-lg {
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+  .shadow-craft-lg {
+    box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.06), 0 4px 12px 0 rgba(0, 0, 0, 0.08);
+  }
+  
+  .shadow-craft-hover {
+    box-shadow: 0 12px 32px 0 rgba(0, 0, 0, 0.08), 0 6px 16px 0 rgba(0, 0, 0, 0.1);
+  }
+
+  /* Soft card background */
+  .bg-card-soft {
+    background-color: #FAFAFA;
+  }
+
+  /* Stitch-style decorative divider */
+  .divider-stitch {
+    position: relative;
+    padding-top: 1.5rem;
+    margin-top: 1.5rem;
+  }
+  
+  .divider-stitch::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(to right, transparent, hsl(182, 15%, 75%), transparent);
+  }
+
+  /* Pill-shaped badge style */
+  .badge-pill {
+    border-radius: 9999px;
+    padding: 0.375rem 0.875rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+
+  /* Soft rounded buttons */
+  .btn-pill {
+    border-radius: 9999px;
+    padding: 0.625rem 1.5rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
   }
 
   /* Hide scrollbar but keep functionality */
@@ -141,5 +216,24 @@ All colors MUST be HSL.
   
   .scrollbar-hide::-webkit-scrollbar {
     display: none;  /* Chrome, Safari and Opera */
+  }
+
+  /* Craft-inspired text styles */
+  .text-craft-heading {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+  }
+
+  .text-craft-body {
+    font-size: 1rem;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+  }
+
+  .text-craft-small {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
   }
 }
