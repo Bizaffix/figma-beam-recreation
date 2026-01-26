@@ -474,7 +474,7 @@ export const BrowseSection = () => {
         {/* Section Header - Craft-inspired */}
         <div className="mb-8 sm:mb-10 text-center">
           <h2 className="text-3xl sm:text-4xl font-semibold text-foreground mb-3 text-craft-heading">
-            Discover Your Next Crafting Adventure
+            Discover Your Next Quilting Adventure
           </h2>
           <p className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto text-craft-body">
             Explore upcoming retreats and beautiful venues where creativity comes to life
