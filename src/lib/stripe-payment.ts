@@ -12,6 +12,9 @@ export const createPaymentIntent = async (
     fullName: string;
     email: string;
     skillLevel: string;
+    ticket_type?: 'STAY' | 'SEAT_ONLY' | null;
+    bed_assignment?: { bedId: string; roomId: string; bedTitle: string; roomName: string } | null;
+    seat_assignment?: { seatId: string; seatIndex: number; row: number; col: number } | null;
   }
 ) => {
   try {
@@ -48,6 +51,9 @@ export const confirmPayment = async (
     fullName: string;
     email: string;
     skillLevel: string;
+    ticket_type?: 'STAY' | 'SEAT_ONLY' | null;
+    bed_assignment?: { bedId: string; roomId: string; bedTitle: string; roomName: string } | null;
+    seat_assignment?: { seatId: string; seatIndex: number; row: number; col: number } | null;
   },
   userId?: string
 ) => {

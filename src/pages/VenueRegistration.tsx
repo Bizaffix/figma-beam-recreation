@@ -11,6 +11,8 @@ import { ArrowLeft, Upload, Image as ImageIcon, MapPin, Plus } from "lucide-reac
 import { toast } from "@/hooks/use-toast";
 import { useDropzone } from "react-dropzone";
 import { createReferral, getCurrentAffiliate } from "@/lib/affiliate-tracking";
+import { VenueRoomManager } from "@/components/VenueRoomManager";
+import { validateVenueRooms, type VenueValidationResult } from "@/lib/venue-validation";
 
 interface VenueData {
   title: string;
@@ -26,6 +28,8 @@ const VenueRegistration = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(!!id);
+  const [venueValidation, setVenueValidation] = useState<VenueValidationResult | null>(null);
+  const [venueId, setVenueId] = useState<string | null>(null);
 
   const [venueData, setVenueData] = useState<VenueData>({
     title: "",
@@ -55,6 +59,7 @@ const VenueRegistration = () => {
               address: data.location || "",
               photos: data.photos || []
             });
+            setVenueId(data.id);
           }
         } catch (error) {
           console.error('Error fetching venue:', error);
@@ -271,6 +276,12 @@ const VenueRegistration = () => {
 
       if (result.error) throw result.error;
 
+      // Set venue ID for room management
+      const savedVenueId = result.data?.[0]?.id;
+      if (savedVenueId) {
+        setVenueId(savedVenueId);
+      }
+
       // Create affiliate referral if venue was published and user was referred
       if (publish && result.data && result.data.length > 0) {
         const venueId = result.data[0].id;
@@ -442,6 +453,29 @@ const VenueRegistration = () => {
             </CardContent>
           </Card>
 
+          {/* Room & Bed Management - Only show when editing existing venue */}
+          {isEditing && venueId && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="w-5 h-5" />
+                  Room & Bed Details
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Add room and bed details to enable bed selection for events. All fields are required.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <VenueRoomManager
+                  venueId={venueId}
+                  onValidationChange={(isValid, validation) => {
+                    setVenueValidation(validation);
+                  }}
+                />
+              </CardContent>
+            </Card>
+          )}
+
           {/* Actions */}
           <div className="flex justify-end gap-4">
             <Button
@@ -459,7 +493,15 @@ const VenueRegistration = () => {
               {saving ? 'Saving...' : 'Save as Draft'}
             </Button>
             <Button
-              onClick={() => handleSave(true)}
+              onClick={() => {
+                // Warn if publishing without complete room details
+                if (venueValidation && !venueValidation.isValid && isEditing) {
+                  if (!confirm('Your venue is missing required room/bed details. Published venues should have complete room information. Continue anyway?')) {
+                    return;
+                  }
+                }
+                handleSave(true);
+              }}
               disabled={saving}
               className="bg-primary hover:bg-primary/90"
             >

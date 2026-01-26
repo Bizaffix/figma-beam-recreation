@@ -12,6 +12,11 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { sendCustomEmail } from "@/lib/email-notifications";
+import { TicketTypeSelector } from "@/components/TicketTypeSelector";
+import { BedSelection } from "@/components/BedSelection";
+import { SeatSelection } from "@/components/SeatSelection";
+import { expireHeldInventory } from "@/lib/event-capacity";
+import { createBedAssignment, createSeatAssignment } from "@/lib/booking-assignments";
 
 interface ContentCard {
   id: string;
@@ -84,6 +89,13 @@ const Booking = () => {
   const [selectedPriceVariant, setSelectedPriceVariant] = useState("");
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [paidManually, setPaidManually] = useState(false);
+  const [ticketType, setTicketType] = useState<'STAY' | 'SEAT_ONLY' | null>(null);
+  const [selectedBed, setSelectedBed] = useState<{ bedId: string; roomId: string; bedTitle: string; roomName: string } | null>(null);
+  const [selectedSeat, setSelectedSeat] = useState<{ seatId: string; seatIndex: number; row: number; col: number } | null>(null);
+  const [eventMode, setEventMode] = useState<'IN_PERSON' | 'ONLINE' | null>(null);
+  const [venueId, setVenueId] = useState<string | null>(null);
+  const [venueUsageType, setVenueUsageType] = useState<'AT_LOCATION' | 'OFFSITE' | null>(null);
+  const [seatCapacity, setSeatCapacity] = useState<number>(0);
   
   // Form validation errors
   const [errors, setErrors] = useState({
@@ -160,6 +172,32 @@ const Booking = () => {
     if (retreat?.price_variants && retreat.price_variants.length > 0 && !selectedPriceVariant) {
       newErrors.priceVariant = "Please select a pricing option";
       isValid = false;
+    }
+    
+    // Validate ticket type and bed/seat selection for IN_PERSON + AT_LOCATION events
+    if (eventMode === 'IN_PERSON' && venueUsageType === 'AT_LOCATION') {
+      if (!ticketType) {
+        toast({
+          title: "Error",
+          description: "Please select a ticket type",
+          variant: "destructive",
+        });
+        isValid = false;
+      } else if (ticketType === 'STAY' && !selectedBed) {
+        toast({
+          title: "Error",
+          description: "Please select a bed for your stay",
+          variant: "destructive",
+        });
+        isValid = false;
+      } else if (ticketType === 'SEAT_ONLY' && !selectedSeat) {
+        toast({
+          title: "Error",
+          description: "Please select a seat",
+          variant: "destructive",
+        });
+        isValid = false;
+      }
     }
     
     setErrors(newErrors);
@@ -240,6 +278,7 @@ const Booking = () => {
           full_amount: totalPrice,
           price_variant: selectedPriceVariant || null,
           add_ons: selectedAddOns.length > 0 ? selectedAddOns : null,
+          ticket_type: ticketType || null,
           booking_date: new Date().toISOString(),
         })
         .select()
@@ -247,6 +286,23 @@ const Booking = () => {
 
       if (error) {
         throw error;
+      }
+
+      // Create bed/seat assignment if applicable
+      if (booking && ticketType === 'STAY' && selectedBed) {
+        const assignmentResult = await createBedAssignment(booking.id, selectedBed.bedId);
+        if (!assignmentResult.success) {
+          // Rollback booking if assignment fails
+          await supabase.from('bookings').delete().eq('id', booking.id);
+          throw new Error(assignmentResult.error || 'Failed to assign bed');
+        }
+      } else if (booking && ticketType === 'SEAT_ONLY' && selectedSeat) {
+        const assignmentResult = await createSeatAssignment(booking.id, selectedSeat.seatId);
+        if (!assignmentResult.success) {
+          // Rollback booking if assignment fails
+          await supabase.from('bookings').delete().eq('id', booking.id);
+          throw new Error(assignmentResult.error || 'Failed to assign seat');
+        }
       }
 
       // Update retreat spots available
@@ -302,7 +358,10 @@ BookMyQuiltRetreat Team
             email: email.trim(), 
             skillLevel: skillLevel,
             price_variant: selectedPriceVariant,
-            selected_add_ons: selectedAddOns
+            selected_add_ons: selectedAddOns,
+            ticket_type: ticketType,
+            bed_assignment: selectedBed,
+            seat_assignment: selectedSeat
           },
           bookingId: booking.id,
           paymentMethod: 'manual',
@@ -338,7 +397,10 @@ BookMyQuiltRetreat Team
             email: email.trim(), 
             skillLevel: skillLevel,
             price_variant: selectedPriceVariant,
-            selected_add_ons: selectedAddOns
+            selected_add_ons: selectedAddOns,
+            ticket_type: ticketType,
+            bed_assignment: selectedBed,
+            seat_assignment: selectedSeat
           },
         },
       });
@@ -379,6 +441,8 @@ BookMyQuiltRetreat Team
   useEffect(() => {
     const retreatFromState = (location.state as any)?.retreat;
     const selectedVariantFromState = (location.state as any)?.selectedPriceVariant;
+    const bookingFromState = (location.state as any)?.booking;
+    const modifySelection = (location.state as any)?.modifySelection;
     
     if (retreatFromState) {
       // Transform if needed - include all fields
@@ -414,6 +478,29 @@ BookMyQuiltRetreat Team
       if (selectedVariantFromState) {
         setSelectedPriceVariant(selectedVariantFromState);
       }
+      // Restore ticket type and bed/seat selections if modifying
+      if (modifySelection && bookingFromState) {
+        if (bookingFromState.ticket_type) {
+          setTicketType(bookingFromState.ticket_type);
+        }
+        if (bookingFromState.bed_assignment) {
+          setSelectedBed(bookingFromState.bed_assignment);
+        }
+        if (bookingFromState.seat_assignment) {
+          setSelectedSeat(bookingFromState.seat_assignment);
+        }
+        // Restore event mode and venue info if available
+        if (retreatFromState.mode) {
+          setEventMode(retreatFromState.mode as 'IN_PERSON' | 'ONLINE');
+        }
+        if (retreatFromState.venue_id) {
+          setVenueId(retreatFromState.venue_id);
+          setVenueUsageType(retreatFromState.venue_usage_type as 'AT_LOCATION' | 'OFFSITE' | null);
+        }
+        if (retreatFromState.seat_capacity) {
+          setSeatCapacity(retreatFromState.seat_capacity);
+        }
+      }
       setLoading(false);
     } else if (id) {
       // Fetch from Supabase - get all fields
@@ -430,6 +517,19 @@ BookMyQuiltRetreat Team
             console.error('Error fetching retreat:', error);
           } else if (data) {
             setRetreat(data);
+            // Load event mode and venue data
+            if (data.mode) {
+              setEventMode(data.mode as 'IN_PERSON' | 'ONLINE');
+            }
+            if (data.venue_id) {
+              setVenueId(data.venue_id);
+              setVenueUsageType(data.venue_usage_type as 'AT_LOCATION' | 'OFFSITE' | null);
+            }
+            if (data.seat_capacity) {
+              setSeatCapacity(data.seat_capacity);
+            }
+            // Expire held inventory on page load
+            expireHeldInventory();
           }
         } catch (error) {
           console.error('Unexpected error:', error);
@@ -1031,6 +1131,54 @@ BookMyQuiltRetreat Team
             </div>
           </CardContent>
         </Card>
+
+        {/* Ticket Type Selection - Only for IN_PERSON + AT_LOCATION events */}
+        {eventMode === 'IN_PERSON' && venueUsageType === 'AT_LOCATION' && (
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <TicketTypeSelector
+                ticketType={ticketType}
+                onTicketTypeChange={(type) => {
+                  setTicketType(type);
+                  // Clear selections when switching ticket types
+                  if (type === 'STAY') {
+                    setSelectedSeat(null);
+                  } else {
+                    setSelectedBed(null);
+                  }
+                }}
+                availableStayTickets={true}
+                availableSeatTickets={seatCapacity > 0}
+              />
+
+              {/* Bed Selection for STAY tickets */}
+              {ticketType === 'STAY' && retreat.id && (
+                <div className="mt-4">
+                  <BedSelection
+                    eventId={retreat.id}
+                    onBedSelected={(bedId, roomId, bedTitle, roomName) => {
+                      setSelectedBed({ bedId, roomId, bedTitle, roomName });
+                    }}
+                    selectedBedId={selectedBed?.bedId}
+                  />
+                </div>
+              )}
+
+              {/* Seat Selection for SEAT_ONLY tickets */}
+              {ticketType === 'SEAT_ONLY' && retreat.id && (
+                <div className="mt-4">
+                  <SeatSelection
+                    eventId={retreat.id}
+                    onSeatSelected={(seatId, seatIndex, row, col) => {
+                      setSelectedSeat({ seatId, seatIndex, row, col });
+                    }}
+                    selectedSeatId={selectedSeat?.seatId}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
       </div>
 

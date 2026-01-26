@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { Header } from "@/components/Header";
 import { useToast } from "@/hooks/use-toast";
 import MessagingSystem from "@/components/MessagingSystem";
+import { EventVenuePreview } from "@/components/EventVenuePreview";
 import { updateMetaTags, resetMetaTags } from "@/lib/meta-tags";
 import {
   Dialog,
@@ -84,6 +85,10 @@ const RetreatDetail = () => {
   const [actionType, setActionType] = useState<'save' | 'register'>('register');
   const [showMessagingDialog, setShowMessagingDialog] = useState(false);
   const [selectedPriceVariant, setSelectedPriceVariant] = useState<string | null>(null);
+  const [eventMode, setEventMode] = useState<'IN_PERSON' | 'ONLINE' | null>(null);
+  const [venueId, setVenueId] = useState<string | null>(null);
+  const [venueUsageType, setVenueUsageType] = useState<'AT_LOCATION' | 'OFFSITE' | null>(null);
+  const [venueData, setVenueData] = useState<any>(null);
 
   // Auto-select first price variant if available and none selected
   useEffect(() => {
@@ -162,6 +167,10 @@ const RetreatDetail = () => {
             content_cards: data.content_cards,
             itinerary_blocks: data.itinerary_blocks,
             location_images: data.location_images,
+            mode: data.mode,
+            venue_id: data.venue_id,
+            venue_usage_type: data.venue_usage_type,
+            seat_capacity: data.seat_capacity,
             instructor: {
               name: data.instructor?.full_name || 'Instructor',
               avatar: data.instructor?.avatar_url || '',
@@ -172,6 +181,26 @@ const RetreatDetail = () => {
             },
           };
           setRetreat(transformedRetreat);
+          
+          // Set event mode and venue data
+          if (data.mode) {
+            setEventMode(data.mode as 'IN_PERSON' | 'ONLINE');
+          }
+          if (data.venue_id) {
+            setVenueId(data.venue_id);
+            setVenueUsageType(data.venue_usage_type as 'AT_LOCATION' | 'OFFSITE' | null);
+            
+            // Fetch venue data
+            const { data: venue } = await supabase
+              .from('properties')
+              .select('*')
+              .eq('id', data.venue_id)
+              .single();
+            
+            if (venue) {
+              setVenueData(venue);
+            }
+          }
         } else {
           // No retreat found
           setRetreat(null);
@@ -575,6 +604,17 @@ const RetreatDetail = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Venue Preview - Only for IN_PERSON events with venue */}
+        {eventMode === 'IN_PERSON' && venueId && venueData && (
+          <EventVenuePreview
+            venueId={venueId}
+            eventId={retreat.id}
+            venueName={venueData.property_name}
+            venueLocation={venueData.location}
+            venuePhotos={venueData.photos || []}
+          />
+        )}
 
         {/* About */}
         <Card>

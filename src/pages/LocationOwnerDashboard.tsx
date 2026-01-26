@@ -40,6 +40,7 @@ import {
   Check
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
+import { VenueDetailsRequiredBanner } from "@/components/VenueDetailsRequiredBanner";
 import { format, isWithinInterval, parseISO } from "date-fns";
 
 interface Property {
@@ -476,6 +477,16 @@ const LocationOwnerDashboard = () => {
               </div>
             </div>
           </div>
+
+          {/* Venue Details Required Banners */}
+          {properties.length > 0 && properties
+            .filter(p => p.status === 'published' || p.status === 'verified')
+            .map(property => (
+              <VenueDetailsRequiredBanner
+                key={property.id}
+                venueId={property.id}
+              />
+            ))}
 
           {/* Stats Overview */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">

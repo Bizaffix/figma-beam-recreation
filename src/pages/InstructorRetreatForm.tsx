@@ -24,6 +24,8 @@ import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
 import { createPassiveCommission } from "@/lib/affiliate-tracking";
 import { ItineraryBuilder, ItineraryBlock, BlockType } from "@/components/ItineraryBuilder";
 import { VenueSelector } from "@/components/VenueSelector";
+import { EventModeSelector } from "@/components/EventModeSelector";
+import { createEventVenueSnapshot, createEventSeatsGrid } from "@/lib/event-capacity";
 import { ShareDialog } from "@/components/ShareDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -225,6 +227,11 @@ const InstructorRetreatForm = () => {
   const [locationImages, setLocationImages] = useState<string[]>([]);
   const [uploadingLocationImage, setUploadingLocationImage] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState<any>(null);
+  const [eventMode, setEventMode] = useState<'IN_PERSON' | 'ONLINE' | null>(null);
+  const [videoProvider, setVideoProvider] = useState<string>('');
+  const [meetingUrl, setMeetingUrl] = useState<string>('');
+  const [venueUsageType, setVenueUsageType] = useState<'AT_LOCATION' | 'OFFSITE' | null>(null);
+  const [seatCapacity, setSeatCapacity] = useState<number>(0);
   const [newPriceVariant, setNewPriceVariant] = useState({ name: "", price: "", description: "" });
   const [newAddOn, setNewAddOn] = useState({ name: "", price: "", description: "", required: false });
   const [discountCoupon, setDiscountCoupon] = useState({
@@ -576,6 +583,34 @@ const InstructorRetreatForm = () => {
           if (data.content_cards && Array.isArray(data.content_cards)) {
             setContentCards(data.content_cards);
           }
+          // Load event mode and related fields
+          if (data.mode) {
+            setEventMode(data.mode as 'IN_PERSON' | 'ONLINE');
+          }
+          if (data.video_provider) {
+            setVideoProvider(data.video_provider);
+          }
+          if (data.meeting_url) {
+            setMeetingUrl(data.meeting_url);
+          }
+          if (data.venue_usage_type) {
+            setVenueUsageType(data.venue_usage_type as 'AT_LOCATION' | 'OFFSITE');
+          }
+          if (data.seat_capacity) {
+            setSeatCapacity(data.seat_capacity);
+          }
+          // Load venue if attached
+          if (data.venue_id) {
+            const { data: venueData } = await supabase
+              .from('properties')
+              .select('*')
+              .eq('id', data.venue_id)
+              .single();
+            if (venueData) {
+              setSelectedVenue(venueData);
+              handleLocationChange(venueData.location, venueData);
+            }
+          }
           if (data.schedule && Array.isArray(data.schedule) && data.schedule.length > 0) {
             if (data.itinerary_blocks && Array.isArray(data.itinerary_blocks)) {
               setItineraryBlocks(data.itinerary_blocks);
@@ -647,6 +682,12 @@ const InstructorRetreatForm = () => {
         location_images: locationImages.length > 0 ? locationImages : null,
         published: false,
         instructor_id: user.id,
+        mode: eventMode || null,
+        video_provider: eventMode === 'ONLINE' ? videoProvider : null,
+        meeting_url: eventMode === 'ONLINE' ? meetingUrl : null,
+        venue_id: eventMode === 'IN_PERSON' && selectedVenue?.id ? selectedVenue.id : null,
+        venue_usage_type: eventMode === 'IN_PERSON' ? venueUsageType : null,
+        seat_capacity: seatCapacity || 0,
         discount_coupon: formData.discount_coupon,
         price_variants: formData.price_variants && formData.price_variants.length > 0 ? formData.price_variants : null,
         add_ons: formData.add_ons && formData.add_ons.length > 0 ? formData.add_ons : null,
@@ -1220,6 +1261,12 @@ const InstructorRetreatForm = () => {
         location_images: locationImages.length > 0 ? locationImages : null,
         published: published !== undefined ? published : (formData.published || false),
         instructor_id: user.id,
+        mode: eventMode || null,
+        video_provider: eventMode === 'ONLINE' ? videoProvider : null,
+        meeting_url: eventMode === 'ONLINE' ? meetingUrl : null,
+        venue_id: eventMode === 'IN_PERSON' && selectedVenue?.id ? selectedVenue.id : null,
+        venue_usage_type: eventMode === 'IN_PERSON' ? venueUsageType : null,
+        seat_capacity: seatCapacity || 0,
         discount_coupon: formData.discount_coupon,
         price_variants: formData.price_variants && formData.price_variants.length > 0 ? formData.price_variants : null,
         add_ons: formData.add_ons && formData.add_ons.length > 0 ? formData.add_ons : null,
@@ -1320,6 +1367,15 @@ const InstructorRetreatForm = () => {
               ).catch(err => console.error('Error creating passive commission:', err));
             }
 
+            // Create venue snapshot if IN_PERSON + AT_LOCATION event with venue
+            if (eventMode === 'IN_PERSON' && venueUsageType === 'AT_LOCATION' && selectedVenue?.id && autoSaveDraftId) {
+              await createEventVenueSnapshot(autoSaveDraftId, selectedVenue.id);
+            }
+            // Create seats grid if seat capacity is set
+            if (seatCapacity > 0 && autoSaveDraftId) {
+              await createEventSeatsGrid(autoSaveDraftId, seatCapacity);
+            }
+
             toast({
               title: "Success",
               description: retreatData.published ? "Retreat published successfully!" : "Retreat saved as draft!",
@@ -1380,6 +1436,15 @@ const InstructorRetreatForm = () => {
                   data.id.toString()
                 ).catch(err => console.error('Error creating passive commission:', err));
               }
+            }
+
+            // Create venue snapshot if IN_PERSON + AT_LOCATION event with venue
+            if (eventMode === 'IN_PERSON' && venueUsageType === 'AT_LOCATION' && selectedVenue?.id && data.id) {
+              await createEventVenueSnapshot(data.id, selectedVenue.id);
+            }
+            // Create seats grid if seat capacity is set
+            if (seatCapacity > 0 && data.id) {
+              await createEventSeatsGrid(data.id, seatCapacity);
             }
             
             toast({
@@ -3043,14 +3108,31 @@ const InstructorRetreatForm = () => {
         </CardContent>
       </Card>
 
-      {/* Location Section */}
+      {/* Event Mode Section */}
       <Card className="overflow-hidden">
         <CardContent className="p-6 space-y-6">
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Location</h3>
-            
-            {/* Venue Selector */}
-            <VenueSelector 
+          <EventModeSelector
+            mode={eventMode}
+            onModeChange={setEventMode}
+            videoProvider={videoProvider}
+            onVideoProviderChange={setVideoProvider}
+            meetingUrl={meetingUrl}
+            onMeetingUrlChange={setMeetingUrl}
+            venueUsageType={venueUsageType}
+            onVenueUsageTypeChange={setVenueUsageType}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Location Section - Only show for IN_PERSON events */}
+      {eventMode === 'IN_PERSON' && (
+        <Card className="overflow-hidden">
+          <CardContent className="p-6 space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-card-foreground">Location</h3>
+              
+              {/* Venue Selector */}
+              <VenueSelector 
               selectedLocation={formData.location}
               onLocationChange={handleLocationChange}
             />
@@ -3113,6 +3195,7 @@ const InstructorRetreatForm = () => {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Dates & Capacity Section */}
       <Card className="overflow-hidden">
@@ -3194,6 +3277,24 @@ const InstructorRetreatForm = () => {
                 />
               </div>
             </div>
+
+            {/* Seat Capacity - Only for IN_PERSON + AT_LOCATION events */}
+            {eventMode === 'IN_PERSON' && venueUsageType === 'AT_LOCATION' && (
+              <div>
+                <Label htmlFor="seat-capacity">Seat Capacity (for SEAT_ONLY tickets)</Label>
+                <Input
+                  id="seat-capacity"
+                  type="number"
+                  min="0"
+                  value={seatCapacity}
+                  onChange={(e) => setSeatCapacity(Number(e.target.value) || 0)}
+                  placeholder="0"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Set seat capacity to enable seat-only tickets. Leave 0 to only offer STAY tickets.
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -8,6 +8,8 @@ import { useStripe, useElements, CardElement } from "@stripe/react-stripe-js";
 import { createPaymentIntent, confirmPayment } from "@/lib/stripe-payment";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { Edit } from "lucide-react";
+import { fetchEventRooms, fetchEventSeats, EventBed, EventRoom, EventSeat } from "@/lib/event-capacity";
 
 interface RetreatData {
   id: number;
@@ -45,9 +47,16 @@ const Payment = () => {
   const bookingFromState = (location.state as any)?.booking;
   const selectedPriceVariant = bookingFromState?.price_variant || null;
   const selectedAddOns = bookingFromState?.selected_add_ons || [];
+  const ticketType = bookingFromState?.ticket_type;
+  const bedAssignment = bookingFromState?.bed_assignment;
+  const seatAssignment = bookingFromState?.seat_assignment;
 
   // Stripe Card Element error state
   const [cardError, setCardError] = useState<string>("");
+
+  // Bed/Seat details for confirmation display
+  const [bedDetails, setBedDetails] = useState<{ bed: EventBed; room: EventRoom } | null>(null);
+  const [seatDetails, setSeatDetails] = useState<EventSeat | null>(null);
 
   // Calculate total price based on selections
   const calculateTotalPrice = () => {
@@ -73,6 +82,42 @@ const Payment = () => {
     
     return basePrice + addOnsTotal;
   };
+
+  // Fetch bed/seat details for confirmation display
+  useEffect(() => {
+    const fetchAssignmentDetails = async () => {
+      if (!retreat?.id) return;
+
+      try {
+        if (ticketType === 'STAY' && bedAssignment) {
+          // Fetch all rooms and find the bed
+          // bedAssignment structure: { bedId, roomId, bedTitle, roomName }
+          const rooms = await fetchEventRooms(retreat.id);
+          for (const room of rooms) {
+            const bed = room.beds?.find(b => b.id === bedAssignment.bedId);
+            if (bed) {
+              setBedDetails({ bed, room });
+              break;
+            }
+          }
+        } else if (ticketType === 'SEAT_ONLY' && seatAssignment) {
+          // Fetch all seats and find the selected one
+          // seatAssignment structure: { seatId, seatIndex, row, col }
+          const seats = await fetchEventSeats(retreat.id);
+          const seat = seats.find(s => s.id === seatAssignment.seatId);
+          if (seat) {
+            setSeatDetails(seat);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching assignment details:', error);
+      }
+    };
+
+    if (retreat) {
+      fetchAssignmentDetails();
+    }
+  }, [retreat, ticketType, bedAssignment, seatAssignment]);
 
   // Fetch retreat and create payment intent
   useEffect(() => {
@@ -306,6 +351,67 @@ const Payment = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Bed/Seat Confirmation Card */}
+        {(ticketType === 'STAY' && bedDetails) || (ticketType === 'SEAT_ONLY' && seatDetails) ? (
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex-1">
+                  {ticketType === 'STAY' && bedDetails && (
+                    <>
+                      <p className="text-sm font-semibold text-card-foreground mb-2">Bed/Room Confirmation</p>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Room:</span>
+                          <span className="text-sm font-medium text-card-foreground">{bedDetails.room.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Bed:</span>
+                          <span className="text-sm font-medium text-card-foreground">{bedDetails.bed.title}</span>
+                        </div>
+                        {bedDetails.bed.image_url && (
+                          <img 
+                            src={bedDetails.bed.image_url} 
+                            alt={bedDetails.bed.title}
+                            className="w-24 h-24 rounded-md object-cover mt-2"
+                          />
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {ticketType === 'SEAT_ONLY' && seatDetails && (
+                    <>
+                      <p className="text-sm font-semibold text-card-foreground mb-2">Seat Confirmation</p>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Seat:</span>
+                          <span className="text-sm font-medium text-card-foreground">
+                            Row {seatDetails.row}, Seat {seatDetails.col} (Seat #{seatDetails.seat_index})
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/retreat/${id}/booking`, { 
+                    state: { 
+                      retreat,
+                      booking: bookingFromState,
+                      modifySelection: true 
+                    } 
+                  })}
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Modify
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardContent className="p-4 sm:p-6">

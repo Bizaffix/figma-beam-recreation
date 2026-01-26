@@ -1,12 +1,13 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Clock } from "lucide-react";
+import { AlertCircle, Clock, Edit } from "lucide-react";
 import calendar, { createGoogleCalendarUrl } from "@/lib/calendar";
 import { convertReferral, getCurrentAffiliate, createPassiveCommission } from "@/lib/affiliate-tracking";
 import { supabase } from "@/lib/supabase";
+import { getBedDetailsFromAssignment, getSeatDetailsFromAssignment, fetchEventRooms, fetchEventSeats, EventBed, EventRoom, EventSeat } from "@/lib/event-capacity";
 
 const Confirmation = () => {
   const location = useLocation();
@@ -16,6 +17,70 @@ const Confirmation = () => {
   const booking = (location.state as any)?.booking;
   const bookingId = (location.state as any)?.bookingId;
   const paymentMethod = (location.state as any)?.paymentMethod; // 'manual' or 'stripe'
+  const ticketType = booking?.ticket_type;
+  const bedAssignment = booking?.bed_assignment;
+  const seatAssignment = booking?.seat_assignment;
+
+  const [bedDetails, setBedDetails] = useState<{ bed: EventBed; room: EventRoom } | null>(null);
+  const [seatDetails, setSeatDetails] = useState<EventSeat | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // Fetch bed/seat details if booking has assignment
+  useEffect(() => {
+    const fetchAssignmentDetails = async () => {
+      if (!retreat?.id) return;
+
+      setLoadingDetails(true);
+      try {
+        if (ticketType === 'STAY' && bedAssignment) {
+          // bedAssignment structure: { bedId, roomId, bedTitle, roomName }
+          // Try to fetch from database first (if booking is confirmed)
+          if (bookingId) {
+            const details = await getBedDetailsFromAssignment(bookingId);
+            if (details) {
+              setBedDetails(details);
+              setLoadingDetails(false);
+              return;
+            }
+          }
+          // Fallback: fetch from event rooms using bedId from state
+          const rooms = await fetchEventRooms(retreat.id);
+          for (const room of rooms) {
+            const bed = room.beds?.find(b => b.id === bedAssignment.bedId);
+            if (bed) {
+              setBedDetails({ bed, room });
+              break;
+            }
+          }
+        } else if (ticketType === 'SEAT_ONLY' && seatAssignment) {
+          // seatAssignment structure: { seatId, seatIndex, row, col }
+          // Try to fetch from database first (if booking is confirmed)
+          if (bookingId) {
+            const details = await getSeatDetailsFromAssignment(bookingId);
+            if (details) {
+              setSeatDetails(details);
+              setLoadingDetails(false);
+              return;
+            }
+          }
+          // Fallback: fetch from event seats using seatId from state
+          const seats = await fetchEventSeats(retreat.id);
+          const seat = seats.find(s => s.id === seatAssignment.seatId);
+          if (seat) {
+            setSeatDetails(seat);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching assignment details:', error);
+      } finally {
+        setLoadingDetails(false);
+      }
+    };
+
+    if (retreat) {
+      fetchAssignmentDetails();
+    }
+  }, [retreat, bookingId, ticketType, bedAssignment, seatAssignment]);
 
   // Convert affiliate referral when booking is confirmed
   useEffect(() => {
@@ -151,6 +216,93 @@ const Confirmation = () => {
                 <p className="text-sm text-muted-foreground">{retreat?.date}</p>
               </div>
             </div>
+
+            {/* Bed/Room Confirmation */}
+            {ticketType === 'STAY' && (bedDetails || bedAssignment) && (
+              <div className="mt-4 border-t border-border pt-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-card-foreground mb-2">Bed/Room Confirmation</p>
+                    {bedDetails ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Room:</span>
+                          <span className="text-sm font-medium text-card-foreground">{bedDetails.room.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Bed:</span>
+                          <span className="text-sm font-medium text-card-foreground">{bedDetails.bed.title}</span>
+                        </div>
+                        {bedDetails.bed.image_url && (
+                          <img 
+                            src={bedDetails.bed.image_url} 
+                            alt={bedDetails.bed.title}
+                            className="w-24 h-24 rounded-md object-cover mt-2"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Bed assignment confirmed</p>
+                    )}
+                  </div>
+                  {retreat?.id && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/retreat/${retreat.id}/booking`, { 
+                        state: { 
+                          retreat,
+                          booking,
+                          modifySelection: true 
+                        } 
+                      })}
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Modify
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Seat Confirmation */}
+            {ticketType === 'SEAT_ONLY' && (seatDetails || seatAssignment) && (
+              <div className="mt-4 border-t border-border pt-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-card-foreground mb-2">Seat Confirmation</p>
+                    {seatDetails ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Seat:</span>
+                          <span className="text-sm font-medium text-card-foreground">
+                            Row {seatDetails.row}, Seat {seatDetails.col} (Seat #{seatDetails.seat_index})
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Seat assignment confirmed</p>
+                    )}
+                  </div>
+                  {retreat?.id && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/retreat/${retreat.id}/booking`, { 
+                        state: { 
+                          retreat,
+                          booking,
+                          modifySelection: true 
+                        } 
+                      })}
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Modify
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 border-t border-border pt-4 text-muted-foreground">
               <p>Confirmation sent to: <span className="text-card-foreground">{email || "(no email provided)"}</span></p>
