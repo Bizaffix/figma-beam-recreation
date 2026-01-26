@@ -2586,6 +2586,20 @@ const AdminDashboard = () => {
                   <Card key={venue.id} className="border hover:shadow-md transition-shadow">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-4">
+                        {/* Venue Photo Thumbnail */}
+                        {venue.photos && venue.photos.length > 0 ? (
+                          <div className="flex-shrink-0">
+                            <img
+                              src={venue.photos[0]}
+                              alt={venue.property_name}
+                              className="w-20 h-20 object-cover rounded-lg border"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex-shrink-0 w-20 h-20 bg-muted rounded-lg border flex items-center justify-center">
+                            <MapPin className="w-8 h-8 text-muted-foreground opacity-50" />
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <h4 className="font-medium truncate">{venue.property_name}</h4>
                           <p className="text-sm text-muted-foreground mt-1">
@@ -2597,6 +2611,11 @@ const AdminDashboard = () => {
                           <p className="text-xs text-muted-foreground mt-1">
                             Last updated: {new Date(venue.updated_at).toLocaleDateString()}
                           </p>
+                          {venue.photos && venue.photos.length > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {venue.photos.length} photo{venue.photos.length !== 1 ? 's' : ''}
+                            </p>
+                          )}
                         </div>
                         <Button
                           size="sm"

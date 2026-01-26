@@ -212,7 +212,7 @@ const Login = () => {
         <div className="flex items-center justify-center p-4 sm:p-6 py-6 sm:py-8 md:py-6 lg:py-8 md:p-8 lg:p-12 bg-muted/20 md:bg-background">
           <Card className="w-full max-w-md shadow-lg border md:shadow-xl bg-card">
         <CardHeader className="pb-2 sm:pb-3 md:pb-4">
-          <CardTitle className="text-xl sm:text-2xl text-center">Quilting Retreats</CardTitle>
+          <CardTitle className="text-xl sm:text-2xl text-center">Book My Quilt Retreat</CardTitle>
           <CardDescription className="text-center text-xs sm:text-sm md:text-base">
             {showForgotPassword ? "Reset your password" : "Sign in to your account"}
           </CardDescription>

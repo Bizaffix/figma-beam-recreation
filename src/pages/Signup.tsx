@@ -78,8 +78,16 @@ const Signup = () => {
         });
         return;
       }
+    } else if (selectedRole === 'location_owner') {
+      if (!agreedToTerms || !agreedToPrivacy) {
+        toast({
+          title: "Error",
+          description: "Please read and agree to the Participant Terms and Conditions and Privacy Policy",
+          variant: "destructive",
+        });
+        return;
+      }
     }
-    // Location owners don't need terms agreement for basic signup (they'll agree during property registration)
     
     setLoading(true);
     try {
@@ -265,7 +273,7 @@ const Signup = () => {
           <div className="w-full max-w-md md:max-h-[calc(100vh-3rem)] lg:max-h-[calc(100vh-4rem)] md:overflow-y-auto md:pr-2">
             <Card className="w-full shadow-lg border md:shadow-xl bg-card">
         <CardHeader className="pb-2 sm:pb-3 md:pb-4">
-          <CardTitle className="text-xl sm:text-2xl text-center">Quilting Retreats</CardTitle>
+          <CardTitle className="text-xl sm:text-2xl text-center">Book My Quilt Retreat</CardTitle>
           <CardDescription className="text-center text-xs sm:text-sm md:text-base">
             Create a new account
           </CardDescription>
@@ -446,6 +454,52 @@ const Signup = () => {
               </>
             )}
             
+            {selectedRole === 'location_owner' && (
+              <div className="space-y-2 pt-2 border-t">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="venue-terms-agreement"
+                    checked={agreedToTerms}
+                    onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="venue-terms-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
+                      I have read and agree to the{" "}
+                      <button
+                        type="button"
+                        onClick={() => setShowStudentTermsDialog(true)}
+                        className="text-primary hover:underline font-medium"
+                      >
+                        Participant Terms and Conditions
+                      </button>
+                    </Label>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="venue-privacy-agreement"
+                    checked={agreedToPrivacy}
+                    onCheckedChange={(checked) => setAgreedToPrivacy(checked === true)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="venue-privacy-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
+                      I have read and agree to the{" "}
+                      <button
+                        type="button"
+                        onClick={() => setShowStudentPrivacyDialog(true)}
+                        className="text-primary hover:underline font-medium"
+                      >
+                        Privacy Policy
+                      </button>
+                    </Label>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-1.5 sm:space-y-2">
               <Label htmlFor="email" className="text-xs sm:text-sm">Email</Label>
               <Input
@@ -488,7 +542,16 @@ const Signup = () => {
                 Password must be at least 6 characters
               </p>
             </div>
-            <Button type="submit" className="w-full h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base" disabled={loading}>
+            <Button 
+              type="submit" 
+              className="w-full h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base" 
+              disabled={
+                loading || 
+                (selectedRole === 'student' && (!agreedToTerms || !agreedToPrivacy)) ||
+                (selectedRole === 'instructor' && (!agreedToTerms || !agreedToPrivacy)) ||
+                (selectedRole === 'location_owner' && (!agreedToTerms || !agreedToPrivacy))
+              }
+            >
               {loading ? "Creating account..." : "Sign Up"}
             </Button>
           </form>
