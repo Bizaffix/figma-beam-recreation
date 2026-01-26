@@ -1875,8 +1875,8 @@ const InstructorDashboard = () => {
       <div className="bg-gradient-primary text-white px-6 py-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Instructor Dashboard</h1>
-            <p className="text-white/90 text-lg">Manage your retreats</p>
+            <h1 className="text-3xl font-bold mb-2">Organizer Dashboard</h1>
+            <p className="text-white/90 text-lg">Manage your events</p>
           </div>
         </div>
       </div>
