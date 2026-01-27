@@ -3,7 +3,8 @@
 export interface VenueRoom {
   id?: string;
   name: string;
-  image_url?: string;
+  image_url?: string; // Can be a single URL or JSON array of URLs
+  images?: string[]; // Array of image URLs (for multiple images)
   description: string;
   bed_count: number;
   beds?: VenueBed[];
@@ -64,8 +65,11 @@ export function validateVenueRooms(rooms: VenueRoom[]): VenueValidationResult {
     if (!room.name || room.name.trim() === '') {
       roomMissing.push('Room name');
     }
-    if (!room.image_url || room.image_url.trim() === '') {
-      roomMissing.push('Room image');
+    // Check for at least one image (either image_url or images array)
+    const hasImage = (room.image_url && room.image_url.trim() !== '') || 
+                     (room.images && room.images.length > 0 && room.images.some(img => img && img.trim() !== ''));
+    if (!hasImage) {
+      roomMissing.push('Room image (at least one required)');
     }
     if (!room.description || room.description.trim() === '') {
       roomMissing.push('Room description');

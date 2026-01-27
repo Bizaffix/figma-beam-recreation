@@ -64,14 +64,33 @@ export const VenueRoomManager = ({ venueId, onValidationChange }: VenueRoomManag
         if (bedsError) throw bedsError;
 
         // Group beds by room
-        const roomsWithBeds: VenueRoom[] = roomsData.map(room => ({
-          id: room.id,
-          name: room.name,
-          image_url: room.image_url || undefined,
-          description: room.description || '',
-          bed_count: room.bed_count,
-          beds: (bedsData || []).filter(bed => bed.room_id === room.id)
-        }));
+        const roomsWithBeds: VenueRoom[] = roomsData.map(room => {
+          // Parse image_url if it's a JSON array, otherwise use as single image
+          let images: string[] = [];
+          if (room.image_url) {
+            try {
+              const parsed = JSON.parse(room.image_url);
+              if (Array.isArray(parsed)) {
+                images = parsed;
+              } else {
+                images = [room.image_url];
+              }
+            } catch {
+              // Not JSON, treat as single image URL
+              images = [room.image_url];
+            }
+          }
+          
+          return {
+            id: room.id,
+            name: room.name,
+            image_url: images[0] || undefined, // Keep first image as primary for backward compatibility
+            images: images, // Store all images
+            description: room.description || '',
+            bed_count: room.bed_count,
+            beds: (bedsData || []).filter(bed => bed.room_id === room.id)
+          };
+        });
 
         setRooms(roomsWithBeds);
       } else {
@@ -92,10 +111,15 @@ export const VenueRoomManager = ({ venueId, onValidationChange }: VenueRoomManag
   const handleSaveRoom = async (room: VenueRoom) => {
     try {
       setSaving(true);
+      // Store images as JSON array (use images array if available, otherwise use image_url)
+      const imagesArray = room.images && room.images.length > 0 
+        ? room.images.filter(img => img && img.trim() !== '')
+        : (room.image_url ? [room.image_url] : []);
+      
       const roomData = {
         venue_id: venueId,
         name: room.name,
-        image_url: room.image_url || null,
+        image_url: imagesArray.length > 0 ? JSON.stringify(imagesArray) : null,
         description: room.description,
         bed_count: room.bed_count,
         sort_order: rooms.length
@@ -306,13 +330,20 @@ export const VenueRoomManager = ({ venueId, onValidationChange }: VenueRoomManag
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {room.image_url && (
-                    <img
-                      src={room.image_url}
-                      alt={room.name}
-                      className="w-full h-48 object-cover rounded-lg"
-                    />
-                  )}
+                  {(room.images && room.images.length > 0) || room.image_url ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {(room.images && room.images.length > 0 ? room.images : [room.image_url]).map((imageUrl, index) => (
+                        imageUrl && (
+                          <img
+                            key={index}
+                            src={imageUrl}
+                            alt={`${room.name} ${index + 1}`}
+                            className="w-full h-32 object-cover rounded-lg border"
+                          />
+                        )
+                      ))}
+                    </div>
+                  ) : null}
                   <p className="text-sm text-muted-foreground">{room.description}</p>
                   
                   {room.bed_count > 1 && (
@@ -412,26 +443,36 @@ const RoomDialog = ({ open, onOpenChange, room, onSave, saving }: RoomDialogProp
     name: '',
     description: '',
     bed_count: 1,
-    beds: []
+    beds: [],
+    images: []
   });
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingImageIndex, setUploadingImageIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (room) {
-      setFormData(room);
+      // Ensure images array is set
+      const images = room.images && room.images.length > 0 
+        ? room.images 
+        : (room.image_url ? [room.image_url] : []);
+      setFormData({
+        ...room,
+        images: images
+      });
     } else {
       setFormData({
         name: '',
         description: '',
         bed_count: 1,
-        beds: []
+        beds: [],
+        images: []
       });
     }
   }, [room]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'room' | 'bed', bedIndex?: number) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     if (!user?.id) {
       toast({
@@ -442,42 +483,106 @@ const RoomDialog = ({ open, onOpenChange, room, onSave, saving }: RoomDialogProp
       return;
     }
 
-    setUploadingImage(true);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      // Use venue-images bucket with user ID folder structure (required by RLS policy)
-      const filePath = `${user.id}/${fileName}`;
+    if (type === 'room') {
+      // Handle multiple room images
+      setUploadingImage(true);
+      try {
+        const uploadPromises = Array.from(files).map(async (file) => {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+          const filePath = `${user.id}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('venue-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
+          const { error: uploadError } = await supabase.storage
+            .from('venue-images')
+            .upload(filePath, file, {
+              cacheControl: '3600',
+              upsert: false
+            });
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('venue-images')
+            .getPublicUrl(filePath);
+
+          return publicUrl;
         });
 
-      if (uploadError) throw uploadError;
+        const uploadedUrls = await Promise.all(uploadPromises);
+        
+        setFormData(prev => ({
+          ...prev,
+          images: [...(prev.images || []), ...uploadedUrls],
+          image_url: uploadedUrls[0] || prev.image_url // Keep first as primary
+        }));
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('venue-images')
-        .getPublicUrl(filePath);
+        toast({
+          title: "Success",
+          description: `Uploaded ${uploadedUrls.length} image(s)`,
+        });
+      } catch (error: any) {
+        console.error('Error uploading images:', error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to upload images",
+          variant: "destructive",
+        });
+      } finally {
+        setUploadingImage(false);
+        e.target.value = '';
+      }
+    } else if (type === 'bed' && bedIndex !== undefined) {
+      // Handle single bed image
+      const file = files[0];
+      setUploadingImageIndex(bedIndex);
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `${user.id}/${fileName}`;
 
-      if (type === 'room') {
-        setFormData(prev => ({ ...prev, image_url: publicUrl }));
-      } else if (type === 'bed' && bedIndex !== undefined) {
+        const { error: uploadError } = await supabase.storage
+          .from('venue-images')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('venue-images')
+          .getPublicUrl(filePath);
+
         setFormData(prev => ({
           ...prev,
           beds: prev.beds?.map((bed, idx) =>
             idx === bedIndex ? { ...bed, image_url: publicUrl } : bed
           ) || []
         }));
+      } catch (error: any) {
+        console.error('Error uploading image:', error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to upload image",
+          variant: "destructive",
+        });
+      } finally {
+        setUploadingImageIndex(null);
+        e.target.value = '';
       }
-    } catch (error: any) {
-      console.error('Error uploading image:', error);
-    } finally {
-      setUploadingImage(false);
-      e.target.value = '';
     }
+  };
+
+  const handleRemoveRoomImage = (index: number) => {
+    setFormData(prev => {
+      const newImages = [...(prev.images || [])];
+      newImages.splice(index, 1);
+      return {
+        ...prev,
+        images: newImages,
+        image_url: newImages[0] || undefined
+      };
+    });
   };
 
   const handleBedCountChange = (newCount: number) => {
@@ -552,21 +657,46 @@ const RoomDialog = ({ open, onOpenChange, room, onSave, saving }: RoomDialogProp
           </div>
 
           <div>
-            <Label>Room Image *</Label>
+            <Label>Room Images * (Add multiple images)</Label>
             <div className="space-y-2">
-              {formData.image_url && (
-                <img
-                  src={formData.image_url}
-                  alt="Room"
-                  className="w-full h-48 object-cover rounded-lg"
-                />
+              {formData.images && formData.images.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {formData.images.map((imageUrl, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={imageUrl}
+                        alt={`Room ${index + 1}`}
+                        className="w-full h-32 object-cover rounded-lg border"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleRemoveRoomImage(index)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                      {index === 0 && (
+                        <Badge className="absolute top-2 left-2">Primary</Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
               <Input
                 type="file"
                 accept="image/*"
+                multiple
                 onChange={(e) => handleImageUpload(e, 'room')}
                 disabled={uploadingImage}
               />
+              {uploadingImage && (
+                <p className="text-sm text-muted-foreground">Uploading images...</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                You can upload multiple images. The first image will be used as the primary display image.
+              </p>
             </div>
           </div>
 
