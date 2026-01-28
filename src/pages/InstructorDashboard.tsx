@@ -1870,20 +1870,20 @@ const InstructorDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-hero pb-20">
+    <div className="min-h-screen bg-background pb-20">
       {/* Header */}
-      <div className="bg-gradient-primary text-white px-6 py-8">
+      <div className="bg-background px-6 py-8 border-b border-[#459394]/20">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Organizer Dashboard</h1>
-            <p className="text-white/90 text-lg">Manage your events</p>
+            <h1 className="text-3xl font-bold mb-2 text-[#387C7F]">Organizer Dashboard</h1>
+            <p className="text-muted-foreground text-lg">Manage your events</p>
           </div>
         </div>
       </div>
 
       {/* Stats - Only show when not editing */}
       {editingId === null && (
-        <div className="px-6 -mt-4 mb-6">
+        <div className="px-6 mt-6 mb-6">
           {/* Stats Grid - Responsive: 1 col mobile, 2 col tablet, 3 col desktop */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
             <StatCard
@@ -1945,7 +1945,7 @@ const InstructorDashboard = () => {
             />
 
             {/* Share Instructor Link - Right Side */}
-            <div className="bg-white rounded-[18px] p-6 shadow-[0_1px_3px_0_rgb(0_0_0_/_0.05),0_1px_2px_-1px_rgb(0_0_0_/_0.05)] transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-[0_4px_6px_-1px_rgb(0_0_0_/_0.1),0_2px_4px_-2px_rgb(0_0_0_/_0.1)]">
+            <div className="bg-white rounded-[18px] p-6 border-2 border-[#459394]/25 shadow-[0_1px_3px_0_rgb(0_0_0_/_0.05),0_1px_2px_-1px_rgb(0_0_0_/_0.05)] transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:border-[#459394]/45 hover:shadow-[0_4px_6px_-1px_rgb(0_0_0_/_0.1),0_2px_4px_-2px_rgb(0_0_0_/_0.1)]">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-lg border border-[#459394]/20" style={{ color: "#459394" }}>

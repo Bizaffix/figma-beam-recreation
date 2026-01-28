@@ -137,7 +137,8 @@ ALTER TABLE public.retreats
   ADD COLUMN IF NOT EXISTS meeting_url text,
   ADD COLUMN IF NOT EXISTS venue_id uuid REFERENCES public.properties(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS venue_usage_type text CHECK (venue_usage_type IN ('AT_LOCATION', 'OFFSITE')),
-  ADD COLUMN IF NOT EXISTS seat_capacity integer DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS seat_capacity integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS sleep_capacity integer DEFAULT 0;
 
 -- Add ticket_type to bookings table
 ALTER TABLE public.bookings

@@ -232,6 +232,9 @@ const InstructorRetreatForm = () => {
   const [meetingUrl, setMeetingUrl] = useState<string>('');
   const [venueUsageType, setVenueUsageType] = useState<'AT_LOCATION' | 'OFFSITE' | null>(null);
   const [seatCapacity, setSeatCapacity] = useState<number>(0);
+  const [sleepCapacity, setSleepCapacity] = useState<number>(0);
+  const [seatCapacityTouched, setSeatCapacityTouched] = useState(false);
+  const [sleepCapacityTouched, setSleepCapacityTouched] = useState(false);
   const [newPriceVariant, setNewPriceVariant] = useState({ name: "", price: "", description: "" });
   const [newAddOn, setNewAddOn] = useState({ name: "", price: "", description: "", required: false });
   const [discountCoupon, setDiscountCoupon] = useState({
@@ -599,6 +602,9 @@ const InstructorRetreatForm = () => {
           if (data.seat_capacity) {
             setSeatCapacity(data.seat_capacity);
           }
+          if (data.sleep_capacity) {
+            setSleepCapacity(data.sleep_capacity);
+          }
           // Load venue if attached
           if (data.venue_id) {
             const { data: venueData } = await supabase
@@ -629,6 +635,24 @@ const InstructorRetreatForm = () => {
 
     fetchRetreat();
   }, [editingId, user, toast]);
+
+  // Auto-fill capacity values from attached venue (only if user hasn't manually edited)
+  useEffect(() => {
+    if (!selectedVenue) return;
+    if (eventMode !== 'IN_PERSON') return;
+
+    // Seats: use venue max_quilters or seat_capacity_total if present
+    const venueSeat = Number((selectedVenue as any)?.max_quilters ?? (selectedVenue as any)?.seat_capacity_total ?? 0) || 0;
+    if (!seatCapacityTouched && seatCapacity === 0 && venueSeat > 0) {
+      setSeatCapacity(venueSeat);
+    }
+
+    // Sleeps: use venue sleeps if present
+    const venueSleep = Number((selectedVenue as any)?.sleeps ?? 0) || 0;
+    if (!sleepCapacityTouched && sleepCapacity === 0 && venueSleep > 0) {
+      setSleepCapacity(venueSleep);
+    }
+  }, [selectedVenue, eventMode, seatCapacity, sleepCapacity, seatCapacityTouched, sleepCapacityTouched]);
 
   // Update formData.date and calculate duration when dateRange changes
   useEffect(() => {
@@ -688,6 +712,7 @@ const InstructorRetreatForm = () => {
         venue_id: eventMode === 'IN_PERSON' && selectedVenue?.id ? selectedVenue.id : null,
         venue_usage_type: eventMode === 'IN_PERSON' ? venueUsageType : null,
         seat_capacity: seatCapacity || 0,
+        sleep_capacity: sleepCapacity || 0,
         discount_coupon: formData.discount_coupon,
         price_variants: formData.price_variants && formData.price_variants.length > 0 ? formData.price_variants : null,
         add_ons: formData.add_ons && formData.add_ons.length > 0 ? formData.add_ons : null,
@@ -1267,6 +1292,7 @@ const InstructorRetreatForm = () => {
         venue_id: eventMode === 'IN_PERSON' && selectedVenue?.id ? selectedVenue.id : null,
         venue_usage_type: eventMode === 'IN_PERSON' ? venueUsageType : null,
         seat_capacity: seatCapacity || 0,
+        sleep_capacity: sleepCapacity || 0,
         discount_coupon: formData.discount_coupon,
         price_variants: formData.price_variants && formData.price_variants.length > 0 ? formData.price_variants : null,
         add_ons: formData.add_ons && formData.add_ons.length > 0 ? formData.add_ons : null,
@@ -2600,6 +2626,45 @@ const InstructorRetreatForm = () => {
             </div>
 
             <div>
+              <Label>Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal text-xs sm:text-sm",
+                      !dateRange && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "LLL dd, y")} -{" "}
+                          {format(dateRange.to, "LLL dd, y")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "LLL dd, y")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div>
               <Label>Event Image</Label>
               <div className="text-xs text-muted-foreground mb-2">
                 Recommended: 1200x400px (3:1 ratio) for best display • Max size: 5MB
@@ -2687,7 +2752,7 @@ const InstructorRetreatForm = () => {
                 <Label className="text-sm font-medium text-card-foreground/70 mb-3 block">Suggested Content Sections</Label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {[
-                    { value: "core", title: "Core Event Description" },
+                    { value: "core", title: "Event Description" },
                     { value: "lodging", title: "Lodging, Rooms, Amenities" },
                     { value: "volunteer", title: "Volunteer Opportunities" },
                     { value: "food", title: "Food, Dietary Needs" },
@@ -3197,50 +3262,11 @@ const InstructorRetreatForm = () => {
       </Card>
       )}
 
-      {/* Dates & Capacity Section */}
+      {/* Dates Section */}
       <Card className="overflow-hidden">
         <CardContent className="p-6 space-y-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Dates & Capacity</h3>
-
-            <div>
-              <Label>Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal text-xs sm:text-sm",
-                      !dateRange && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>
-                          {format(dateRange.from, "LLL dd, y")} -{" "}
-                          {format(dateRange.to, "LLL dd, y")}
-                        </>
-                      ) : (
-                        format(dateRange.from, "LLL dd, y")
-                      )
-                    ) : (
-                      <span>Pick a date range</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+            <h3 className="text-lg font-semibold text-card-foreground">Dates</h3>
 
             {/* Create Itinerary Button */}
             {dateRange?.from && dateRange?.to && (
@@ -3257,42 +3283,77 @@ const InstructorRetreatForm = () => {
               </div>
             )}
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Duration</Label>
-                <Input
-                  value={formData.duration}
-                  onChange={(e) => setFormData(prev => ({ ...prev, duration: e.target.value }))}
-                  placeholder="4 days"
-                  required
-                />
-              </div>
-              <div>
-                <Label>Capacity</Label>
-                <Input
-                  type="number"
-                  value={formData.totalSpots}
-                  onChange={(e) => setFormData(prev => ({ ...prev, totalSpots: Number(e.target.value) }))}
-                  required
-                />
-              </div>
+            <div>
+              <Label>Duration</Label>
+              <Input
+                value={formData.duration}
+                onChange={(e) => setFormData(prev => ({ ...prev, duration: e.target.value }))}
+                placeholder="4 days"
+                required
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Capacity Section */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-6 space-y-6">
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-card-foreground">Capacity</h3>
+
+            <div>
+              <Label>Max Booking Capacity</Label>
+              <Input
+                type="number"
+                min="0"
+                value={formData.totalSpots}
+                onChange={(e) => setFormData(prev => ({ ...prev, totalSpots: Number(e.target.value) || 0 }))}
+                required
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                This is the total number of attendees that can book the event.
+              </p>
             </div>
 
-            {/* Seat Capacity - Only for IN_PERSON + AT_LOCATION events */}
+            {/* Venue-based capacities (auto-filled when venue attached) */}
             {eventMode === 'IN_PERSON' && venueUsageType === 'AT_LOCATION' && (
-              <div>
-                <Label htmlFor="seat-capacity">Seat Capacity (for SEAT_ONLY tickets)</Label>
-                <Input
-                  id="seat-capacity"
-                  type="number"
-                  min="0"
-                  value={seatCapacity}
-                  onChange={(e) => setSeatCapacity(Number(e.target.value) || 0)}
-                  placeholder="0"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Set seat capacity to enable seat-only tickets. Leave 0 to only offer STAY tickets.
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="seat-capacity">Max Seat Capacity</Label>
+                  <Input
+                    id="seat-capacity"
+                    type="number"
+                    min="0"
+                    value={seatCapacity}
+                    onChange={(e) => {
+                      setSeatCapacityTouched(true);
+                      setSeatCapacity(Number(e.target.value) || 0);
+                    }}
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Defaults from venue (Max quilters). Set &gt; 0 to enable seat-only tickets.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="sleep-capacity">Max Sleep Capacity</Label>
+                  <Input
+                    id="sleep-capacity"
+                    type="number"
+                    min="0"
+                    value={sleepCapacity}
+                    onChange={(e) => {
+                      setSleepCapacityTouched(true);
+                      setSleepCapacity(Number(e.target.value) || 0);
+                    }}
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Defaults from venue (Sleeps).
+                  </p>
+                </div>
               </div>
             )}
           </div>
