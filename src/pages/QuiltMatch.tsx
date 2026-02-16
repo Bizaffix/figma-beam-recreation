@@ -26,7 +26,7 @@ import { searchQuiltMatch, getExampleQueries } from "@/services/quiltmatch";
 import { discoverRetreats } from "@/services/discover";
 import { MatchCard } from "@/components/quiltmatch/MatchCard";
 import { DemoListingCard } from "@/components/quiltmatch/DemoListingCard";
-import { DraftListingCard } from "@/components/quiltmatch/DraftListingCard";
+import { DraftListingCard, getDismissedIds } from "@/components/quiltmatch/DraftListingCard";
 import { QualityScoreBar } from "@/components/quiltmatch/QualityScoreBar";
 import { ParsedFiltersDisplay } from "@/components/quiltmatch/ParsedFiltersDisplay";
 import type { QuiltMatchResponse, StudentContext } from "@/types/quiltmatch";
@@ -450,9 +450,17 @@ export default function QuiltMatch() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {discoveredListings.map((listing) => (
-                      <DraftListingCard key={listing.id} listing={listing} />
-                    ))}
+                    {discoveredListings
+                      .filter((l) => !getDismissedIds().includes(l.id))
+                      .map((listing) => (
+                        <DraftListingCard
+                          key={listing.id}
+                          listing={listing}
+                          onDismiss={(id) => {
+                            setDiscoveredListings((prev) => prev.filter((l) => l.id !== id));
+                          }}
+                        />
+                      ))}
                   </div>
                 )}
               </div>

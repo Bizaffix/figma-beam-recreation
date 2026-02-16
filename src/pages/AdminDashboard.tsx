@@ -12,7 +12,8 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar, Link as LinkIcon, Percent, Tag, Gift, Settings2 } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar, Link as LinkIcon, Percent, Tag, Gift, Settings2, Search } from "lucide-react";
+import { DraftListingsPanel } from "@/components/admin/DraftListingsPanel";
 import { StatCard } from "@/components/StatCard";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1388,6 +1389,15 @@ const AdminDashboard = () => {
               .map(v => v.photos[0])
               .slice(0, 4)}
           />
+        </div>
+
+        {/* Web-Discovered Listings Review Panel */}
+        <div className="mb-6">
+          <Card>
+            <CardContent className="p-6">
+              <DraftListingsPanel />
+            </CardContent>
+          </Card>
         </div>
 
         {/* Affiliate Program Manager Card */}

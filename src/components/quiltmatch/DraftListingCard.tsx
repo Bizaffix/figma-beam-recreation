@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,21 +23,76 @@ import { InterestModal } from "./InterestModal";
 interface DraftListingCardProps {
   listing: DraftListing;
   onInterestSent?: () => void;
+  onDismiss?: (listingId: string) => void;
 }
 
 const confidenceConfig = {
   high: { color: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "" },
   medium: { color: "bg-amber-50 text-amber-700 border-amber-200", label: "Some details may be missing" },
-  low: { color: "bg-red-50 text-red-700 border-red-200", label: "Limited info—we'll ask the organizer" },
+  low: { color: "bg-red-50 text-red-700 border-red-200", label: "Limited info — we'll ask the organizer" },
 };
 
-export function DraftListingCard({ listing, onInterestSent }: DraftListingCardProps) {
+const SAVED_KEY = "quiltmatch_saved_listings";
+const DISMISSED_KEY = "quiltmatch_dismissed_listings";
+
+function getSavedIds(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function setSavedIds(ids: string[]) {
+  localStorage.setItem(SAVED_KEY, JSON.stringify(ids));
+}
+
+export function getDismissedIds(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function setDismissedIds(ids: string[]) {
+  localStorage.setItem(DISMISSED_KEY, JSON.stringify(ids));
+}
+
+export function DraftListingCard({ listing, onInterestSent, onDismiss }: DraftListingCardProps) {
   const [showInterestModal, setShowInterestModal] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    setSaved(getSavedIds().includes(listing.id));
+  }, [listing.id]);
 
   const conf = confidenceConfig[listing.extraction_confidence] || confidenceConfig.medium;
   const locationParts = [listing.location_city, listing.location_region].filter(Boolean);
   const locationStr = locationParts.length > 0 ? locationParts.join(", ") : "Location TBD";
+
+  const handleSave = () => {
+    const ids = getSavedIds();
+    if (ids.includes(listing.id)) {
+      setSavedIds(ids.filter((id) => id !== listing.id));
+      setSaved(false);
+    } else {
+      setSavedIds([...ids, listing.id]);
+      setSaved(true);
+    }
+  };
+
+  const handleDismiss = () => {
+    const ids = getDismissedIds();
+    if (!ids.includes(listing.id)) {
+      setDismissedIds([...ids, listing.id]);
+    }
+    setDismissed(true);
+    onDismiss?.(listing.id);
+  };
+
+  if (dismissed) return null;
 
   return (
     <>
@@ -49,6 +104,15 @@ export function DraftListingCard({ listing, onInterestSent }: DraftListingCardPr
             Draft Listing
           </Badge>
         </div>
+
+        {/* Dismiss button */}
+        <button
+          onClick={handleDismiss}
+          className="absolute top-3 right-3 z-10 w-7 h-7 rounded-full bg-white/90 border border-border/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:border-red-200"
+          title="Not a fit — hide this"
+        >
+          <XCircle className="w-4 h-4 text-muted-foreground hover:text-red-500" />
+        </button>
 
         {/* Image or gradient */}
         <div className="relative h-44 overflow-hidden">
@@ -140,11 +204,20 @@ export function DraftListingCard({ listing, onInterestSent }: DraftListingCardPr
               variant="outline"
               size="icon"
               className={`h-9 w-9 shrink-0 ${saved ? "text-accent border-accent/30 bg-accent/5" : ""}`}
-              onClick={() => setSaved(!saved)}
+              onClick={handleSave}
+              title={saved ? "Remove from saved" : "Save for later"}
             >
               <Bookmark className={`w-3.5 h-3.5 ${saved ? "fill-accent" : ""}`} />
             </Button>
           </div>
+
+          {/* Saved indicator */}
+          {saved && (
+            <p className="text-xs text-accent flex items-center gap-1">
+              <Bookmark className="w-3 h-3 fill-accent" />
+              Saved for later
+            </p>
+          )}
 
           {/* Source link */}
           <a

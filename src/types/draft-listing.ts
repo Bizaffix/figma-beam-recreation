@@ -42,6 +42,28 @@ export interface DraftListing {
   search_result_snippet: string | null;
   created_at: string;
   updated_at: string;
+  // V2: Editable fields
+  additional_images?: string[];
+  amenities?: string[];
+  skill_levels?: string[];
+  max_capacity?: number | null;
+  policies?: string | null;
+  cancellation_policy?: string | null;
+  deposit_info?: string | null;
+  website_url?: string | null;
+  facebook_url?: string | null;
+  instagram_url?: string | null;
+  // V2: Application
+  claimer_role?: string | null;
+  application_about?: string | null;
+  application_events_hosted?: string | null;
+  application_notes?: string | null;
+  // V2: Admin
+  admin_notes?: string | null;
+  review_flags?: string[];
+  // V2: Expiry
+  invite_expires_at?: string | null;
+  invite_reminder_sent?: boolean;
   // Computed on frontend
   interest_count?: number;
 }
