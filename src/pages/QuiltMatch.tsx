@@ -18,15 +18,19 @@ import {
   ChevronUp,
   Mail,
   Info,
+  Globe,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { searchQuiltMatch, getExampleQueries } from "@/services/quiltmatch";
+import { discoverRetreats } from "@/services/discover";
 import { MatchCard } from "@/components/quiltmatch/MatchCard";
 import { DemoListingCard } from "@/components/quiltmatch/DemoListingCard";
+import { DraftListingCard } from "@/components/quiltmatch/DraftListingCard";
 import { QualityScoreBar } from "@/components/quiltmatch/QualityScoreBar";
 import { ParsedFiltersDisplay } from "@/components/quiltmatch/ParsedFiltersDisplay";
 import type { QuiltMatchResponse, StudentContext } from "@/types/quiltmatch";
+import type { DraftListing } from "@/types/draft-listing";
 import {
   Collapsible,
   CollapsibleContent,
@@ -43,6 +47,11 @@ export default function QuiltMatch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<QuiltMatchResponse | null>(null);
+
+  // Web discovery state
+  const [discoverLoading, setDiscoverLoading] = useState(false);
+  const [discoveredListings, setDiscoveredListings] = useState<DraftListing[]>([]);
+  const [discoverNote, setDiscoverNote] = useState<string>("");
 
   // Student context (optional)
   const [showContext, setShowContext] = useState(false);
@@ -72,6 +81,8 @@ export default function QuiltMatch() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setDiscoveredListings([]);
+    setDiscoverNote("");
 
     const context: Partial<StudentContext> = {
       name: studentName || undefined,
@@ -81,11 +92,37 @@ export default function QuiltMatch() {
       flexible_budget: flexibleBudget,
     };
 
-    try {
-      const res = await searchQuiltMatch(query, context);
-      setResult(res);
-    } catch (err) {
+    // Run database matching and web discovery in parallel
+    const dbMatchPromise = searchQuiltMatch(query, context).catch((err) => {
       console.error("QuiltMatch search error:", err);
+      return null;
+    });
+
+    const webDiscoverPromise = (async () => {
+      setDiscoverLoading(true);
+      try {
+        const discoverRes = await discoverRetreats({
+          query,
+          location: homeLocation || undefined,
+        });
+        setDiscoveredListings(discoverRes.draft_listings || []);
+        setDiscoverNote(discoverRes.note || "");
+      } catch (err) {
+        console.warn("Web discovery unavailable:", err);
+      } finally {
+        setDiscoverLoading(false);
+      }
+    })();
+
+    try {
+      const [dbResult] = await Promise.all([dbMatchPromise, webDiscoverPromise]);
+      if (dbResult) {
+        setResult(dbResult);
+      } else {
+        setError("Something went wrong with the search. Please try again.");
+      }
+    } catch (err) {
+      console.error("Search error:", err);
       setError(
         err instanceof Error ? err.message : "Something went wrong. Please try again."
       );
@@ -110,6 +147,8 @@ export default function QuiltMatch() {
     setResult(null);
     setError(null);
     setQuery("");
+    setDiscoveredListings([]);
+    setDiscoverNote("");
     setTimeout(() => textareaRef.current?.focus(), 100);
   };
 
@@ -390,8 +429,37 @@ export default function QuiltMatch() {
               </div>
             )}
 
+            {/* Web Discovery Results */}
+            {(discoveredListings.length > 0 || discoverLoading) && (
+              <div>
+                <h2 className="text-xl font-semibold text-foreground mb-2 flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-primary" />
+                  Discovered from the Web
+                </h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {discoverNote || "Found retreats across the web that match your search. Express interest and we'll connect you with the organizer."}
+                </p>
+
+                {discoverLoading ? (
+                  <div className="flex items-center gap-3 bg-muted/30 rounded-xl px-5 py-4">
+                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Searching the web...</p>
+                      <p className="text-xs text-muted-foreground">Finding quilt retreats beyond our directory</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {discoveredListings.map((listing) => (
+                      <DraftListingCard key={listing.id} listing={listing} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Empty State */}
-            {result.matches.length === 0 && !result.demo_listing && (
+            {result.matches.length === 0 && !result.demo_listing && discoveredListings.length === 0 && !discoverLoading && (
               <div className="text-center py-12">
                 <Scissors className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-foreground mb-2">
