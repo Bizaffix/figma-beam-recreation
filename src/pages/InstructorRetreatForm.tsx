@@ -18,6 +18,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
@@ -179,6 +180,7 @@ const InstructorRetreatForm = () => {
   const location = useLocation();
   const { role, user } = useAuth();
   const { toast } = useToast();
+  const { instructorFeeRate, settings: platformSettings } = usePlatformSettings();
   
   const [draftRetreats, setDraftRetreats] = useState<Retreat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1212,9 +1214,9 @@ const InstructorRetreatForm = () => {
     setSelectedVenue(venueData || null);
   };
 
-  // Calculate platform fee based on discounts
+  // Calculate platform fee based on discounts (rate from admin-configured platform settings)
   const calculatePlatformFee = (revenue: number): number => {
-    const basePlatformFee = revenue * 0.124; // 12.4% base fee
+    const basePlatformFee = revenue * instructorFeeRate;
     
     // FIRST EVENT FREE: If organizer is eligible, campaign is active, and this is their first event
     if (firstEventFreeCampaignActive && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent && editingId === 'new') {
@@ -4017,8 +4019,9 @@ const InstructorRetreatForm = () => {
                 
                 {(() => {
                   const revenue = (formData.price || 0) * (formData.totalSpots || 0);
-                  const basePlatformFee = revenue * 0.124;
+                  const basePlatformFee = revenue * instructorFeeRate;
                   const platformFee = calculatePlatformFee(revenue);
+                  const feePercent = platformSettings?.platform_fee_rate_instructor ?? 12.4;
 
                   // Determine discount info for display
                   let discountInfo = '';
@@ -4040,7 +4043,7 @@ const InstructorRetreatForm = () => {
                     <div className="flex items-center justify-between py-2 border-b">
                       <div className="flex flex-col">
                         <span className="text-sm font-medium">
-                          {hasDiscount ? `Platform Fee (${discountPercent}% Discount Applied)` : '-12.4% Platform Fee'}
+                          {hasDiscount ? `Platform Fee (${discountPercent}% Discount Applied)` : `-${feePercent}% Platform Fee`}
                         </span>
                         {hasDiscount && discountInfo && (
                           <span className="text-xs text-muted-foreground mt-0.5">{discountInfo}</span>

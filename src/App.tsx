@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { PermissionsProvider } from "./contexts/PermissionsContext";
+import { PlatformSettingsProvider } from "./contexts/PlatformSettingsContext";
 import Index from "./pages/Index";
 import Home from "./pages/Home";
 import Landing from "./pages/Landing";
@@ -154,6 +155,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <PlatformSettingsProvider>
           <PermissionsProvider>
             <AffiliateTrackingInit />
             <Routes>
@@ -213,6 +215,7 @@ const App = () => (
           <Route path="*" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />
             </Routes>
           </PermissionsProvider>
+          </PlatformSettingsProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

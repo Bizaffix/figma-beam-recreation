@@ -10,8 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar, Link as LinkIcon, Percent, Tag, Gift } from "lucide-react";
+import { LogOut, Users, GraduationCap, DollarSign, BookOpen, Loader2, Bell, X, Upload, Trash2, Save, FileText, FolderOpen, Plus, GripVertical, MapPin, Eye, Calendar, Link as LinkIcon, Percent, Tag, Gift, Settings2 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -143,11 +144,23 @@ const AdminDashboard = () => {
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [discountValue, setDiscountValue] = useState<string>('');
   const [assigningDiscount, setAssigningDiscount] = useState(false);
+  const [savingFees, setSavingFees] = useState(false);
+  const [feeInstructor, setFeeInstructor] = useState<string>('12.4');
+  const [feeVenue, setFeeVenue] = useState<string>('0');
+
+  const { settings: platformSettings, loading: platformSettingsLoading, updateSettings: updatePlatformSettings, refresh: refreshPlatformSettings } = usePlatformSettings();
 
   useEffect(() => {
     if (role !== 'admin' || !user) return;
     fetchData();
   }, [role, user]);
+
+  useEffect(() => {
+    if (platformSettings) {
+      setFeeInstructor(String(platformSettings.platform_fee_rate_instructor));
+      setFeeVenue(String(platformSettings.platform_fee_rate_venue));
+    }
+  }, [platformSettings]);
 
   const fetchData = async () => {
     if (!user) return;
@@ -514,6 +527,31 @@ const AdminDashboard = () => {
       setSelectedLocationOwners(new Set());
     } else {
       setSelectedLocationOwners(new Set(locationOwnersList.map(l => l.id)));
+    }
+  };
+
+  const handleSaveFees = async () => {
+    const instructorRate = parseFloat(feeInstructor);
+    const venueRate = parseFloat(feeVenue);
+    if (isNaN(instructorRate) || instructorRate < 0 || instructorRate > 100) {
+      toast({ title: "Invalid rate", description: "Instructor fee must be 0–100%", variant: "destructive" });
+      return;
+    }
+    if (isNaN(venueRate) || venueRate < 0 || venueRate > 100) {
+      toast({ title: "Invalid rate", description: "Venue fee must be 0–100%", variant: "destructive" });
+      return;
+    }
+    setSavingFees(true);
+    const { success, error } = await updatePlatformSettings({
+      platform_fee_rate_instructor: instructorRate,
+      platform_fee_rate_venue: venueRate,
+    });
+    setSavingFees(false);
+    if (success) {
+      toast({ title: "Rates saved", description: "Platform fee rates updated successfully" });
+      refreshPlatformSettings();
+    } else {
+      toast({ title: "Error", description: error || "Failed to save rates", variant: "destructive" });
     }
   };
 
@@ -1366,6 +1404,61 @@ const AdminDashboard = () => {
                   Open Manager
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Fee / Rate Management Card */}
+        <div className="mb-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Settings2 className="w-5 h-5 text-primary" />
+                <div>
+                  <h3 className="text-lg font-semibold">Fee & Rate Management</h3>
+                  <p className="text-sm text-muted-foreground">Configure platform fee rates for organizers and venue hosts</p>
+                </div>
+              </div>
+              {platformSettingsLoading ? (
+                <Skeleton className="h-24 w-full" />
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="fee-instructor">Organizer / Instructor Fee (%)</Label>
+                    <Input
+                      id="fee-instructor"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      value={feeInstructor}
+                      onChange={(e) => setFeeInstructor(e.target.value)}
+                      placeholder="12.4"
+                    />
+                    <p className="text-xs text-muted-foreground">% of gross booking revenue deducted from organizer payouts</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fee-venue">Venue / Host Fee (%)</Label>
+                    <Input
+                      id="fee-venue"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      value={feeVenue}
+                      onChange={(e) => setFeeVenue(e.target.value)}
+                      placeholder="0"
+                    />
+                    <p className="text-xs text-muted-foreground">% of venue fees (if applicable)</p>
+                  </div>
+                  <div className="flex items-end">
+                    <Button onClick={handleSaveFees} disabled={savingFees}>
+                      {savingFees ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                      Save Rates
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

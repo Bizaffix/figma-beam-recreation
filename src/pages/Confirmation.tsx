@@ -7,11 +7,13 @@ import { AlertCircle, Clock, Edit } from "lucide-react";
 import calendar, { createGoogleCalendarUrl } from "@/lib/calendar";
 import { convertReferral, getCurrentAffiliate, createPassiveCommission } from "@/lib/affiliate-tracking";
 import { supabase } from "@/lib/supabase";
+import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 import { getBedDetailsFromAssignment, getSeatDetailsFromAssignment, fetchEventRooms, fetchEventSeats, EventBed, EventRoom, EventSeat } from "@/lib/event-capacity";
 
 const Confirmation = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { instructorFeeRate } = usePlatformSettings();
 
   const retreat = (location.state as any)?.retreat;
   const booking = (location.state as any)?.booking;
@@ -108,7 +110,7 @@ const Confirmation = () => {
 
         const referralId = referrals[0].id;
         const transactionAmount = retreat.price || 0;
-        const platformFee = transactionAmount * 0.1; // Assume 10% platform fee
+        const platformFee = transactionAmount * instructorFeeRate;
 
         await convertReferral(
           referralId,
@@ -148,7 +150,7 @@ const Confirmation = () => {
     };
 
     handleAffiliateConversion();
-  }, [bookingId, retreat]);
+  }, [bookingId, retreat, instructorFeeRate]);
 
   const email = booking?.email ?? "";
 

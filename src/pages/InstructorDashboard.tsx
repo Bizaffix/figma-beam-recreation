@@ -15,6 +15,7 @@ import { Plus, Edit, Trash2, Eye, EyeOff, Save, X, Upload, MapPin, ExternalLink,
 import { StatCard } from "@/components/StatCard";
 import { PayoutCard } from "@/components/PayoutCard";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
@@ -166,6 +167,7 @@ const InstructorDashboard = () => {
   const navigate = useNavigate();
   const { role, user } = useAuth();
   const { toast } = useToast();
+  const { instructorFeeRate, settings: platformSettings } = usePlatformSettings();
   const [allRetreats, setAllRetreats] = useState<Retreat[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | 'new' | null>(null);
@@ -1004,7 +1006,7 @@ const InstructorDashboard = () => {
             // Create passive commission when event is published (for organizer referrals)
             if (retreatData.published && user.id) {
               const revenue = (retreatData.price || 0) * (retreatData.total_spots || 0);
-              const basePlatformFee = revenue * 0.124;
+              const basePlatformFee = revenue * instructorFeeRate;
               let platformFee = basePlatformFee;
               if (firstEventFreeCampaignActive && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
                 platformFee = 0;
@@ -1078,7 +1080,7 @@ const InstructorDashboard = () => {
             // Create passive commission when event is published (for organizer referrals)
             if (data.published && user.id) {
               const revenue = (retreatData.price || 0) * (retreatData.total_spots || 0);
-              const basePlatformFee = revenue * 0.124;
+              const basePlatformFee = revenue * instructorFeeRate;
               let platformFee = basePlatformFee;
               if (firstEventFreeCampaignActive && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
                 platformFee = 0;
@@ -1157,7 +1159,7 @@ const InstructorDashboard = () => {
           // Create passive commission when event is published (for organizer referrals)
           if (isNowPublished && user.id) {
             const revenue = (retreatData.price || 0) * (retreatData.total_spots || 0);
-            const basePlatformFee = revenue * 0.124;
+            const basePlatformFee = revenue * instructorFeeRate;
             let platformFee = basePlatformFee;
             if (firstEventFreeCampaignActive && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
               platformFee = 0;
@@ -1688,7 +1690,8 @@ const InstructorDashboard = () => {
                 
                 {(() => {
                   const revenue = (formData.price || 0) * (formData.totalSpots || 0);
-                  const basePlatformFee = revenue * 0.124; // 12.4% base fee
+                  const basePlatformFee = revenue * instructorFeeRate;
+                  const feePercent = platformSettings?.platform_fee_rate_instructor ?? 12.4;
                   
                   // FIRST EVENT FREE: If organizer is eligible, campaign is active, and this is their first event
                   let platformFee = basePlatformFee;
@@ -1711,7 +1714,7 @@ const InstructorDashboard = () => {
                     <div className="flex items-center justify-between py-2 border-b">
                       <div className="flex flex-col">
                         <span className="text-sm font-medium">
-                          {hasDiscount ? `Platform Fee (${discountPercent}% Discount Applied)` : '-12.4% Platform Fee'}
+                          {hasDiscount ? `Platform Fee (${discountPercent}% Discount Applied)` : `-${feePercent}% Platform Fee`}
                         </span>
                         {hasDiscount && (
                           <span className="text-xs text-muted-foreground mt-0.5">
@@ -1786,7 +1789,7 @@ const InstructorDashboard = () => {
                 
                 {(() => {
                   const revenue = (formData.price || 0) * (formData.totalSpots || 0);
-                  const basePlatformFee = revenue * 0.124; // 12.4% base fee
+                  const basePlatformFee = revenue * instructorFeeRate;
                   // FIRST EVENT FREE: If organizer is eligible, campaign is active, and this is their first event
                   let platformFee = basePlatformFee;
                   if (firstEventFreeCampaignActive && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent && editingId === null) {
