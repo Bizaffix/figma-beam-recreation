@@ -30,6 +30,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import LocationOwnerDashboard from "./pages/LocationOwnerDashboard";
 import VenueOwnerMessages from "./pages/VenueOwnerMessages";
 import VenueRegistration from "./pages/VenueRegistration";
+import QuiltMatch from "./pages/QuiltMatch";
 import { useAuth } from "./contexts/AuthContext";
 import { initializeAffiliateTracking } from "./lib/affiliate-tracking";
 import { useEffect } from "react";
@@ -172,6 +173,10 @@ const App = () => (
           {/* Public Retreat Browsing - Event Feed */}
           <Route path="/browse" element={<Index />} />
           <Route path="/discover" element={<Index />} />
+          
+          {/* QuiltMatch AI – Smart Retreat Finder */}
+          <Route path="/find" element={<QuiltMatch />} />
+          <Route path="/quiltmatch" element={<QuiltMatch />} />
           
           {/* Protected Student Routes */}
           <Route path="/home" element={<StudentRoute><Home /></StudentRoute>} />
