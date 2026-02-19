@@ -23,6 +23,7 @@ import StudentMessages from "./pages/StudentMessages";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import AffiliateProgramManager from "./pages/AffiliateProgramManager";
+import { CookieConsentBanner } from "./components/CookieConsentBanner";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import EmailConfirm from "./pages/EmailConfirm";
@@ -218,6 +219,7 @@ const App = () => (
           {/* Catch-all route - redirect to login if not authenticated */}
           <Route path="*" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />
             </Routes>
+            <CookieConsentBanner />
           </PermissionsProvider>
           </PlatformSettingsProvider>
         </AuthProvider>
