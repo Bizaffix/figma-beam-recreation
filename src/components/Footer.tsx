@@ -74,7 +74,7 @@ export const Footer = () => {
               </li>
               <li>
                 <Link
-                  to="/#how-it-works"
+                  to="/how-it-works"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   How It Works

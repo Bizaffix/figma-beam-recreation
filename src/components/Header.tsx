@@ -1,7 +1,7 @@
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { Menu, X, LogOut, User, LayoutDashboard, Compass, Home } from "lucide-react";
+import { Menu, X, LogOut, User, LayoutDashboard, Sparkles } from "lucide-react";
 import { useState } from "react";
 import {
   DropdownMenu,
@@ -14,7 +14,6 @@ import {
 export const Header = () => {
   const { user, role, signOut } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -30,24 +29,9 @@ export const Header = () => {
 
   const handleHowItWorksClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
-    
-    // Navigate to landing page, then scroll
-    navigate('/');
-    setTimeout(() => {
-      const element = document.getElementById('how-it-works');
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
-    
-    setMobileMenuOpen(false);
-  };
 
-  const handleHomeClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-    
-    // Navigate to landing page
-    navigate('/');
+    // Dedicated page for detailed product sections
+    navigate('/how-it-works');
     setMobileMenuOpen(false);
   };
 
@@ -128,8 +112,14 @@ export const Header = () => {
               </>
             ) : (
               <>
+                <Link
+                  to="/find"
+                  className="text-sm font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
+                >
+                  Find with AI
+                </Link>
                 <a
-                  href="/#how-it-works"
+                  href="/how-it-works"
                   onClick={handleHowItWorksClick}
                   className="text-sm font-medium text-[#387C7F] hover:text-[#459394] transition-colors cursor-pointer"
                 >
@@ -262,8 +252,18 @@ export const Header = () => {
                 ) : (
                   <>
                     <div className="space-y-1">
+                      <Link
+                        to="/find"
+                        className="block py-3 text-base font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <Sparkles className="w-4 h-4" />
+                          Find with AI
+                        </span>
+                      </Link>
                       <a
-                        href="/#how-it-works"
+                        href="/how-it-works"
                         onClick={handleHowItWorksClick}
                         className="block py-3 text-base font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
                       >

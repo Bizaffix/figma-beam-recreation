@@ -29,6 +29,7 @@ import Signup from "./pages/Signup";
 import EmailConfirm from "./pages/EmailConfirm";
 import ResetPassword from "./pages/ResetPassword";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import HowItWorks from "./pages/HowItWorks";
 import LocationOwnerDashboard from "./pages/LocationOwnerDashboard";
 import VenueOwnerMessages from "./pages/VenueOwnerMessages";
 import VenueRegistration from "./pages/VenueRegistration";
@@ -173,6 +174,7 @@ const App = () => (
           <Route path="/auth/reset-password" element={<ResetPassword />} />
           {/* Public Legal Pages */}
           <Route path="/privacy" element={<PublicRoute><PrivacyPolicy /></PublicRoute>} />
+          <Route path="/how-it-works" element={<PublicRoute><HowItWorks /></PublicRoute>} />
           
           {/* Public Retreat Browsing - Event Feed */}
           <Route path="/browse" element={<Index />} />

@@ -469,7 +469,7 @@ export const BrowseSection = () => {
   };
 
   return (
-    <section className="py-12 sm:py-16 bg-white w-full overflow-x-hidden">
+    <section id="browse-section" className="py-12 sm:py-16 bg-white w-full overflow-x-hidden">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 w-full max-w-full">
         {/* Section Header - Craft-inspired */}
         <div className="mb-8 sm:mb-10 text-center">
@@ -508,8 +508,22 @@ export const BrowseSection = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Search Bar - Soft, welcoming */}
-          <div className="flex gap-3 sm:gap-4 mb-8 mt-8 max-w-2xl mx-auto">
+          {/* AI shortcut + search */}
+          <div className="max-w-2xl mx-auto mt-8 mb-3">
+            <Button
+              variant="outline"
+              className="w-full justify-between border-dashed border-[#459394]/50 text-[#387C7F] hover:bg-[#459394]/5"
+              onClick={() => navigate("/find")}
+            >
+              <span className="inline-flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                Want personalized matches? Use QuiltMatch AI
+              </span>
+              <span className="text-xs">2 min</span>
+            </Button>
+          </div>
+
+          <div className="flex gap-3 sm:gap-4 mb-8 max-w-2xl mx-auto">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input
