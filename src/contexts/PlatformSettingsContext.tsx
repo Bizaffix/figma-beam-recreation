@@ -11,7 +11,7 @@ interface PlatformSettingsContextType {
   loading: boolean;
   refresh: () => Promise<void>;
   updateSettings: (
-    updates: Partial<Pick<PlatformSettings, 'platform_fee_rate_instructor' | 'platform_fee_rate_venue' | 'platform_fee_min' | 'platform_fee_max'>>
+    updates: Partial<Pick<PlatformSettings, 'platform_fee_rate_instructor' | 'platform_fee_rate_venue' | 'platform_fee_min' | 'platform_fee_max' | 'ai_subscription_monthly_price'>>
   ) => Promise<{ success: boolean; error?: string }>;
   /** Instructor fee rate as decimal (e.g. 0.124 for 12.4%) */
   instructorFeeRate: number;
@@ -36,7 +36,7 @@ export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) 
   }, []);
 
   const updateSettings = async (
-    updates: Partial<Pick<PlatformSettings, 'platform_fee_rate_instructor' | 'platform_fee_rate_venue' | 'platform_fee_min' | 'platform_fee_max'>>
+    updates: Partial<Pick<PlatformSettings, 'platform_fee_rate_instructor' | 'platform_fee_rate_venue' | 'platform_fee_min' | 'platform_fee_max' | 'ai_subscription_monthly_price'>>
   ) => {
     const { data, error } = await updatePlatformSettings(updates);
     if (error) {

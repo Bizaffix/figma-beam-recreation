@@ -66,6 +66,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 
 // Quick-add chips for dream input
 const QUICK_CHIPS = [
@@ -85,7 +86,9 @@ type FlowStage = "dream" | "quiz" | "personality" | "results";
 
 export default function QuiltMatch() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hasAiAccess } = useAuth();
+  const { settings: platformSettings } = usePlatformSettings();
+  const aiMonthlyPrice = platformSettings?.ai_subscription_monthly_price ?? 3.99;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Flow stage
@@ -385,6 +388,63 @@ export default function QuiltMatch() {
     clearQuiltMatchData();
     setStage("dream");
   };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <Card className="w-full max-w-lg border border-[#459394]/30">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#459394]/10">
+              <Sparkles className="w-6 h-6 text-[#387C7F]" />
+            </div>
+            <h1 className="text-2xl font-bold">QuiltMatch AI is a premium feature</h1>
+            <p className="text-muted-foreground">
+              Create an account and start your QuiltMatch AI plan for {"$"}
+              {aiMonthlyPrice.toFixed(2)}/month to unlock personalized retreat matching.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button
+                onClick={() => navigate(`/signup?role=student&intent=quiltmatch_ai&plan=${encodeURIComponent(String(aiMonthlyPrice))}&next=/find`)}
+                className="bg-[#459394] hover:bg-[#387C7F] text-white"
+              >
+                Sign up and continue
+              </Button>
+              <Button variant="outline" onClick={() => navigate("/browse")}>
+                Browse free listings
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!hasAiAccess) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <Card className="w-full max-w-lg border border-[#459394]/30">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#459394]/10">
+              <Sparkles className="w-6 h-6 text-[#387C7F]" />
+            </div>
+            <h1 className="text-2xl font-bold">Upgrade required for QuiltMatch AI</h1>
+            <p className="text-muted-foreground">
+              You are signed in. Start your QuiltMatch AI plan for {"$"}
+              {aiMonthlyPrice.toFixed(2)}/month to unlock personalized matching.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button onClick={() => navigate("/quiltmatch/upgrade")} className="bg-[#459394] hover:bg-[#387C7F] text-white">
+                Upgrade now
+              </Button>
+              <Button variant="outline" onClick={() => navigate("/browse")}>
+                Browse free listings
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

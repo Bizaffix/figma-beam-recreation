@@ -148,6 +148,7 @@ const AdminDashboard = () => {
   const [savingFees, setSavingFees] = useState(false);
   const [feeInstructor, setFeeInstructor] = useState<string>('12.4');
   const [feeVenue, setFeeVenue] = useState<string>('0');
+  const [aiMonthlyPrice, setAiMonthlyPrice] = useState<string>('3.99');
 
   const { settings: platformSettings, loading: platformSettingsLoading, updateSettings: updatePlatformSettings, refresh: refreshPlatformSettings } = usePlatformSettings();
 
@@ -160,6 +161,7 @@ const AdminDashboard = () => {
     if (platformSettings) {
       setFeeInstructor(String(platformSettings.platform_fee_rate_instructor));
       setFeeVenue(String(platformSettings.platform_fee_rate_venue));
+      setAiMonthlyPrice(String(platformSettings.ai_subscription_monthly_price ?? 3.99));
     }
   }, [platformSettings]);
 
@@ -534,6 +536,7 @@ const AdminDashboard = () => {
   const handleSaveFees = async () => {
     const instructorRate = parseFloat(feeInstructor);
     const venueRate = parseFloat(feeVenue);
+    const aiPrice = parseFloat(aiMonthlyPrice);
     if (isNaN(instructorRate) || instructorRate < 0 || instructorRate > 100) {
       toast({ title: "Invalid rate", description: "Instructor fee must be 0–100%", variant: "destructive" });
       return;
@@ -542,10 +545,15 @@ const AdminDashboard = () => {
       toast({ title: "Invalid rate", description: "Venue fee must be 0–100%", variant: "destructive" });
       return;
     }
+    if (isNaN(aiPrice) || aiPrice <= 0) {
+      toast({ title: "Invalid price", description: "QuiltMatch AI monthly price must be greater than 0", variant: "destructive" });
+      return;
+    }
     setSavingFees(true);
     const { success, error } = await updatePlatformSettings({
       platform_fee_rate_instructor: instructorRate,
       platform_fee_rate_venue: venueRate,
+      ai_subscription_monthly_price: aiPrice,
     });
     setSavingFees(false);
     if (success) {
@@ -1460,6 +1468,19 @@ const AdminDashboard = () => {
                       placeholder="0"
                     />
                     <p className="text-xs text-muted-foreground">% of venue fees (if applicable)</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-subscription-price">QuiltMatch AI Price ($ / month)</Label>
+                    <Input
+                      id="ai-subscription-price"
+                      type="number"
+                      min={0.01}
+                      step={0.01}
+                      value={aiMonthlyPrice}
+                      onChange={(e) => setAiMonthlyPrice(e.target.value)}
+                      placeholder="3.99"
+                    />
+                    <p className="text-xs text-muted-foreground">Monthly subscription price shown across home, signup, and AI upgrade flow</p>
                   </div>
                   <div className="flex items-end">
                     <Button onClick={handleSaveFees} disabled={savingFees}>

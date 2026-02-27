@@ -6,6 +6,7 @@ export interface PlatformSettings {
   platform_fee_rate_venue: number;
   platform_fee_min: number;
   platform_fee_max: number;
+  ai_subscription_monthly_price: number;
   updated_at: string;
 }
 
@@ -15,6 +16,7 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   platform_fee_rate_venue: 0,
   platform_fee_min: 0,
   platform_fee_max: 0,
+  ai_subscription_monthly_price: 3.99,
   updated_at: '',
 };
 
@@ -48,6 +50,7 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
     platform_fee_rate_venue: Number(data.platform_fee_rate_venue ?? 0),
     platform_fee_min: Number(data.platform_fee_min ?? 0),
     platform_fee_max: Number(data.platform_fee_max ?? 0),
+    ai_subscription_monthly_price: Number(data.ai_subscription_monthly_price ?? 3.99),
     updated_at: data.updated_at ?? '',
   };
   cacheTimestamp = Date.now();
@@ -65,7 +68,7 @@ export function getInstructorFeeRateDecimal(settings: PlatformSettings): number 
  * Update platform settings (admin only).
  */
 export async function updatePlatformSettings(
-  updates: Partial<Pick<PlatformSettings, 'platform_fee_rate_instructor' | 'platform_fee_rate_venue' | 'platform_fee_min' | 'platform_fee_max'>>
+  updates: Partial<Pick<PlatformSettings, 'platform_fee_rate_instructor' | 'platform_fee_rate_venue' | 'platform_fee_min' | 'platform_fee_max' | 'ai_subscription_monthly_price'>>
 ): Promise<{ data: PlatformSettings | null; error: Error | null }> {
   const { data: existing } = await supabase
     .from('platform_settings')
@@ -81,6 +84,7 @@ export async function updatePlatformSettings(
         platform_fee_rate_venue: updates.platform_fee_rate_venue ?? 0,
         platform_fee_min: updates.platform_fee_min ?? 0,
         platform_fee_max: updates.platform_fee_max ?? 0,
+        ai_subscription_monthly_price: updates.ai_subscription_monthly_price ?? 3.99,
       })
       .select()
       .single();

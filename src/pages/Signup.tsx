@@ -11,12 +11,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Header } from "@/components/Header";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Sparkles } from "lucide-react";
 import { INSTRUCTOR_AGREEMENT } from "@/content/instructor-agreement";
 import { PRIVACY_POLICY } from "@/content/privacy-policy";
 import { STUDENT_TERMS_AND_CONDITIONS } from "@/content/student-terms-and-conditions";
 import { STUDENT_PRIVACY_POLICY } from "@/content/student-privacy-policy";
 import { createReferral, getCurrentAffiliate } from "@/lib/affiliate-tracking";
+import { setPostAuthRedirect } from "@/lib/post-auth";
+import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 
 const Signup = () => {
   const [email, setEmail] = useState("");
@@ -38,6 +40,12 @@ const Signup = () => {
   const [searchParams] = useSearchParams();
   const referralCode = searchParams.get('ref') || undefined;
   const roleParam = searchParams.get('role');
+  const intent = searchParams.get('intent');
+  const plan = searchParams.get('plan');
+  const nextPath = searchParams.get('next');
+  const isQuiltMatchSignup = intent === 'quiltmatch_ai';
+  const { settings: platformSettings } = usePlatformSettings();
+  const aiMonthlyPrice = platformSettings?.ai_subscription_monthly_price ?? Number(plan || 3.99);
   
   // Set initial role from URL parameter if provided
   useEffect(() => {
@@ -45,6 +53,18 @@ const Signup = () => {
       setSelectedRole(roleParam);
     }
   }, [roleParam]);
+
+  useEffect(() => {
+    if (isQuiltMatchSignup) {
+      setSelectedRole('student');
+    }
+  }, [isQuiltMatchSignup]);
+
+  useEffect(() => {
+    if (nextPath) {
+      setPostAuthRedirect(nextPath);
+    }
+  }, [nextPath]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,7 +149,9 @@ const Signup = () => {
 
         toast({
           title: "Account Created",
-          description: "Please check your email and click the confirmation link to verify your account before signing in.",
+          description: isQuiltMatchSignup
+            ? "Please verify your email, then sign in to continue your QuiltMatch AI subscription setup."
+            : "Please check your email and click the confirmation link to verify your account before signing in.",
           duration: 10000,
         });
         // Don't redirect - user needs to confirm email first
@@ -271,6 +293,19 @@ const Signup = () => {
         {/* Form Section */}
         <div className="flex items-start md:items-center justify-center p-4 sm:p-6 py-6 sm:py-8 md:py-6 lg:py-8 md:p-8 lg:p-12 bg-muted/20 md:bg-background overflow-y-auto md:overflow-visible">
           <div className="w-full max-w-md md:max-h-[calc(100vh-3rem)] lg:max-h-[calc(100vh-4rem)] md:overflow-y-auto md:pr-2">
+            {isQuiltMatchSignup && (
+              <div className="mb-4 rounded-xl border border-[#459394]/30 bg-[#459394]/10 p-4">
+                <div className="flex items-start gap-3">
+                  <Sparkles className="w-5 h-5 text-[#387C7F] mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">QuiltMatch AI subscription</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Create your account to unlock QuiltMatch AI for ${aiMonthlyPrice.toFixed(2)}/month.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <Card className="w-full shadow-lg border md:shadow-xl bg-card">
         <CardHeader className="pb-2 sm:pb-3 md:pb-4">
           <CardTitle className="text-xl sm:text-2xl text-center">Book My Quilt Retreat</CardTitle>
@@ -299,6 +334,7 @@ const Signup = () => {
                   }
                 }}
                 className="flex flex-col sm:flex-row gap-3 sm:gap-4"
+                disabled={isQuiltMatchSignup}
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="student" id="role-student" />
@@ -558,7 +594,7 @@ const Signup = () => {
 
           <div className="mt-3 sm:mt-4 md:mt-6 text-center text-xs sm:text-sm">
             <span className="text-muted-foreground">Already have an account? </span>
-            <Link to="/login" className="text-primary hover:underline font-medium">
+                <Link to={nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login"} className="text-primary hover:underline font-medium">
               Sign in
             </Link>
           </div>

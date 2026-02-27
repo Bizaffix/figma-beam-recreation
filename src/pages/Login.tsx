@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Header } from "@/components/Header";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Eye, EyeOff } from "lucide-react";
+import { consumePostAuthRedirect, setPostAuthRedirect } from "@/lib/post-auth";
 
 const ResendConfirmationForm = () => {
   const [resendEmail, setResendEmail] = useState("");
@@ -84,6 +85,8 @@ const Login = () => {
   const { signIn, resetPassword } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const nextPath = searchParams.get("next");
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,6 +105,16 @@ const Login = () => {
           title: "Success",
           description: "Signed in successfully",
         });
+
+        if (nextPath) {
+          setPostAuthRedirect(nextPath);
+        }
+        const redirectPath = consumePostAuthRedirect();
+        if (redirectPath && redirectPath !== "/home") {
+          navigate(redirectPath);
+          return;
+        }
+
         // Redirect based on role
         if (role === 'instructor') {
           navigate("/instructor/dashboard");
@@ -311,7 +324,7 @@ const Login = () => {
 
               <div className="mt-3 sm:mt-4 md:mt-6 text-center text-xs sm:text-sm">
                 <span className="text-muted-foreground">Don't have an account? </span>
-                <Link to="/signup" className="text-primary hover:underline font-medium">
+                <Link to={nextPath ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup"} className="text-primary hover:underline font-medium">
                   Sign up
                 </Link>
               </div>

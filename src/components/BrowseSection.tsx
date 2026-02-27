@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
@@ -68,6 +70,9 @@ interface VenueData {
 
 export const BrowseSection = () => {
   const navigate = useNavigate();
+  const { user, hasAiAccess } = useAuth();
+  const { settings: platformSettings } = usePlatformSettings();
+  const aiMonthlyPrice = platformSettings?.ai_subscription_monthly_price ?? 3.99;
   const [activeTab, setActiveTab] = useState<"events" | "venues">("events");
   const [searchQuery, setSearchQuery] = useState("");
   const [retreats, setRetreats] = useState<RetreatData[]>([]);
@@ -92,7 +97,7 @@ export const BrowseSection = () => {
   const [eventType, setEventType] = useState<string>("all");
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
-  const [sortBy, setSortBy] = useState<string>("upcoming");
+  const [sortBy, setSortBy] = useState<string>("newest");
 
   // Fetch published retreats
   useEffect(() => {
@@ -109,6 +114,7 @@ export const BrowseSection = () => {
             )
           `)
           .eq('published', true)
+          .gt('spots_available', 0)
           .order('created_at', { ascending: false })
           .limit(12);
 
@@ -443,7 +449,7 @@ export const BrowseSection = () => {
     fetchVenueEvents();
   }, [selectedVenue]);
 
-  const hasActiveFilters = dateFrom || dateTo || selectedLocation !== "all" || zipCode || radius !== "all" || minDays !== "all" || maxDays !== "all" || eventType !== "all" || minPrice || maxPrice || sortBy !== "upcoming";
+  const hasActiveFilters = dateFrom || dateTo || selectedLocation !== "all" || zipCode || radius !== "all" || minDays !== "all" || maxDays !== "all" || eventType !== "all" || minPrice || maxPrice || sortBy !== "newest";
 
   const clearFilters = () => {
     setDateFrom(undefined);
@@ -456,7 +462,7 @@ export const BrowseSection = () => {
     setEventType("all");
     setMinPrice("");
     setMaxPrice("");
-    setSortBy("upcoming");
+    setSortBy("newest");
   };
 
   // Logo colors: Exact hex values converted to Tailwind
@@ -477,7 +483,7 @@ export const BrowseSection = () => {
             Discover Your Next Quilting Adventure
           </h2>
           <p className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto text-craft-body">
-            Explore upcoming retreats and beautiful venues where creativity comes to life
+            Browse active and most recently published live listings
           </p>
         </div>
 
@@ -508,21 +514,6 @@ export const BrowseSection = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* AI shortcut + search */}
-          <div className="max-w-2xl mx-auto mt-8 mb-3">
-            <Button
-              variant="outline"
-              className="w-full justify-between border-dashed border-[#459394]/50 text-[#387C7F] hover:bg-[#459394]/5"
-              onClick={() => navigate("/find")}
-            >
-              <span className="inline-flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                Want personalized matches? Use QuiltMatch AI
-              </span>
-              <span className="text-xs">2 min</span>
-            </Button>
-          </div>
-
           <div className="flex gap-3 sm:gap-4 mb-8 max-w-2xl mx-auto">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -533,6 +524,23 @@ export const BrowseSection = () => {
                 className="pl-12 pr-4 bg-white border border-gray-200/60 focus:border-[#459394] focus:ring-2 focus:ring-[#459394]/20 h-14 text-base rounded-2xl shadow-craft transition-craft"
               />
             </div>
+            <Button
+              className="h-14 px-4 sm:px-5 rounded-2xl bg-[#459394] hover:bg-[#387C7F] text-white shadow-craft hover:shadow-craft-hover transition-craft whitespace-nowrap"
+              onClick={() => {
+                if (!user) {
+                  navigate(`/signup?role=student&intent=quiltmatch_ai&plan=${encodeURIComponent(String(aiMonthlyPrice))}&next=/find`);
+                  return;
+                }
+                if (!hasAiAccess) {
+                  navigate("/quiltmatch/upgrade");
+                  return;
+                }
+                navigate("/find");
+              }}
+            >
+              <Sparkles className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Use QuiltMatch AI (${aiMonthlyPrice.toFixed(2)}/mo)</span>
+            </Button>
             <Button 
               size="icon" 
               className={`h-14 w-14 border transition-craft rounded-2xl shadow-craft hover:shadow-craft-hover relative ${

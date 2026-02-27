@@ -6,6 +6,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   role: 'instructor' | 'student' | 'admin' | 'location_owner' | null;
+  aiSubscriptionStatus: 'inactive' | 'active' | 'past_due' | 'canceled' | null;
+  hasAiAccess: boolean;
   loading: boolean;
   signUp: (email: string, password: string, role?: 'student' | 'instructor' | 'location_owner', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }, locationOwnerData?: { firstName: string; lastName: string; propertyName?: string }) => Promise<{ error: any; needsConfirmation?: boolean; data?: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any; role?: 'instructor' | 'student' | 'admin' | 'location_owner' | undefined; needsConfirmation?: boolean }>;
@@ -21,6 +23,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<'instructor' | 'student' | 'admin' | 'location_owner' | null>(null);
+  const [aiSubscriptionStatus, setAiSubscriptionStatus] = useState<'inactive' | 'active' | 'past_due' | 'canceled' | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,6 +49,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setSession(null);
           setUser(null);
           setRole(null);
+          setAiSubscriptionStatus(null);
           setLoading(false);
           return;
         }
@@ -64,6 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(null);
         setUser(null);
         setRole(null);
+        setAiSubscriptionStatus(null);
         setLoading(false);
       });
 
@@ -77,6 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         fetchUserRole(session.user.id);
       } else {
         setRole(null);
+        setAiSubscriptionStatus(null);
         setLoading(false);
       }
     });
@@ -89,22 +95,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Get role from profiles table (created automatically by database trigger)
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, ai_subscription_status')
         .eq('id', userId)
         .single();
       
       if (error) {
         console.error('Error fetching user role:', error);
         setRole('student'); // Default to student on error
+        setAiSubscriptionStatus('inactive');
       } else if (profile?.role === 'instructor' || profile?.role === 'student' || profile?.role === 'admin' || profile?.role === 'location_owner') {
         setRole(profile.role);
+        setAiSubscriptionStatus((profile.ai_subscription_status as 'inactive' | 'active' | 'past_due' | 'canceled' | null) || 'inactive');
       } else {
         // Default to student if no role is set
         setRole('student');
+        setAiSubscriptionStatus('inactive');
       }
     } catch (error) {
       console.error('Error fetching user role:', error);
       setRole('student'); // Default to student on error
+      setAiSubscriptionStatus('inactive');
     } finally {
       setLoading(false);
     }
@@ -215,6 +225,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setSession(null);
     setRole(null);
+    setAiSubscriptionStatus(null);
   };
 
   const resendConfirmationEmail = async (email: string) => {
@@ -255,7 +266,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, role, loading, signUp, signIn, signOut, resendConfirmationEmail, resetPassword, updatePassword }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        role,
+        aiSubscriptionStatus,
+        hasAiAccess: aiSubscriptionStatus === 'active',
+        loading,
+        signUp,
+        signIn,
+        signOut,
+        resendConfirmationEmail,
+        resetPassword,
+        updatePassword,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
