@@ -68,6 +68,8 @@ import {
 } from "@/components/ui/collapsible";
 import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 
+const FREE_AI_SEARCH_KEY = "bmqr_ai_free_search_used";
+
 // Quick-add chips for dream input
 const QUICK_CHIPS = [
   { emoji: "\u{1F4CD}", label: "Near...", field: "location" as const, placeholder: "City or region" },
@@ -89,6 +91,8 @@ export default function QuiltMatch() {
   const { user, hasAiAccess } = useAuth();
   const { settings: platformSettings } = usePlatformSettings();
   const aiMonthlyPrice = platformSettings?.ai_subscription_monthly_price ?? 3.99;
+  const [freeSearchUsed, setFreeSearchUsed] = useState(false);
+  const [freeSessionUnlocked, setFreeSessionUnlocked] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Flow stage
@@ -137,10 +141,16 @@ export default function QuiltMatch() {
   useEffect(() => {
     initSession();
 
+    const used = localStorage.getItem(FREE_AI_SEARCH_KEY) === "true";
+    setFreeSearchUsed(used);
+    if (!hasAiAccess && !used) {
+      setFreeSessionUnlocked(true);
+    }
+
     if (hasExistingProgress()) {
       setShowWelcomeBack(true);
     }
-  }, []);
+  }, [hasAiAccess]);
 
   // ---- Exit intent detection (mouse leaves viewport) ----
   useEffect(() => {
@@ -303,6 +313,12 @@ export default function QuiltMatch() {
           ...(dbResult.demo_listings?.map((_: unknown, i: number) => `demo_${i}`) || []),
         ];
         saveMatches(matchIds);
+
+        // Mark free trial as consumed for non-subscribed users
+        if (!hasAiAccess) {
+          localStorage.setItem(FREE_AI_SEARCH_KEY, "true");
+          setFreeSearchUsed(true);
+        }
       } else {
         setError("Something went wrong with the search. Please try again.");
       }
@@ -394,7 +410,9 @@ export default function QuiltMatch() {
     setStage("dream");
   };
 
-  if (!user) {
+  const canAccessQuiltMatch = hasAiAccess || freeSessionUnlocked;
+
+  if (!canAccessQuiltMatch) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <Card className="w-full max-w-lg border border-[#459394]/30">
@@ -402,44 +420,23 @@ export default function QuiltMatch() {
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#459394]/10">
               <Sparkles className="w-6 h-6 text-[#387C7F]" />
             </div>
-            <h1 className="text-2xl font-bold">QuiltMatch AI is a premium feature</h1>
+            <h1 className="text-2xl font-bold">Your free AI search is used</h1>
             <p className="text-muted-foreground">
-              Create an account and start your QuiltMatch AI plan for {"$"}
-              {aiMonthlyPrice.toFixed(2)}/month to unlock personalized retreat matching.
+              Unlock unlimited QuiltMatch AI with a plan at {"$"}
+              {aiMonthlyPrice.toFixed(2)}/month.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
-                onClick={() => navigate(`/signup?role=student&intent=quiltmatch_ai&plan=${encodeURIComponent(String(aiMonthlyPrice))}&next=/find`)}
+                onClick={() => {
+                  if (!user) {
+                    navigate(`/signup?role=student&intent=quiltmatch_ai&plan=${encodeURIComponent(String(aiMonthlyPrice))}&next=/find`);
+                    return;
+                  }
+                  navigate("/quiltmatch/upgrade");
+                }}
                 className="bg-[#459394] hover:bg-[#387C7F] text-white"
               >
-                Sign up and continue
-              </Button>
-              <Button variant="outline" onClick={() => navigate("/browse")}>
-                Browse free listings
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!hasAiAccess) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <Card className="w-full max-w-lg border border-[#459394]/30">
-          <CardContent className="p-8 text-center space-y-4">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#459394]/10">
-              <Sparkles className="w-6 h-6 text-[#387C7F]" />
-            </div>
-            <h1 className="text-2xl font-bold">Upgrade required for QuiltMatch AI</h1>
-            <p className="text-muted-foreground">
-              You are signed in. Start your QuiltMatch AI plan for {"$"}
-              {aiMonthlyPrice.toFixed(2)}/month to unlock personalized matching.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button onClick={() => navigate("/quiltmatch/upgrade")} className="bg-[#459394] hover:bg-[#387C7F] text-white">
-                Upgrade now
+                {user ? "Upgrade now" : "Sign up and continue"}
               </Button>
               <Button variant="outline" onClick={() => navigate("/browse")}>
                 Browse free listings
@@ -612,6 +609,13 @@ export default function QuiltMatch() {
 
             {/* Quick-add chips */}
             <div className="mb-6">
+              {!hasAiAccess && !freeSearchUsed && (
+                <div className="mb-4 text-center">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs bg-[#459394]/10 text-[#387C7F] border border-[#459394]/20">
+                    First AI search is free
+                  </span>
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 {QUICK_CHIPS.map((chip) => (
                   <button

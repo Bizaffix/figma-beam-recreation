@@ -73,6 +73,7 @@ export const BrowseSection = () => {
   const { user, hasAiAccess } = useAuth();
   const { settings: platformSettings } = usePlatformSettings();
   const aiMonthlyPrice = platformSettings?.ai_subscription_monthly_price ?? 3.99;
+  const FREE_AI_SEARCH_KEY = "bmqr_ai_free_search_used";
   const [activeTab, setActiveTab] = useState<"events" | "venues">("events");
   const [searchQuery, setSearchQuery] = useState("");
   const [retreats, setRetreats] = useState<RetreatData[]>([]);
@@ -524,23 +525,37 @@ export const BrowseSection = () => {
                 className="pl-12 pr-4 bg-white border border-gray-200/60 focus:border-[#459394] focus:ring-2 focus:ring-[#459394]/20 h-14 text-base rounded-2xl shadow-craft transition-craft"
               />
             </div>
-            <Button
-              className="h-14 px-4 sm:px-5 rounded-2xl bg-[#459394] hover:bg-[#387C7F] text-white shadow-craft hover:shadow-craft-hover transition-craft whitespace-nowrap"
-              onClick={() => {
-                if (!user) {
-                  navigate(`/signup?role=student&intent=quiltmatch_ai&plan=${encodeURIComponent(String(aiMonthlyPrice))}&next=/find`);
-                  return;
-                }
-                if (!hasAiAccess) {
-                  navigate("/quiltmatch/upgrade");
-                  return;
-                }
-                navigate("/find");
-              }}
-            >
-              <Sparkles className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Use QuiltMatch AI (${aiMonthlyPrice.toFixed(2)}/mo)</span>
-            </Button>
+            <div className="flex flex-col items-center gap-1">
+              <Button
+                className="h-14 px-4 sm:px-5 rounded-2xl bg-[#459394] hover:bg-[#387C7F] text-white shadow-craft hover:shadow-craft-hover transition-craft whitespace-nowrap"
+                onClick={() => {
+                  const freeSearchUsed = localStorage.getItem(FREE_AI_SEARCH_KEY) === "true";
+
+                  // First AI search is free for everyone
+                  if (!freeSearchUsed) {
+                    navigate("/find");
+                    return;
+                  }
+
+                  // After free search, require account + subscription
+                  if (!user) {
+                    navigate(`/signup?role=student&intent=quiltmatch_ai&plan=${encodeURIComponent(String(aiMonthlyPrice))}&next=/find`);
+                    return;
+                  }
+                  if (!hasAiAccess) {
+                    navigate("/quiltmatch/upgrade");
+                    return;
+                  }
+                  navigate("/find");
+                }}
+              >
+                <Sparkles className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Search with AI</span>
+              </Button>
+              <p className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
+                First AI search free • then ${aiMonthlyPrice.toFixed(2)}/mo
+              </p>
+            </div>
             <Button 
               size="icon" 
               className={`h-14 w-14 border transition-craft rounded-2xl shadow-craft hover:shadow-craft-hover relative ${
