@@ -121,6 +121,7 @@ export default function QuiltMatch() {
   const [studentName, setStudentName] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
   const [homeLocation, setHomeLocation] = useState("");
+  const [personalPreferences, setPersonalPreferences] = useState("");
   const [flexibleDates, setFlexibleDates] = useState(true);
   const [flexibleBudget, setFlexibleBudget] = useState(true);
 
@@ -258,11 +259,15 @@ export default function QuiltMatch() {
       if (searchAdditions) enrichedQuery += `. Preferences: ${searchAdditions}`;
       if (budgetRange) enrichedQuery += `. Budget: ${budgetRange}`;
     }
+    if (personalPreferences.trim()) {
+      enrichedQuery += `. Personal preferences: ${personalPreferences.trim()}`;
+    }
 
     const context: Partial<StudentContext> = {
       name: studentName || undefined,
       email: studentEmail || undefined,
       home_location: homeLocation || undefined,
+      preferences: personalPreferences || undefined,
       flexible_dates: flexibleDates,
       flexible_budget: flexibleBudget,
     };
@@ -556,7 +561,7 @@ export default function QuiltMatch() {
                       <button className="w-full px-5 py-3 flex items-center justify-between text-sm text-muted-foreground hover:bg-muted/30 transition-colors">
                         <span className="flex items-center gap-2">
                           <Info className="w-4 h-4" />
-                          Add personal details for better matches
+                          Add personal preferences (room sharing, diet, accessibility) for better matches
                         </span>
                         {showContext ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </button>
@@ -576,6 +581,17 @@ export default function QuiltMatch() {
                             <Label className="text-xs text-muted-foreground mb-1 block">Home Location</Label>
                             <Input value={homeLocation} onChange={(e) => setHomeLocation(e.target.value)} placeholder="Charlotte, NC" className="h-9" />
                           </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-1 block">
+                            Preferences (optional)
+                          </Label>
+                          <Textarea
+                            value={personalPreferences}
+                            onChange={(e) => setPersonalPreferences(e.target.value)}
+                            placeholder="Example: private room only, vegetarian meals, gluten-free options, quiet evenings, wheelchair accessible spaces."
+                            className="min-h-[72px] text-sm"
+                          />
                         </div>
                         <div className="flex gap-6">
                           <div className="flex items-center gap-2">

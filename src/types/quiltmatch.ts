@@ -9,6 +9,7 @@ export interface StudentContext {
   name?: string;
   email?: string;
   home_location?: string;
+  preferences?: string;
   flexible_dates?: boolean;
   flexible_budget?: boolean;
 }
