@@ -8,7 +8,7 @@ A comprehensive, child-friendly website analytics dashboard that displays data f
 
 ## Features Implemented
 
-### 1️⃣ **Overview Cards** (Big Picture)
+### 1️⃣ Overview Cards** (Big Picture)
 - **Visitors** 👥: How many people visited
 - **Visits** 📈: How many sessions/times they visited
 - **Pageviews** 👁️: How many pages were seen
