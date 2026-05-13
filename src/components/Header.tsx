@@ -43,7 +43,7 @@ export const Header = () => {
             {/* Logo */}
             <Link to="/" className="flex items-center">
               <img 
-                src="/Final quilt logo-01.png" 
+                src="/quiltmatch-logo.svg" 
                 alt="BookMyQuiltRetreat Logo" 
                 className="w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-lg object-contain"
               />
@@ -180,7 +180,7 @@ export const Header = () => {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   <img 
-                    src="/Final quilt logo-01.png" 
+                    src="/quiltmatch-logo.svg" 
                     alt="BookMyQuiltRetreat Logo" 
                     className="w-32 h-32 rounded-lg object-contain"
                   />
