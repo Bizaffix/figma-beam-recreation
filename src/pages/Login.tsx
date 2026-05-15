@@ -1,14 +1,13 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Mail } from "lucide-react";
+import { QuiltMatchSiteHeader } from "@/components/quilt-match-home/site-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Header } from "@/components/Header";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Eye, EyeOff } from "lucide-react";
 import { consumePostAuthRedirect, setPostAuthRedirect } from "@/lib/post-auth";
+import { supabase } from "@/lib/supabase";
 
 const ResendConfirmationForm = () => {
   const [resendEmail, setResendEmail] = useState("");
@@ -44,7 +43,7 @@ const ResendConfirmationForm = () => {
         });
         setResendEmail("");
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "An unexpected error occurred",
@@ -63,10 +62,10 @@ const ResendConfirmationForm = () => {
           placeholder="your.email@example.com"
           value={resendEmail}
           onChange={(e) => setResendEmail(e.target.value)}
-          className="flex-1 h-9 sm:h-10 text-sm"
+          className="flex-1 h-10 text-sm border-border bg-background"
         />
-        <Button type="submit" size="sm" disabled={resendLoading} className="h-9 sm:h-10 text-xs sm:text-sm">
-          <Mail className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+        <Button type="submit" size="sm" disabled={resendLoading} variant="outline" className="h-10 shrink-0">
+          <Mail className="w-4 h-4 mr-2" />
           {resendLoading ? "Sending..." : "Resend"}
         </Button>
       </div>
@@ -78,17 +77,35 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetLoading, setResetLoading] = useState(false);
-  const { signIn, resetPassword } = useAuth();
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const { signIn } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const nextPath = searchParams.get("next");
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const redirectAfterSignIn = (role: string | undefined) => {
+    if (nextPath) {
+      setPostAuthRedirect(nextPath);
+    }
+    const redirectPath = consumePostAuthRedirect();
+    if (redirectPath && redirectPath !== "/home") {
+      navigate(redirectPath);
+      return;
+    }
+
+    if (role === "instructor") {
+      navigate("/instructor/dashboard");
+    } else if (role === "admin") {
+      navigate("/admin/dashboard");
+    } else if (role === "location_owner") {
+      navigate("/location-owner/dashboard");
+    } else {
+      navigate("/home");
+    }
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
@@ -105,24 +122,9 @@ const Login = () => {
           title: "Success",
           description: "Signed in successfully",
         });
-
-        if (nextPath) {
-          setPostAuthRedirect(nextPath);
-        }
-        const redirectPath = consumePostAuthRedirect();
-        if (redirectPath && redirectPath !== "/home") {
-          navigate(redirectPath);
-          return;
-        }
-
-        // Redirect based on role
-        if (role === 'instructor') {
-          navigate("/instructor/dashboard");
-        } else {
-          navigate("/home");
-        }
+        redirectAfterSignIn(role);
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "An unexpected error occurred",
@@ -133,215 +135,116 @@ const Login = () => {
     }
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetEmail) {
+  const handleGoogle = async () => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
       toast({
-        title: "Error",
-        description: "Please enter your email address",
+        title: "Unavailable",
+        description: "Sign-in isn’t configured yet.",
         variant: "destructive",
       });
       return;
     }
 
-    setResetLoading(true);
+    setGoogleLoading(true);
     try {
-      const { error } = await resetPassword(resetEmail);
+      const redirectTo = `${window.location.origin}/home`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+        },
+      });
       if (error) {
         toast({
-          title: "Error",
-          description: error.message || "Failed to send password reset email",
+          title: "Google sign-in failed",
+          description: error.message,
           variant: "destructive",
         });
-      } else {
-        toast({
-          title: "Email Sent",
-          description: "Password reset link has been sent to your email. Please check your inbox.",
-          duration: 8000,
-        });
-        setResetEmail("");
-        setShowForgotPassword(false);
       }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
     } finally {
-      setResetLoading(false);
+      setGoogleLoading(false);
     }
   };
 
+  const signupHref = nextPath ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup";
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Header />
-      
-      {/* Mobile Header Banner */}
-      <div className="lg:hidden relative bg-gradient-primary text-white overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-accent/90 z-10"></div>
-        <div className="relative z-20 px-4 py-8 sm:py-10">
-          <div className="max-w-md mx-auto text-center space-y-3">
-            <h2 className="text-2xl sm:text-3xl font-bold leading-tight">
-              Welcome Back to Your Quilting Community
-            </h2>
-            <p className="text-sm sm:text-base text-white/90 leading-relaxed">
-              Connect with passionate quilters, discover amazing retreats, and continue your creative journey.
-            </p>
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <div className="w-8 h-0.5 bg-white/50"></div>
-              <span className="text-xs sm:text-sm text-white/80">Join thousands of quilters</span>
-            </div>
+    <div className="min-h-screen bg-background quilt-match-home text-foreground">
+      <QuiltMatchSiteHeader />
+      <main className="max-w-md mx-auto px-6 py-20">
+        <h1 className="font-display text-4xl mb-2">Welcome back</h1>
+        <p className="text-muted-foreground mb-10">Sign in to continue.</p>
+
+        <button
+          type="button"
+          onClick={() => void handleGoogle()}
+          disabled={googleLoading}
+          className="w-full border border-border py-3 text-sm font-medium hover:bg-accent transition-colors mb-6 disabled:opacity-50"
+        >
+          {googleLoading ? "Continuing…" : "Continue with Google"}
+        </button>
+
+        <div className="flex items-center gap-4 mb-6">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-xs uppercase tracking-widest text-muted-foreground">or</span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+          <div>
+            <label htmlFor="login-email" className="text-xs uppercase tracking-widest text-muted-foreground block mb-2">
+              Email
+            </label>
+            <input
+              id="login-email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-foreground"
+            />
           </div>
-        </div>
-      </div>
-
-      <div className="flex-1 grid lg:grid-cols-2">
-        {/* Desktop Image Section */}
-        <div className="hidden lg:flex relative bg-gradient-primary overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-accent/90 z-10"></div>
-          <img 
-            src="/Image2.jpg" 
-            alt="Quilting retreat" 
-            className="w-full h-full object-cover mix-blend-overlay"
-          />
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-12 text-white">
-            <div className="max-w-md space-y-6">
-              <h2 className="text-4xl font-bold leading-tight">
-                Welcome Back to Your Quilting Community
-              </h2>
-              <p className="text-lg text-white/90 leading-relaxed">
-                Connect with passionate quilters, discover amazing retreats, and continue your creative journey.
-              </p>
-              <div className="flex items-center gap-2 pt-4">
-                <div className="w-12 h-0.5 bg-white/50"></div>
-                <span className="text-sm text-white/80">Join thousands of quilters</span>
-              </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label htmlFor="login-password" className="text-xs uppercase tracking-widest text-muted-foreground">
+                Password
+              </label>
+              <Link to="/forgot-password" className="text-xs text-rust border-b border-rust/30 hover:border-rust">
+                Forgot?
+              </Link>
             </div>
+            <input
+              id="login-password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-foreground"
+            />
           </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full btn-primary py-3 text-sm font-medium disabled:opacity-50"
+          >
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+
+        <p className="text-sm text-muted-foreground mt-8 text-center">
+          New to QuiltMatch?{" "}
+          <Link to={signupHref} className="text-rust border-b border-rust/30 hover:border-rust">
+            Create an account
+          </Link>
+        </p>
+
+        <div className="mt-10 pt-8 border-t border-border">
+          <p className="text-xs text-center text-muted-foreground mb-3">Didn&apos;t receive the confirmation email?</p>
+          <ResendConfirmationForm />
         </div>
-
-        {/* Form Section */}
-        <div className="flex items-center justify-center p-4 sm:p-6 py-6 sm:py-8 md:py-6 lg:py-8 md:p-8 lg:p-12 bg-muted/20 md:bg-background">
-          <Card className="w-full max-w-md shadow-lg border md:shadow-xl bg-card">
-        <CardHeader className="pb-2 sm:pb-3 md:pb-4">
-          <CardTitle className="text-xl sm:text-2xl text-center">Book My Quilt Retreat</CardTitle>
-          <CardDescription className="text-center text-xs sm:text-sm md:text-base">
-            {showForgotPassword ? "Reset your password" : "Sign in to your account"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="px-4 sm:px-6 pb-3 sm:pb-4 md:pb-6">
-          {showForgotPassword ? (
-            <>
-              {/* Forgot Password Form */}
-              <div className="space-y-3 sm:space-y-4">
-                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  Enter your email address and we'll send you a link to reset your password.
-                </p>
-                <form onSubmit={handleForgotPassword} className="space-y-3 sm:space-y-4">
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <Label htmlFor="reset-email" className="text-xs sm:text-sm">Email</Label>
-                    <Input
-                      id="reset-email"
-                      type="email"
-                      placeholder="your.email@example.com"
-                      value={resetEmail}
-                      onChange={(e) => setResetEmail(e.target.value)}
-                      required
-                      className="h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
-                    />
-                  </div>
-                  <Button type="submit" className="w-full h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base" disabled={resetLoading}>
-                    {resetLoading ? "Sending..." : "Send Reset Link"}
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowForgotPassword(false);
-                      setResetEmail("");
-                    }}
-                    className="w-full text-xs sm:text-sm text-muted-foreground hover:text-foreground py-2"
-                  >
-                    Back to Sign In
-                  </button>
-                </form>
-              </div>
-            </>
-          ) : (
-            <>
-              <form onSubmit={handleSignIn} className="space-y-3 sm:space-y-4">
-                <div className="space-y-1.5 sm:space-y-2">
-                  <Label htmlFor="email" className="text-xs sm:text-sm">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="your.email@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
-                  />
-                </div>
-                <div className="space-y-1.5 sm:space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password" className="text-xs sm:text-sm">Password</Label>
-                    <button
-                      type="button"
-                      onClick={() => setShowForgotPassword(true)}
-                      className="text-xs sm:text-sm text-primary hover:underline"
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="pr-10 h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <Button type="submit" className="w-full h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base" disabled={loading}>
-                  {loading ? "Signing in..." : "Sign In"}
-                </Button>
-              </form>
-
-              <div className="mt-3 sm:mt-4 md:mt-6 text-center text-xs sm:text-sm">
-                <span className="text-muted-foreground">Don't have an account? </span>
-                <Link to={nextPath ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup"} className="text-primary hover:underline font-medium">
-                  Sign up
-                </Link>
-              </div>
-
-              {/* Resend confirmation email section */}
-              <div className="mt-3 sm:mt-4 md:mt-6 pt-3 sm:pt-4 border-t">
-                <p className="text-xs sm:text-sm text-center text-muted-foreground mb-2">
-                  Didn't receive the confirmation email?
-                </p>
-                <ResendConfirmationForm />
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-        </div>
-      </div>
+      </main>
     </div>
   );
 };

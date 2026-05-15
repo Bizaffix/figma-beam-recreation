@@ -56,7 +56,12 @@ interface VenueData {
   created_at: string;
 }
 
-const Index = () => {
+interface IndexProps {
+  /** When embedded under QuiltMatchSiteHeader (/retreats), hide the teal app Header. */
+  hideAppHeader?: boolean;
+}
+
+const Index = ({ hideAppHeader = false }: IndexProps) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"events" | "venues">("events");
   const [searchQuery, setSearchQuery] = useState("");
@@ -469,13 +474,13 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-hero pb-20">
       {/* Header - only show if not logged in */}
-      {!user && <Header />}
+      {!user && !hideAppHeader && <Header />}
       
       {/* Hero Section */}
-      <div className={`bg-white px-4 sm:px-6 py-6 sm:py-8 relative overflow-hidden ${!user ? 'pt-20' : ''}`}>
+      <div className={`bg-white px-4 sm:px-6 py-6 sm:py-8 relative overflow-hidden ${!user && !hideAppHeader ? 'pt-20' : ''}`}>
         <div className="relative z-10">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-[#387C7F]">Browse Events</h1>
-          <p className="text-[#459394] text-base sm:text-lg">Discover Events & Venues</p>
+          <h1 className={`text-2xl sm:text-3xl font-bold mb-2 ${hideAppHeader ? "text-foreground" : "text-[#387C7F]"}`}>Browse Events</h1>
+          <p className={`text-base sm:text-lg ${hideAppHeader ? "text-muted-foreground" : "text-[#459394]"}`}>Discover Events & Venues</p>
         </div>
       </div>
 

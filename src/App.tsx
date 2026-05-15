@@ -26,10 +26,11 @@ import AffiliateProgramManager from "./pages/AffiliateProgramManager";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
 import EmailConfirm from "./pages/EmailConfirm";
 import ResetPassword from "./pages/ResetPassword";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
-import HowItWorks from "./pages/HowItWorks";
+import QuiltMatchHowItWorksPage from "./pages/marketing/QuiltMatchHowItWorksPage";
 import LocationOwnerDashboard from "./pages/LocationOwnerDashboard";
 import VenueOwnerMessages from "./pages/VenueOwnerMessages";
 import VenueRegistration from "./pages/VenueRegistration";
@@ -40,6 +41,16 @@ import QuiltMatchSubscriptionSuccess from "./pages/QuiltMatchSubscriptionSuccess
 import { useAuth } from "./contexts/AuthContext";
 import { initializeAffiliateTracking } from "./lib/affiliate-tracking";
 import { useEffect } from "react";
+import QuiltMatchVenuesPage from "./pages/marketing/QuiltMatchVenuesPage";
+import QuiltMatchCreatorsPage from "./pages/marketing/QuiltMatchCreatorsPage";
+import QuiltMatchBlogPage from "./pages/marketing/QuiltMatchBlogPage";
+import RetreatsMarketingLayout from "./pages/marketing/RetreatsMarketingLayout";
+import QuiltMatchRetreatsPage from "./pages/marketing/QuiltMatchRetreatsPage";
+import QuiltMatchRetreats2026Page from "./pages/marketing/QuiltMatchRetreats2026Page";
+import QuiltMatchRetreatsInStatePage from "./pages/marketing/QuiltMatchRetreatsInStatePage";
+import QuiltMatchRetreatsRegionPage from "./pages/marketing/QuiltMatchRetreatsRegionPage";
+import QuiltMatchGuideWhatIsPage from "./pages/marketing/QuiltMatchGuideWhatIsPage";
+import QuiltMatchGuideWhatToBringPage from "./pages/marketing/QuiltMatchGuideWhatToBringPage";
 
 const queryClient = new QueryClient();
 
@@ -170,14 +181,30 @@ const App = () => (
           {/* Public Routes - Only Login/Signup and Email Confirmation */}
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
           {/* Email confirmation route - accessible to all (needs to handle sign-out) */}
           <Route path="/auth/confirm" element={<EmailConfirm />} />
           {/* Password reset route - accessible to all (needs to handle sign-out) */}
           <Route path="/auth/reset-password" element={<ResetPassword />} />
           {/* Public Legal Pages */}
           <Route path="/privacy" element={<PublicRoute><PrivacyPolicy /></PublicRoute>} />
-          <Route path="/how-it-works" element={<PublicRoute><HowItWorks /></PublicRoute>} />
-          
+          <Route path="/how-it-works" element={<QuiltMatchHowItWorksPage />} />
+
+          {/* Quilt-match retreats hub + SEO paths (aligned with quilt-match repo) */}
+          <Route path="/retreats" element={<RetreatsMarketingLayout />}>
+            <Route index element={<QuiltMatchRetreatsPage />} />
+            <Route path="2026" element={<QuiltMatchRetreats2026Page />} />
+            <Route path="in/:state" element={<QuiltMatchRetreatsInStatePage />} />
+            <Route path=":region" element={<QuiltMatchRetreatsRegionPage />} />
+          </Route>
+          <Route path="/guides/what-is-a-quilt-retreat" element={<QuiltMatchGuideWhatIsPage />} />
+          <Route path="/guides/what-to-bring" element={<QuiltMatchGuideWhatToBringPage />} />
+          <Route path="/venues" element={<QuiltMatchVenuesPage />} />
+          <Route path="/creators" element={<QuiltMatchCreatorsPage />} />
+          <Route path="/blog" element={<QuiltMatchBlogPage />} />
+          <Route path="/news" element={<QuiltMatchBlogPage />} />
+          <Route path="/guides" element={<QuiltMatchHowItWorksPage />} />
+
           {/* Public Retreat Browsing - Event Feed */}
           <Route path="/browse" element={<Index />} />
           <Route path="/discover" element={<Index />} />

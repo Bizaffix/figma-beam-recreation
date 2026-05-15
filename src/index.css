@@ -74,6 +74,34 @@ All colors MUST be HSL.
     --sidebar-ring: 182 36% 45%;
   }
 
+  /*
+   * QuiltMatch marketing: Radix portals attach to document.body, so variables must live on html.
+   * When any .quilt-match-home exists under html, switch tokens to cream/charcoal (quilt-match).
+   */
+  html:has(.quilt-match-home) {
+    --background: 43 33% 97%;
+    --foreground: 0 0% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 13%;
+    --popover: 43 33% 97%;
+    --popover-foreground: 0 0% 13%;
+    --primary: 0 0% 13%;
+    --primary-foreground: 43 33% 97%;
+    --secondary: 43 14% 94%;
+    --secondary-foreground: 0 0% 13%;
+    --muted: 43 16% 94%;
+    --muted-foreground: 0 0% 43%;
+    --accent: 16 58% 58%;
+    --accent-foreground: 43 33% 97%;
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 43 13% 88%;
+    --input: 43 13% 88%;
+    --ring: 16 58% 45%;
+    --radius: 0.25rem;
+    --gradient-hero: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background)) 100%);
+  }
+
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
@@ -114,6 +142,38 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 182 10% 95%;
     --sidebar-border: 182 25% 20%;
     --sidebar-ring: 182 36% 55%;
+  }
+
+  /*
+   * Dark class on <html> overrides :has() block above (same cascade layer, later wins).
+   * Keep QuiltMatch marketing cream/charcoal when dark mode is enabled globally.
+   */
+  html.dark:has(.quilt-match-home) {
+    --background: 43 33% 97%;
+    --foreground: 0 0% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 13%;
+    --popover: 43 33% 97%;
+    --popover-foreground: 0 0% 13%;
+    --primary: 0 0% 13%;
+    --primary-foreground: 43 33% 97%;
+    --secondary: 43 14% 94%;
+    --secondary-foreground: 0 0% 13%;
+    --muted: 43 16% 94%;
+    --muted-foreground: 0 0% 43%;
+    --accent: 16 58% 58%;
+    --accent-foreground: 43 33% 97%;
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 43 13% 88%;
+    --input: 43 13% 88%;
+    --ring: 16 58% 45%;
+    --radius: 0.25rem;
+    --gradient-primary: linear-gradient(135deg, hsl(0, 0%, 13%), hsl(16, 58%, 45%));
+    --gradient-hero: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background)) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(38, 95%, 58%), hsl(14, 98%, 70%));
+    --gradient-coral: linear-gradient(135deg, hsl(14, 98%, 70%), hsl(11, 81%, 58%));
+    --gradient-teal-coral: linear-gradient(135deg, hsl(182, 36%, 45%), hsl(14, 98%, 70%));
   }
 }
 
@@ -217,6 +277,40 @@ All colors MUST be HSL.
   
   .scrollbar-hide::-webkit-scrollbar {
     display: none;  /* Chrome, Safari and Opera */
+  }
+
+  .quilt-match-home .font-display {
+    font-family: "Playfair Display", ui-serif, Georgia, serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  /* Craft-inspired text styles */
+  .btn-primary {
+    background-color: oklch(0.66 0.14 32);
+    color: oklch(0.992 0.003 70);
+    transition: background-color 0.2s ease;
+  }
+  .btn-primary:hover {
+    background-color: color-mix(in oklch, oklch(0.66 0.14 32) 88%, black);
+  }
+  .btn-outline {
+    background-color: transparent;
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--foreground));
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  .btn-outline:hover {
+    background-color: hsl(var(--foreground));
+    color: hsl(var(--background));
+  }
+  .quilt-match-home .font-mono {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+  }
+  .quilt-match-home .font-display {
+    font-family: "Playfair Display", ui-serif, Georgia, serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 
   /* Craft-inspired text styles */
