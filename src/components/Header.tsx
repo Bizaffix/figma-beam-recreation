@@ -27,14 +27,6 @@ export const Header = () => {
     return '/home';
   };
 
-  const handleHowItWorksClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-
-    // Dedicated page for detailed product sections
-    navigate('/how-it-works');
-    setMobileMenuOpen(false);
-  };
-
   return (
     <>
       <header className="sticky top-0 z-50 w-full border-b bg-white shadow-sm">
@@ -118,13 +110,12 @@ export const Header = () => {
                 >
                   Find with AI
                 </Link>
-                <a
-                  href="/how-it-works"
-                  onClick={handleHowItWorksClick}
-                  className="text-sm font-medium text-[#387C7F] hover:text-[#459394] transition-colors cursor-pointer"
+                <Link
+                  to="/how-it-works"
+                  className="text-sm font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
                 >
                   How It Works
-                </a>
+                </Link>
               </>
             )}
           </nav>
@@ -262,13 +253,13 @@ export const Header = () => {
                           Find with AI
                         </span>
                       </Link>
-                      <a
-                        href="/how-it-works"
-                        onClick={handleHowItWorksClick}
+                      <Link
+                        to="/how-it-works"
                         className="block py-3 text-base font-medium text-[#387C7F] hover:text-[#459394] transition-colors"
+                        onClick={() => setMobileMenuOpen(false)}
                       >
                         How It Works
-                      </a>
+                      </Link>
                     </div>
                   </>
                 )}

@@ -5,7 +5,8 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ArrowRight, Heart, GraduationCap, Search, CreditCard, Users, FileText } from "lucide-react";
 
-const HowItWorks = () => {
+/** Legacy BookMyQuiltRetreat-style how-it-works (backup). Active route uses QuiltMatchHowItWorksPage. */
+const HowItWorksLegacy = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
       <Header />
@@ -106,5 +107,4 @@ const HowItWorks = () => {
   );
 };
 
-export default HowItWorks;
-
+export default HowItWorksLegacy;

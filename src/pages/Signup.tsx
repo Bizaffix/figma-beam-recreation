@@ -1,17 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Header } from "@/components/Header";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { QuiltMatchSiteHeader } from "@/components/quilt-match-home/site-header";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { INSTRUCTOR_AGREEMENT } from "@/content/instructor-agreement";
 import { PRIVACY_POLICY } from "@/content/privacy-policy";
 import { STUDENT_TERMS_AND_CONDITIONS } from "@/content/student-terms-and-conditions";
@@ -19,16 +16,51 @@ import { STUDENT_PRIVACY_POLICY } from "@/content/student-privacy-policy";
 import { createReferral, getCurrentAffiliate } from "@/lib/affiliate-tracking";
 import { setPostAuthRedirect } from "@/lib/post-auth";
 import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
+import { supabase } from "@/lib/supabase";
+
+type SignupRole = "student" | "instructor" | "location_owner";
+
+const ROLE_CARDS: {
+  id: SignupRole;
+  eyebrow: string;
+  title: string;
+  copy: string;
+  color: string;
+}[] = [
+  {
+    id: "student",
+    eyebrow: "For the Maker",
+    title: "I'm a Quilter",
+    copy: "Discover retreats, book seats, and share projects.",
+    color: "text-sage",
+  },
+  {
+    id: "instructor",
+    eyebrow: "For the Host",
+    title: "I'm a Creator",
+    copy: "Run workshops, fill seats, and grow your following.",
+    color: "text-rust",
+  },
+  {
+    id: "location_owner",
+    eyebrow: "For the Space",
+    title: "I'm a Venue",
+    copy: "List your space, post open weeks, fill the calendar.",
+    color: "text-match-indigo",
+  },
+];
+
+const inputClass =
+  "w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-foreground";
 
 const Signup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'student' | 'instructor' | 'location_owner'>('student');
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<SignupRole | null>(null);
+  const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const [showTermsDialog, setShowTermsDialog] = useState(false);
@@ -38,25 +70,24 @@ const Signup = () => {
   const { signUp } = useAuth();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
-  const referralCode = searchParams.get('ref') || undefined;
-  const roleParam = searchParams.get('role');
-  const intent = searchParams.get('intent');
-  const plan = searchParams.get('plan');
-  const nextPath = searchParams.get('next');
-  const isQuiltMatchSignup = intent === 'quiltmatch_ai';
+  const referralCode = searchParams.get("ref") || undefined;
+  const roleParam = searchParams.get("role");
+  const intent = searchParams.get("intent");
+  const plan = searchParams.get("plan");
+  const nextPath = searchParams.get("next");
+  const isQuiltMatchSignup = intent === "quiltmatch_ai";
   const { settings: platformSettings } = usePlatformSettings();
   const aiMonthlyPrice = platformSettings?.ai_subscription_monthly_price ?? Number(plan || 3.99);
-  
-  // Set initial role from URL parameter if provided
+
   useEffect(() => {
-    if (roleParam === 'student' || roleParam === 'instructor' || roleParam === 'location_owner') {
+    if (roleParam === "student" || roleParam === "instructor" || roleParam === "location_owner") {
       setSelectedRole(roleParam);
     }
   }, [roleParam]);
 
   useEffect(() => {
     if (isQuiltMatchSignup) {
-      setSelectedRole('student');
+      setSelectedRole("student");
     }
   }, [isQuiltMatchSignup]);
 
@@ -66,67 +97,134 @@ const Signup = () => {
     }
   }, [nextPath]);
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validate name fields (required for all roles)
-    if (!firstName.trim() || !lastName.trim()) {
+  const splitDisplayName = (): { firstName: string; lastName: string } | null => {
+    const trimmed = displayName.trim().replace(/\s+/g, " ");
+    const parts = trimmed.split(" ");
+    if (parts.length < 2) {
       toast({
         title: "Error",
-        description: "Please enter your first and last name",
+        description: "Please enter your first and last name.",
+        variant: "destructive",
+      });
+      return null;
+    }
+    return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+  };
+
+  const handleGoogle = async () => {
+    if (!selectedRole) return;
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      toast({
+        title: "Unavailable",
+        description: "Sign-up isn’t configured yet.",
         variant: "destructive",
       });
       return;
     }
-    
-    // Validate agreement checkboxes
-    if (selectedRole === 'instructor') {
+
+    setGoogleLoading(true);
+    try {
+      sessionStorage.setItem("signup_intended_role", selectedRole);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/home`,
+        },
+      });
+      if (error) {
+        toast({
+          title: "Google sign-up failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleSignUp = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!selectedRole) return;
+
+    const names = splitDisplayName();
+    if (!names) return;
+
+    const { firstName, lastName } = names;
+
+    if (selectedRole === "instructor") {
       if (!agreedToTerms || !agreedToPrivacy) {
         toast({
           title: "Error",
-          description: "Please read and agree to the Instructor Terms of Service and Privacy Policy",
+          description:
+            "Please read and agree to the Instructor Terms of Service and Privacy Policy",
           variant: "destructive",
         });
         return;
       }
-    } else if (selectedRole === 'student') {
+    } else if (selectedRole === "student") {
       if (!agreedToTerms || !agreedToPrivacy) {
         toast({
           title: "Error",
-          description: "Please read and agree to the Participant Terms and Conditions and Privacy Policy",
+          description:
+            "Please read and agree to the Participant Terms and Conditions and Privacy Policy",
           variant: "destructive",
         });
         return;
       }
-    } else if (selectedRole === 'location_owner') {
+    } else if (selectedRole === "location_owner") {
       if (!agreedToTerms || !agreedToPrivacy) {
         toast({
           title: "Error",
-          description: "Please read and agree to the Participant Terms and Conditions and Privacy Policy",
+          description:
+            "Please read and agree to the Participant Terms and Conditions and Privacy Policy",
           variant: "destructive",
         });
         return;
       }
     }
-    
+
+    if (password.length < 8) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 8 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      const studentData = {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+      const studentData = { firstName: firstName.trim(), lastName: lastName.trim() };
+
+      const instructorData =
+        selectedRole === "instructor"
+          ? {
+              ...studentData,
+              bio: bio.trim(),
+            }
+          : undefined;
+
+      const locationOwnerData = selectedRole === "location_owner" ? { ...studentData } : undefined;
+
+      const result = await signUp(
+        email,
+        password,
+        selectedRole,
+        referralCode,
+        studentData,
+        instructorData,
+        locationOwnerData,
+      );
+      const { error, needsConfirmation, data: signupData } = result as {
+        error: { message?: string } | null;
+        needsConfirmation?: boolean;
+        data?: { user?: { id: string } };
       };
-      
-      const instructorData = selectedRole === 'instructor' ? {
-        ...studentData,
-        bio: bio.trim(),
-      } : undefined;
-      
-      const locationOwnerData = selectedRole === 'location_owner' ? {
-        ...studentData,
-      } : undefined;
-      
-      const result = await signUp(email, password, selectedRole, referralCode, studentData, instructorData, locationOwnerData);
-      const { error, needsConfirmation, data: signupData } = result as { error: any; needsConfirmation?: boolean; data?: any };
+
       if (error) {
         toast({
           title: "Error",
@@ -134,16 +232,18 @@ const Signup = () => {
           variant: "destructive",
         });
       } else {
-        // Create affiliate referral if user was referred via affiliate link
-        // Note: This happens after email confirmation, but we track the cookie now
         const affiliateData = getCurrentAffiliate();
         if (affiliateData && signupData?.user?.id) {
           try {
-            const referralType = selectedRole === 'instructor' ? 'organizer' : selectedRole === 'location_owner' ? 'venue' : 'student';
+            const referralType =
+              selectedRole === "instructor"
+                ? "organizer"
+                : selectedRole === "location_owner"
+                  ? "venue"
+                  : "student";
             await createReferral(referralType, signupData.user.id);
           } catch (affiliateError) {
-            console.error('Error creating affiliate referral:', affiliateError);
-            // Don't block signup if affiliate tracking fails
+            console.error("Error creating affiliate referral:", affiliateError);
           }
         }
 
@@ -151,21 +251,21 @@ const Signup = () => {
           title: "Account Created",
           description: isQuiltMatchSignup
             ? "Please verify your email, then sign in to continue your QuiltMatch AI subscription setup."
-            : "Please check your email and click the confirmation link to verify your account before signing in.",
+            : needsConfirmation === false
+              ? "You’re signed in."
+              : "Please check your email and click the confirmation link to verify your account before signing in.",
           duration: 10000,
         });
-        // Don't redirect - user needs to confirm email first
-        // Clear the form
+
         setEmail("");
         setPassword("");
-        setSelectedRole('student');
-        setFirstName("");
-        setLastName("");
+        setSelectedRole("student");
+        setDisplayName("");
         setBio("");
         setAgreedToTerms(false);
         setAgreedToPrivacy(false);
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "An unexpected error occurred",
@@ -176,435 +276,296 @@ const Signup = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Header />
-      
-      {/* Mobile Header Banner */}
-      <div className="lg:hidden relative bg-gradient-primary text-white overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-accent/90 z-10"></div>
-        <div className="relative z-20 px-4 py-8 sm:py-10">
-          <div className="max-w-md mx-auto text-center space-y-3">
-            <h2 className="text-2xl sm:text-3xl font-bold leading-tight">
-              {selectedRole === 'instructor' 
-                ? "Share Your Quilting Expertise" 
-                : "Start Your Quilting Journey Today"}
-            </h2>
-            <p className="text-sm sm:text-base text-white/90 leading-relaxed">
-              {selectedRole === 'instructor'
-                ? "Join our community of instructors. Create retreats, manage bookings, and share your passion with eager quilters."
-                : "Join our community of passionate quilters and instructors. Discover retreats, share your skills, and create unforgettable experiences."}
-            </p>
-            <div className="space-y-2 pt-3">
-              {selectedRole === 'instructor' ? (
-                <>
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
-                    <span className="text-xs sm:text-sm text-white/90">Create and manage retreats</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
-                    <span className="text-xs sm:text-sm text-white/90">Handle bookings and payments</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
-                    <span className="text-xs sm:text-sm text-white/90">Reach passionate quilters</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
-                    <span className="text-xs sm:text-sm text-white/90">Discover amazing retreats</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
-                    <span className="text-xs sm:text-sm text-white/90">Connect with instructors</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
-                    <span className="text-xs sm:text-sm text-white/90">Join a vibrant community</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+  const loginHref = nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login";
+
+  const termsBlock =
+    selectedRole === "instructor" ? (
+      <div className="space-y-3 pt-2 border-t border-border">
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="terms-agreement"
+            checked={agreedToTerms}
+            onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+            className="mt-0.5"
+          />
+          <Label htmlFor="terms-agreement" className="text-xs font-normal cursor-pointer leading-relaxed">
+            I have read and agree to the{" "}
+            <button
+              type="button"
+              onClick={() => setShowTermsDialog(true)}
+              className="text-rust border-b border-rust/30 hover:border-rust"
+            >
+              Instructor Terms of Service
+            </button>
+          </Label>
+        </div>
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="privacy-agreement"
+            checked={agreedToPrivacy}
+            onCheckedChange={(checked) => setAgreedToPrivacy(checked === true)}
+            className="mt-0.5"
+          />
+          <Label htmlFor="privacy-agreement" className="text-xs font-normal cursor-pointer leading-relaxed">
+            I have read and agree to the{" "}
+            <button
+              type="button"
+              onClick={() => setShowPrivacyDialog(true)}
+              className="text-rust border-b border-rust/30 hover:border-rust"
+            >
+              Privacy Policy
+            </button>
+          </Label>
         </div>
       </div>
-
-      <div className="flex-1 grid lg:grid-cols-2">
-        {/* Desktop Image Section */}
-        <div className="hidden lg:flex relative bg-gradient-primary overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-accent/90 z-10"></div>
-          <img 
-            src={selectedRole === 'instructor' ? "/Image4.jpg" : "/Image3.jpg"}
-            alt={selectedRole === 'instructor' ? "Quilting instructor" : "Quilting workshop"} 
-            className="w-full h-full object-cover mix-blend-overlay transition-opacity duration-300"
+    ) : selectedRole === "student" ? (
+      <div className="space-y-3 pt-2 border-t border-border">
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="student-terms-agreement"
+            checked={agreedToTerms}
+            onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+            className="mt-0.5"
           />
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-12 text-white">
-            <div className="max-w-md space-y-6">
-              <h2 className="text-4xl font-bold leading-tight">
-                {selectedRole === 'instructor' 
-                  ? "Share Your Quilting Expertise" 
-                  : "Start Your Quilting Journey Today"}
-              </h2>
-              <p className="text-lg text-white/90 leading-relaxed">
-                {selectedRole === 'instructor'
-                  ? "Join our community of instructors. Create retreats, manage bookings, and share your passion with eager quilters."
-                  : "Join our community of passionate quilters and instructors. Discover retreats, share your skills, and create unforgettable experiences."}
-              </p>
-              <div className="space-y-3 pt-4">
-                {selectedRole === 'instructor' ? (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                      <span className="text-sm text-white/90">Create and manage retreats</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                      <span className="text-sm text-white/90">Handle bookings and payments</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                      <span className="text-sm text-white/90">Reach passionate quilters</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                      <span className="text-sm text-white/90">Discover amazing retreats</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                      <span className="text-sm text-white/90">Connect with instructors</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                      <span className="text-sm text-white/90">Join a vibrant community</span>
-                    </div>
-                  </>
-                )}
+          <Label htmlFor="student-terms-agreement" className="text-xs font-normal cursor-pointer leading-relaxed">
+            I have read and agree to the{" "}
+            <button
+              type="button"
+              onClick={() => setShowStudentTermsDialog(true)}
+              className="text-rust border-b border-rust/30 hover:border-rust"
+            >
+              Participant Terms and Conditions
+            </button>
+          </Label>
+        </div>
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="student-privacy-agreement"
+            checked={agreedToPrivacy}
+            onCheckedChange={(checked) => setAgreedToPrivacy(checked === true)}
+            className="mt-0.5"
+          />
+          <Label htmlFor="student-privacy-agreement" className="text-xs font-normal cursor-pointer leading-relaxed">
+            I have read and agree to the{" "}
+            <button
+              type="button"
+              onClick={() => setShowStudentPrivacyDialog(true)}
+              className="text-rust border-b border-rust/30 hover:border-rust"
+            >
+              Privacy Policy
+            </button>
+          </Label>
+        </div>
+      </div>
+    ) : selectedRole === "location_owner" ? (
+      <div className="space-y-3 pt-2 border-t border-border">
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="venue-terms-agreement"
+            checked={agreedToTerms}
+            onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+            className="mt-0.5"
+          />
+          <Label htmlFor="venue-terms-agreement" className="text-xs font-normal cursor-pointer leading-relaxed">
+            I have read and agree to the{" "}
+            <button
+              type="button"
+              onClick={() => setShowStudentTermsDialog(true)}
+              className="text-rust border-b border-rust/30 hover:border-rust"
+            >
+              Participant Terms and Conditions
+            </button>
+          </Label>
+        </div>
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="venue-privacy-agreement"
+            checked={agreedToPrivacy}
+            onCheckedChange={(checked) => setAgreedToPrivacy(checked === true)}
+            className="mt-0.5"
+          />
+          <Label htmlFor="venue-privacy-agreement" className="text-xs font-normal cursor-pointer leading-relaxed">
+            I have read and agree to the{" "}
+            <button
+              type="button"
+              onClick={() => setShowStudentPrivacyDialog(true)}
+              className="text-rust border-b border-rust/30 hover:border-rust"
+            >
+              Privacy Policy
+            </button>
+          </Label>
+        </div>
+      </div>
+    ) : null;
+
+  const submitDisabled =
+    loading ||
+    !selectedRole ||
+    (selectedRole === "student" && (!agreedToTerms || !agreedToPrivacy)) ||
+    (selectedRole === "instructor" && (!agreedToTerms || !agreedToPrivacy)) ||
+    (selectedRole === "location_owner" && (!agreedToTerms || !agreedToPrivacy));
+
+  return (
+    <div className="min-h-screen bg-background quilt-match-home text-foreground">
+      <QuiltMatchSiteHeader />
+      <main className="max-w-3xl mx-auto px-6 py-16">
+        {isQuiltMatchSignup && (
+          <div className="mb-8 rounded-xl border border-border bg-muted/40 p-4">
+            <div className="flex items-start gap-3">
+              <Sparkles className="w-5 h-5 text-rust mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-foreground">QuiltMatch AI subscription</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Create your account to unlock QuiltMatch AI for ${aiMonthlyPrice.toFixed(2)}/month.
+                </p>
               </div>
             </div>
           </div>
+        )}
+
+        <h1 className="font-display text-4xl mb-2">Join QuiltMatch</h1>
+        <p className="text-muted-foreground mb-10">
+          Tell us how you&apos;ll use the platform. You can add more roles later.
+        </p>
+
+        <div className="grid md:grid-cols-3 gap-4 mb-10">
+          {ROLE_CARDS.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => {
+                setSelectedRole(r.id);
+                setAgreedToTerms(false);
+                setAgreedToPrivacy(false);
+              }}
+              disabled={isQuiltMatchSignup && r.id !== "student"}
+              className={`text-left p-6 border transition-colors disabled:opacity-50 disabled:pointer-events-none ${
+                selectedRole === r.id
+                  ? "border-foreground bg-accent/30"
+                  : "border-border hover:border-foreground/40"
+              }`}
+            >
+              <span className={`font-mono text-[10px] uppercase tracking-widest ${r.color} block mb-3`}>
+                {r.eyebrow}
+              </span>
+              <h2 className="font-display text-xl mb-2">{r.title}</h2>
+              <p className="text-sm text-muted-foreground">{r.copy}</p>
+            </button>
+          ))}
         </div>
 
-        {/* Form Section */}
-        <div className="flex items-start md:items-center justify-center p-4 sm:p-6 py-6 sm:py-8 md:py-6 lg:py-8 md:p-8 lg:p-12 bg-muted/20 md:bg-background overflow-y-auto md:overflow-visible">
-          <div className="w-full max-w-md md:max-h-[calc(100vh-3rem)] lg:max-h-[calc(100vh-4rem)] md:overflow-y-auto md:pr-2">
-            {isQuiltMatchSignup && (
-              <div className="mb-4 rounded-xl border border-[#459394]/30 bg-[#459394]/10 p-4">
-                <div className="flex items-start gap-3">
-                  <Sparkles className="w-5 h-5 text-[#387C7F] mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">QuiltMatch AI subscription</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Create your account to unlock QuiltMatch AI for ${aiMonthlyPrice.toFixed(2)}/month.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-            <Card className="w-full shadow-lg border md:shadow-xl bg-card">
-        <CardHeader className="pb-2 sm:pb-3 md:pb-4">
-          <CardTitle className="text-xl sm:text-2xl text-center">Book My Quilt Retreat</CardTitle>
-          <CardDescription className="text-center text-xs sm:text-sm md:text-base">
-            Create a new account
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="px-4 sm:px-6 pb-3 sm:pb-4 md:pb-6">
-          <form onSubmit={handleSignUp} className="space-y-2.5 sm:space-y-3 md:space-y-4">
-            <div className="space-y-1.5 sm:space-y-2">
-              <Label className="text-xs sm:text-sm">I am a...</Label>
-              <RadioGroup
-                value={selectedRole}
-                onValueChange={(value) => {
-                  setSelectedRole(value as 'student' | 'instructor' | 'location_owner');
-                  // Reset agreement checkboxes when role changes
-                  if (value === 'student') {
-                    setAgreedToTerms(false);
-                    setAgreedToPrivacy(false);
-                  } else if (value === 'instructor') {
-                    setAgreedToTerms(false);
-                    setAgreedToPrivacy(false);
-                  } else if (value === 'location_owner') {
-                    setAgreedToTerms(false);
-                    setAgreedToPrivacy(false);
-                  }
-                }}
-                className="flex flex-col sm:flex-row gap-3 sm:gap-4"
-                disabled={isQuiltMatchSignup}
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="student" id="role-student" />
-                  <Label htmlFor="role-student" className="font-normal cursor-pointer text-xs sm:text-sm md:text-base">
-                    Student
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="instructor" id="role-instructor" />
-                  <Label htmlFor="role-instructor" className="font-normal cursor-pointer text-xs sm:text-sm md:text-base">
-                    Instructor
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="location_owner" id="role-location-owner" />
-                  <Label htmlFor="role-location-owner" className="font-normal cursor-pointer text-xs sm:text-sm md:text-base">
-                    Venue Owner
-                  </Label>
-                </div>
-              </RadioGroup>
+        {selectedRole && (
+          <>
+            <button
+              type="button"
+              onClick={() => void handleGoogle()}
+              disabled={googleLoading}
+              className="w-full border border-border py-3 text-sm font-medium hover:bg-accent transition-colors mb-6 disabled:opacity-50"
+            >
+              {googleLoading ? "Continuing…" : "Continue with Google"}
+            </button>
+
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs uppercase tracking-widest text-muted-foreground">or</span>
+              <div className="flex-1 h-px bg-border" />
             </div>
-            
-            <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:gap-4">
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label htmlFor="firstname" className="text-xs sm:text-sm">First Name</Label>
-                <Input
-                  id="firstname"
+
+            <form onSubmit={(e) => void handleSignUp(e)} className="space-y-4 max-w-md">
+              <div>
+                <label
+                  htmlFor="signup-name"
+                  className="text-xs uppercase tracking-widest text-muted-foreground block mb-2"
+                >
+                  Name
+                </label>
+                <input
+                  id="signup-name"
                   type="text"
-                  placeholder="First name"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
                   required
-                  className="h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
+                  autoComplete="name"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="First Last"
+                  className={inputClass}
                 />
               </div>
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label htmlFor="lastname" className="text-xs sm:text-sm">Last Name</Label>
-                <Input
-                  id="lastname"
-                  type="text"
-                  placeholder="Last name"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  required
-                  className="h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
-                />
-              </div>
-            </div>
-            
-            {selectedRole === 'student' && (
-              <div className="space-y-2 pt-2 border-t">
-                <div className="flex items-start gap-2">
-                  <Checkbox
-                    id="student-terms-agreement"
-                    checked={agreedToTerms}
-                    onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="student-terms-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
-                      I have read and agree to the{" "}
-                      <button
-                        type="button"
-                        onClick={() => setShowStudentTermsDialog(true)}
-                        className="text-primary hover:underline font-medium"
-                      >
-                        Participant Terms and Conditions
-                      </button>
-                    </Label>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-2">
-                  <Checkbox
-                    id="student-privacy-agreement"
-                    checked={agreedToPrivacy}
-                    onCheckedChange={(checked) => setAgreedToPrivacy(checked === true)}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="student-privacy-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
-                      I have read and agree to the{" "}
-                      <button
-                        type="button"
-                        onClick={() => setShowStudentPrivacyDialog(true)}
-                        className="text-primary hover:underline font-medium"
-                      >
-                        Privacy Policy
-                      </button>
-                    </Label>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {selectedRole === 'instructor' && (
-              <>
-                <div className="space-y-1.5 sm:space-y-2">
-                  <Label htmlFor="bio" className="text-xs sm:text-sm">Bio</Label>
+
+              {selectedRole === "instructor" && (
+                <div>
+                  <label htmlFor="signup-bio" className="text-xs uppercase tracking-widest text-muted-foreground block mb-2">
+                    Bio <span className="normal-case text-muted-foreground">(optional)</span>
+                  </label>
                   <Textarea
-                    id="bio"
+                    id="signup-bio"
                     placeholder="Tell us about yourself..."
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
-                    rows={2}
-                    className="text-xs sm:text-sm md:text-base resize-none min-h-[60px]"
+                    rows={3}
+                    className={`${inputClass} min-h-[88px] resize-y`}
                   />
                 </div>
-                
-                <div className="space-y-2 pt-2 border-t">
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id="terms-agreement"
-                      checked={agreedToTerms}
-                      onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1">
-                      <Label htmlFor="terms-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
-                        I have read and agree to the{" "}
-                        <button
-                          type="button"
-                          onClick={() => setShowTermsDialog(true)}
-                          className="text-primary hover:underline font-medium"
-                        >
-                          Instructor Terms of Service
-                        </button>
-                      </Label>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id="privacy-agreement"
-                      checked={agreedToPrivacy}
-                      onCheckedChange={(checked) => setAgreedToPrivacy(checked === true)}
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1">
-                      <Label htmlFor="privacy-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
-                        I have read and agree to the{" "}
-                        <button
-                          type="button"
-                          onClick={() => setShowPrivacyDialog(true)}
-                          className="text-primary hover:underline font-medium"
-                        >
-                          Privacy Policy
-                        </button>
-                      </Label>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-            
-            {selectedRole === 'location_owner' && (
-              <div className="space-y-2 pt-2 border-t">
-                <div className="flex items-start gap-2">
-                  <Checkbox
-                    id="venue-terms-agreement"
-                    checked={agreedToTerms}
-                    onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="venue-terms-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
-                      I have read and agree to the{" "}
-                      <button
-                        type="button"
-                        onClick={() => setShowStudentTermsDialog(true)}
-                        className="text-primary hover:underline font-medium"
-                      >
-                        Participant Terms and Conditions
-                      </button>
-                    </Label>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-2">
-                  <Checkbox
-                    id="venue-privacy-agreement"
-                    checked={agreedToPrivacy}
-                    onCheckedChange={(checked) => setAgreedToPrivacy(checked === true)}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="venue-privacy-agreement" className="text-xs sm:text-sm font-normal cursor-pointer leading-relaxed">
-                      I have read and agree to the{" "}
-                      <button
-                        type="button"
-                        onClick={() => setShowStudentPrivacyDialog(true)}
-                        className="text-primary hover:underline font-medium"
-                      >
-                        Privacy Policy
-                      </button>
-                    </Label>
-                  </div>
-                </div>
+              )}
+
+              <div>
+                <label
+                  htmlFor="signup-email"
+                  className="text-xs uppercase tracking-widest text-muted-foreground block mb-2"
+                >
+                  Email
+                </label>
+                <input
+                  id="signup-email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
+                />
               </div>
-            )}
-            
-            <div className="space-y-1.5 sm:space-y-2">
-              <Label htmlFor="email" className="text-xs sm:text-sm">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="your.email@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
-              />
-            </div>
-            <div className="space-y-1.5 sm:space-y-2">
-              <Label htmlFor="password" className="text-xs sm:text-sm">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Create a password"
+
+              <div>
+                <label
+                  htmlFor="signup-password"
+                  className="text-xs uppercase tracking-widest text-muted-foreground block mb-2"
+                >
+                  Password
+                </label>
+                <input
+                  id="signup-password"
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  className="pr-10 h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base"
+                  className={inputClass}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
+                <p className="text-xs text-muted-foreground mt-2">At least 8 characters.</p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Password must be at least 6 characters
-              </p>
-            </div>
-            <Button 
-              type="submit" 
-              className="w-full h-9 sm:h-10 md:h-11 text-xs sm:text-sm md:text-base" 
-              disabled={
-                loading || 
-                (selectedRole === 'student' && (!agreedToTerms || !agreedToPrivacy)) ||
-                (selectedRole === 'instructor' && (!agreedToTerms || !agreedToPrivacy)) ||
-                (selectedRole === 'location_owner' && (!agreedToTerms || !agreedToPrivacy))
-              }
-            >
-              {loading ? "Creating account..." : "Sign Up"}
-            </Button>
-          </form>
 
-          <div className="mt-3 sm:mt-4 md:mt-6 text-center text-xs sm:text-sm">
-            <span className="text-muted-foreground">Already have an account? </span>
-                <Link to={nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login"} className="text-primary hover:underline font-medium">
-              Sign in
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-          </div>
-        </div>
-      </div>
+              {termsBlock}
 
-      {/* Dialogs - Outside grid layout */}
+              <button
+                type="submit"
+                disabled={submitDisabled}
+                className="w-full btn-primary py-3 text-sm font-medium disabled:opacity-50"
+              >
+                {loading ? "Creating account…" : "Create account"}
+              </button>
+            </form>
+          </>
+        )}
+
+        <p className="text-sm text-muted-foreground mt-8">
+          Already have an account?{" "}
+          <Link to={loginHref} className="text-rust border-b border-rust/30 hover:border-rust">
+            Sign in
+          </Link>
+        </p>
+      </main>
+
       <Dialog open={showTermsDialog} onOpenChange={setShowTermsDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
@@ -615,20 +576,19 @@ const Signup = () => {
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
             <div className="pr-4">
-              <div className="prose prose-sm max-w-none dark:prose-invert">
-                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-                  {INSTRUCTOR_AGREEMENT.content}
-                </pre>
-              </div>
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+                {INSTRUCTOR_AGREEMENT.content}
+              </pre>
             </div>
           </div>
           <div className="flex justify-end pt-4 pb-6 px-6 border-t flex-shrink-0">
-            <Button onClick={() => setShowTermsDialog(false)}>Close</Button>
+            <Button type="button" onClick={() => setShowTermsDialog(false)}>
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Student Terms and Conditions Dialog */}
       <Dialog open={showStudentTermsDialog} onOpenChange={setShowStudentTermsDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
@@ -639,20 +599,19 @@ const Signup = () => {
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
             <div className="pr-4">
-              <div className="prose prose-sm max-w-none dark:prose-invert">
-                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-                  {STUDENT_TERMS_AND_CONDITIONS.content}
-                </pre>
-              </div>
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+                {STUDENT_TERMS_AND_CONDITIONS.content}
+              </pre>
             </div>
           </div>
           <div className="flex justify-end pt-4 pb-6 px-6 border-t flex-shrink-0">
-            <Button onClick={() => setShowStudentTermsDialog(false)}>Close</Button>
+            <Button type="button" onClick={() => setShowStudentTermsDialog(false)}>
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Student Privacy Policy Dialog */}
       <Dialog open={showStudentPrivacyDialog} onOpenChange={setShowStudentPrivacyDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
@@ -663,20 +622,19 @@ const Signup = () => {
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
             <div className="pr-4">
-              <div className="prose prose-sm max-w-none dark:prose-invert">
-                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-                  {STUDENT_PRIVACY_POLICY.content}
-                </pre>
-              </div>
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+                {STUDENT_PRIVACY_POLICY.content}
+              </pre>
             </div>
           </div>
           <div className="flex justify-end pt-4 pb-6 px-6 border-t flex-shrink-0">
-            <Button onClick={() => setShowStudentPrivacyDialog(false)}>Close</Button>
+            <Button type="button" onClick={() => setShowStudentPrivacyDialog(false)}>
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Privacy Policy Dialog */}
       <Dialog open={showPrivacyDialog} onOpenChange={setShowPrivacyDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
@@ -687,15 +645,15 @@ const Signup = () => {
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
             <div className="pr-4">
-              <div className="prose prose-sm max-w-none dark:prose-invert">
-                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-                  {PRIVACY_POLICY.content}
-                </pre>
-              </div>
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+                {PRIVACY_POLICY.content}
+              </pre>
             </div>
           </div>
           <div className="flex justify-end pt-4 pb-6 px-6 border-t flex-shrink-0">
-            <Button onClick={() => setShowPrivacyDialog(false)}>Close</Button>
+            <Button type="button" onClick={() => setShowPrivacyDialog(false)}>
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -704,4 +662,3 @@ const Signup = () => {
 };
 
 export default Signup;
-
