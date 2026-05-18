@@ -44,6 +44,10 @@ import { useEffect } from "react";
 import QuiltMatchVenuesPage from "./pages/marketing/QuiltMatchVenuesPage";
 import QuiltMatchCreatorsPage from "./pages/marketing/QuiltMatchCreatorsPage";
 import QuiltMatchBlogPage from "./pages/marketing/QuiltMatchBlogPage";
+import QuiltMatchBlogPostPage from "./pages/marketing/QuiltMatchBlogPostPage";
+import QuiltMatchNewsPage from "./pages/marketing/QuiltMatchNewsPage";
+import QuiltMatchNewsPostPage from "./pages/marketing/QuiltMatchNewsPostPage";
+import AdminContentPage from "./pages/AdminContentPage";
 import RetreatsMarketingLayout from "./pages/marketing/RetreatsMarketingLayout";
 import QuiltMatchRetreatsPage from "./pages/marketing/QuiltMatchRetreatsPage";
 import QuiltMatchRetreats2026Page from "./pages/marketing/QuiltMatchRetreats2026Page";
@@ -202,7 +206,9 @@ const App = () => (
           <Route path="/venues" element={<QuiltMatchVenuesPage />} />
           <Route path="/creators" element={<QuiltMatchCreatorsPage />} />
           <Route path="/blog" element={<QuiltMatchBlogPage />} />
-          <Route path="/news" element={<QuiltMatchBlogPage />} />
+          <Route path="/blog/:slug" element={<QuiltMatchBlogPostPage />} />
+          <Route path="/news" element={<QuiltMatchNewsPage />} />
+          <Route path="/news/:slug" element={<QuiltMatchNewsPostPage />} />
           <Route path="/guides" element={<QuiltMatchHowItWorksPage />} />
 
           {/* Public Retreat Browsing - Event Feed */}
@@ -248,6 +254,7 @@ const App = () => (
           <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
           <Route path="/admin/affiliates" element={<AdminRoute><AffiliateProgramManager /></AdminRoute>} />
+          <Route path="/admin/content" element={<AdminRoute><AdminContentPage /></AdminRoute>} />
           
           {/* Catch-all route - redirect to login if not authenticated */}
           <Route path="*" element={<ProtectedRoute><NotFound /></ProtectedRoute>} />

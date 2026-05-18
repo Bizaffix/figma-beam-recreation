@@ -1298,6 +1298,15 @@ const AdminDashboard = () => {
           <div className="flex gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
+              onClick={() => navigate('/admin/content')}
+              className="bg-white/10 hover:bg-white/20 text-white border-white/20 w-full sm:w-auto"
+              size="sm"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Content
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => navigate('/admin/analytics')}
               className="bg-white/10 hover:bg-white/20 text-white border-white/20 w-full sm:w-auto"
               size="sm"
