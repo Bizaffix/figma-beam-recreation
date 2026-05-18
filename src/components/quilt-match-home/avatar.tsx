@@ -22,7 +22,7 @@ export function Avatar({
 }) {
   const sizeClass =
     size === "lg" ? "h-16 w-16 text-base" : size === "sm" ? "h-7 w-7 text-[10px]" : "h-9 w-9 text-xs";
-  const base = `rounded-full flex items-center justify-center font-mono font-semibold ring-2 ring-background ${toneClasses[tone]} ${sizeClass}`;
+  const base = `rounded-full flex items-center justify-center font-semibold ring-2 ring-background ${toneClasses[tone]} ${sizeClass}`;
   if (onClick) {
     return (
       <button
