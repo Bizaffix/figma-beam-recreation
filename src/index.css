@@ -79,6 +79,7 @@ All colors MUST be HSL.
    * When any .quilt-match-home exists under html, switch tokens to cream/charcoal (quilt-match).
    */
   html:has(.quilt-match-home) {
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     --background: 43 33% 97%;
     --foreground: 0 0% 13%;
     --card: 0 0% 100%;
@@ -279,10 +280,23 @@ All colors MUST be HSL.
     display: none;  /* Chrome, Safari and Opera */
   }
 
+  .quilt-match-home {
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
   .quilt-match-home .font-display {
     font-family: "Playfair Display", ui-serif, Georgia, serif;
     font-weight: 600;
     letter-spacing: -0.01em;
+  }
+
+  /* Eyebrow / label text (replaces JetBrains Mono on marketing pages) */
+  .quilt-match-home .font-mono {
+    font-family: inherit;
+    font-variant-numeric: normal;
+    font-weight: 600;
+    letter-spacing: 0.14em;
   }
 
   /* Craft-inspired text styles */
@@ -304,15 +318,6 @@ All colors MUST be HSL.
     background-color: hsl(var(--foreground));
     color: hsl(var(--background));
   }
-  .quilt-match-home .font-mono {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-  }
-  .quilt-match-home .font-display {
-    font-family: "Playfair Display", ui-serif, Georgia, serif;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-  }
-
   /* Craft-inspired text styles */
   .text-craft-heading {
     font-weight: 600;
