@@ -44,6 +44,7 @@ import { useEffect } from "react";
 import QuiltMatchVenuesPage from "./pages/marketing/QuiltMatchVenuesPage";
 import QuiltMatchCreatorsPage from "./pages/marketing/QuiltMatchCreatorsPage";
 import QuiltMatchBlogPage from "./pages/marketing/QuiltMatchBlogPage";
+import QuiltMatchFaqPage from "./pages/marketing/QuiltMatchFaqPage";
 import QuiltMatchBlogPostPage from "./pages/marketing/QuiltMatchBlogPostPage";
 import QuiltMatchNewsPage from "./pages/marketing/QuiltMatchNewsPage";
 import QuiltMatchNewsPostPage from "./pages/marketing/QuiltMatchNewsPostPage";
@@ -205,6 +206,7 @@ const App = () => (
           <Route path="/guides/what-to-bring" element={<QuiltMatchGuideWhatToBringPage />} />
           <Route path="/venues" element={<QuiltMatchVenuesPage />} />
           <Route path="/creators" element={<QuiltMatchCreatorsPage />} />
+          <Route path="/faq" element={<QuiltMatchFaqPage />} />
           <Route path="/blog" element={<QuiltMatchBlogPage />} />
           <Route path="/blog/:slug" element={<QuiltMatchBlogPostPage />} />
           <Route path="/news" element={<QuiltMatchNewsPage />} />

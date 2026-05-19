@@ -10,7 +10,6 @@ import { RegionsSection } from "@/components/quilt-match-home/homepage/regions-s
 import { HowItWorksSection } from "@/components/quilt-match-home/homepage/how-it-works-section";
 import { FinalCtaSection } from "@/components/quilt-match-home/homepage/final-cta-section";
 import { BookingStepsSection } from "@/components/quilt-match-home/homepage/booking-steps-section";
-import { FaqSection } from "@/components/quilt-match-home/homepage/faq-section";
 import { allRetreats } from "@/data/quiltMatchHomeRetreats";
 
 const featuredRetreats = allRetreats.slice(0, 4);
@@ -43,7 +42,6 @@ export function QuiltMatchHomePage() {
         <HowItWorksSection />
         <FinalCtaSection />
         <BookingStepsSection />
-        <FaqSection />
       </main>
 
       <QuiltMatchSiteFooter />
