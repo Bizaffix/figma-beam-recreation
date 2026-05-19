@@ -17,6 +17,7 @@ const navLinks = [
   { to: "/how-it-works", label: "How It Works" },
   { to: "/creators", label: "Community" },
   { to: "/blog", label: "Blog" },
+  { to: "/faq", label: "FAQ" },
 ] as const;
 
 export function QuiltMatchSiteHeader() {
