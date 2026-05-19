@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Search, Heart, CheckCircle, ArrowRight } from "lucide-react";
-import { QM_TEAL, QM_RUST, QM_AMBER } from "@/lib/quilt-match-home-brand";
+import { QM_TEAL, QM_RUST } from "@/lib/quilt-match-home-brand";
 
 const STEPS = [
   {
@@ -22,7 +22,7 @@ const STEPS = [
     title: "Book Your Spot",
     desc: "Secure your reservation with our safe payment system. Get instant confirmation and retreat details.",
     icon: CheckCircle,
-    color: QM_AMBER,
+    color: QM_TEAL,
   },
 ] as const;
 

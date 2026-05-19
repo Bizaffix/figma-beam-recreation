@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
-import { QM_TEAL, QM_RUST, QM_AMBER, QM_CHARCOAL } from "@/lib/quilt-match-home-brand";
+import { QM_TEAL, QM_RUST, QM_CHARCOAL } from "@/lib/quilt-match-home-brand";
 
 export function FinalCtaSection() {
   return (
@@ -49,7 +49,7 @@ export function FinalCtaSection() {
             <Link
               to="/venues"
               className="inline-flex items-center justify-center gap-2 text-white px-6 py-3.5 text-sm font-semibold rounded-[6px] transition-opacity w-full shadow-lg hover:opacity-90"
-              style={{ background: QM_AMBER }}
+              style={{ background: QM_TEAL }}
             >
               List Your Space <ArrowRight className="h-3.5 w-3.5" aria-hidden />
             </Link>
