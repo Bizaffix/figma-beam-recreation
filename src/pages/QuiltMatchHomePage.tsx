@@ -34,9 +34,9 @@ export function QuiltMatchHomePage() {
 
       <main>
         <QuiltMatchHeroSection />
+        <AiSearchSection />
         <CommunityQuoteSection />
         <OpenVenuesSection />
-        <AiSearchSection />
         <FeaturedRetreatsSection retreats={featuredRetreats} />
         <FeaturedCreatorsSection creators={featuredCreators} />
         <RegionsSection />

@@ -6,6 +6,8 @@ export type MarketingVenue = {
   name: string;
   location: string;
   availableLabel: string;
+  image: string | null;
+  sleeps: number | null;
 };
 
 type PropertyRow = {
@@ -13,6 +15,8 @@ type PropertyRow = {
   property_name: string;
   location: string;
   availability_calendar: string[] | null;
+  photos: string[] | null;
+  sleeps: number | null;
 };
 
 export function formatVenueLocationLabel(location: string): string {
@@ -48,11 +52,17 @@ export function formatNextAvailableLabel(dates: string[] | null | undefined): st
   return `Available ${format(upcoming[0], "MMM d")}`;
 }
 
+function pickFirstPhoto(photos: string[] | null): string | null {
+  if (!photos || photos.length === 0) return null;
+  const first = photos.find((p) => typeof p === "string" && p.trim());
+  return first ? first.trim() : null;
+}
+
 /** Published/verified venues from `properties` (same as Browse). */
 export async function fetchHomepageVenues(): Promise<MarketingVenue[]> {
   const { data, error } = await supabase
     .from("properties")
-    .select("id, property_name, location, availability_calendar")
+    .select("id, property_name, location, availability_calendar, photos, sleeps")
     .in("status", ["published", "verified"])
     .order("created_at", { ascending: false });
 
@@ -66,5 +76,7 @@ export async function fetchHomepageVenues(): Promise<MarketingVenue[]> {
     name: (row.property_name ?? "").trim() || "Untitled venue",
     location: formatVenueLocationLabel(row.location ?? ""),
     availableLabel: formatNextAvailableLabel(row.availability_calendar),
+    image: pickFirstPhoto(row.photos),
+    sleeps: typeof row.sleeps === "number" ? row.sleeps : null,
   }));
 }

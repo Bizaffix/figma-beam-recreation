@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
-import { QM_TEAL, QM_RUST, QM_AMBER, QM_TEAL_LIGHT, QM_RUST_LIGHT, QM_AMBER_LIGHT } from "@/lib/quilt-match-home-brand";
+import { QM_TEAL, QM_RUST, QM_TEAL_LIGHT, QM_RUST_LIGHT } from "@/lib/quilt-match-home-brand";
 
 const QUILTER_ITEMS = [
   { icon: "🔍", label: "Find", text: "retreats by location, skill level, and style" },
@@ -107,12 +107,12 @@ export function HowItWorksSection() {
           />
           <RoleCard
             badge="For Venue Hosts"
-            badgeStyle={{ background: QM_AMBER_LIGHT, color: QM_AMBER }}
+            badgeStyle={{ background: QM_TEAL_LIGHT, color: QM_TEAL }}
             items={HOST_ITEMS}
             cta="List Your Space"
-            ctaStyle={{ background: QM_AMBER }}
+            ctaStyle={{ background: QM_TEAL }}
             to="/venues"
-            hoverBorder="hover:border-[#D4A017]/30"
+            hoverBorder="hover:border-[#3A6B6E]/30"
           />
         </div>
       </div>

@@ -1,83 +1,97 @@
 import { Link } from "react-router-dom";
 
+type FooterColumn = {
+  heading: string;
+  links: { label: string; to: string }[];
+};
+
+const FOOTER_COLUMNS: FooterColumn[] = [
+  {
+    heading: "Explore by region",
+    links: [
+      { label: "Pacific Northwest", to: "/retreats/in/or" },
+      { label: "New England", to: "/retreats/in/vt" },
+      { label: "The South", to: "/retreats/in/nc" },
+      { label: "Mountain West", to: "/retreats/in/mt" },
+    ],
+  },
+  {
+    heading: "Resources",
+    links: [
+      { label: "Blog & guides", to: "/blog" },
+      { label: "Retreat news", to: "/news" },
+      { label: "Venue standards", to: "/guides" },
+      { label: "Trust & safety", to: "/guides" },
+    ],
+  },
+  {
+    heading: "Company",
+    links: [
+      { label: "About", to: "/how-it-works" },
+      { label: "For Creators", to: "/creators" },
+      { label: "For Venue Hosts", to: "/venues" },
+      { label: "Contact", to: "/contact" },
+    ],
+  },
+];
+
 export function QuiltMatchSiteFooter() {
   return (
-    <footer className="bg-foreground text-background py-24 px-6">
-      <div className="max-w-7xl mx-auto grid md:grid-cols-4 gap-12">
-        <div className="md:col-span-1">
-          <span className="font-display text-2xl tracking-tight text-background block mb-6">QuiltMatch</span>
-          <p className="text-xs leading-relaxed max-w-xs text-background/85">
-            The US marketplace for the modern quilting community. Connecting makers, creators, and venues through the art of the stitch.
-          </p>
-        </div>
-        <div>
-          <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] mb-8 text-background/80">Explore by region</h2>
-          <ul className="space-y-4 text-sm">
-            <li>
-              <Link to="/retreats/in/or" className="text-background/90 hover:text-background">
-                Pacific Northwest
-              </Link>
-            </li>
-            <li>
-              <Link to="/retreats/in/vt" className="text-background/90 hover:text-background">
-                New England
-              </Link>
-            </li>
-            <li>
-              <Link to="/retreats/in/nc" className="text-background/90 hover:text-background">
-                The South
-              </Link>
-            </li>
-            <li>
-              <Link to="/retreats/in/mt" className="text-background/90 hover:text-background">
-                Mountain West
-              </Link>
-            </li>
-          </ul>
-        </div>
-        <div>
-          <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] mb-8 text-background/80">Resources</h2>
-          <ul className="space-y-4 text-sm">
-            <li>
-              <Link to="/blog" className="text-background/90 hover:text-background">
-                Blog &amp; guides
-              </Link>
-            </li>
-            <li>
-              <Link to="/news" className="text-background/90 hover:text-background">
-                Retreat news
-              </Link>
-            </li>
-            <li>
-              <Link to="/guides" className="text-background/90 hover:text-background">
-                Venue standards
-              </Link>
-            </li>
-            <li>
-              <Link to="/guides" className="text-background/90 hover:text-background">
-                Trust &amp; safety
-              </Link>
-            </li>
-          </ul>
-        </div>
-        <div>
-          <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] mb-8 text-background/80">Join us</h2>
-          <p className="text-sm mb-6 text-background">Sign up for our seasonal journal.</p>
-          <div className="border-b border-background/40 pb-2 flex justify-between">
-            <span className="text-sm text-background/85">Email address</span>
-            <span className="text-xs font-mono uppercase cursor-pointer text-background">Sign up</span>
+    <footer className="bg-card border-t border-border px-5 py-16">
+      <div className="max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-10 mb-12">
+          <div>
+            <Link to="/" className="inline-block mb-5" aria-label="QuiltMatch home">
+              <img
+                src="/quiltmatch-logo.svg"
+                alt="QuiltMatch"
+                className="h-8 w-auto object-contain object-left"
+              />
+            </Link>
+            <p className="text-sm text-muted-foreground leading-relaxed max-w-[280px]">
+              The marketplace for quilting retreats. Connecting quilters with inspiring creative getaways nationwide.
+            </p>
           </div>
+
+          {FOOTER_COLUMNS.map((col) => (
+            <div key={col.heading}>
+              <p className="text-[11px] uppercase tracking-[0.14em] font-semibold mb-4 text-foreground">
+                {col.heading}
+              </p>
+              <ul className="space-y-2.5">
+                {col.links.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      to={link.to}
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
-      </div>
-      <div className="max-w-7xl mx-auto mt-24 pt-8 border-t border-background/20 flex flex-col md:flex-row justify-between items-center gap-4">
-        <span className="text-[10px] font-mono uppercase tracking-widest text-background/80">© 2026 QuiltMatch. All rights reserved.</span>
-        <div className="flex gap-8 text-[10px] font-mono uppercase tracking-widest text-background/80">
-          <Link to="/privacy" className="hover:text-background">
-            Privacy
-          </Link>
-          <Link to="/terms" className="hover:text-background">
-            Terms
-          </Link>
+
+        <div className="border-t border-border pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <p className="text-xs text-muted-foreground">
+            © {new Date().getFullYear()} QuiltMatch · All rights reserved
+          </p>
+          <div className="flex gap-6">
+            <Link
+              to="/privacy"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Privacy
+            </Link>
+            <Link
+              to="/terms"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Terms
+            </Link>
+          </div>
         </div>
       </div>
     </footer>
