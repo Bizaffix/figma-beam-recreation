@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import { MapPin, ChevronRight } from "lucide-react";
 import type { Retreat } from "@/data/quiltMatchHomeRetreats";
-import { QM_RUST, QM_TEAL, QM_AMBER } from "@/lib/quilt-match-home-brand";
+import { QM_RUST, QM_TEAL } from "@/lib/quilt-match-home-brand";
 
-const CREATOR_COLORS = [QM_RUST, QM_TEAL, QM_AMBER, "#6B6760"];
+const CREATOR_COLORS = [QM_RUST, QM_TEAL, QM_RUST, QM_TEAL];
 
 type Props = { creators: Retreat[] };
 
