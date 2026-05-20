@@ -34,8 +34,7 @@ export default function QuiltMatchHowItWorksPage() {
       <QuiltMatchSiteHeader />
       <main>
         <section className="px-6 pt-20 pb-16 max-w-4xl mx-auto text-center">
-          <span className="font-mono text-[10px] uppercase tracking-widest text-rust mb-4 block">How it works</span>
-          <h1 className="font-display text-5xl md:text-6xl mb-6 text-balance">How QuiltMatch works.</h1>
+          <h1 className="font-display text-5xl md:text-6xl mb-6 text-balance">How QuiltMatch works</h1>
           <p className="text-muted-foreground max-w-2xl mx-auto">
             Three roles, one shared calendar. We handle bookings, payments, and the small details — so the focus
             stays on the craft.
