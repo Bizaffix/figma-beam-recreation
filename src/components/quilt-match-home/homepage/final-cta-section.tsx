@@ -2,58 +2,65 @@ import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { QM_TEAL, QM_RUST, QM_CHARCOAL } from "@/lib/quilt-match-home-brand";
 
+function CtaCard({
+  title,
+  description,
+  cta,
+  to,
+  buttonColor,
+}: {
+  title: string;
+  description: string;
+  cta: string;
+  to: string;
+  buttonColor: string;
+}) {
+  return (
+    <div className="flex flex-col h-full border border-white/10 bg-white/5 backdrop-blur-sm rounded-[10px] p-8 text-center hover:border-white/20 transition-colors">
+      <h3 className="font-display text-xl md:text-2xl font-bold text-white mb-3 leading-tight shrink-0">
+        {title}
+      </h3>
+      <p className="text-white/65 text-sm leading-relaxed flex-1 min-h-[2.75rem]">{description}</p>
+      <Link
+        to={to}
+        className="mt-6 grid place-items-center w-full rounded-[6px] px-6 py-3.5 text-sm font-semibold text-white shadow-lg transition-opacity hover:opacity-90 no-underline shrink-0"
+        style={{ background: buttonColor }}
+      >
+        <span className="inline-flex items-center gap-2">
+          {cta}
+          <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        </span>
+      </Link>
+    </div>
+  );
+}
+
 export function FinalCtaSection() {
   return (
     <section className="py-24 px-5" style={{ background: QM_CHARCOAL }}>
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="border border-white/10 bg-white/5 backdrop-blur-sm rounded-[10px] p-8 text-center hover:border-white/20 transition-colors">
-            <h3 className="font-display text-xl md:text-2xl font-bold text-white mb-3 leading-tight">
-              Ready to find your next retreat?
-            </h3>
-            <p className="text-white/65 mb-6 text-sm leading-relaxed">
-              Browse hundreds of quilting experiences nationwide.
-            </p>
-            <Link
-              to="/retreats"
-              className="inline-flex items-center justify-center gap-2 text-white px-6 py-3.5 text-sm font-semibold rounded-[6px] transition-opacity w-full shadow-lg hover:opacity-90"
-              style={{ background: QM_TEAL }}
-            >
-              Explore Retreats <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-            </Link>
-          </div>
-
-          <div className="border border-white/10 bg-white/5 backdrop-blur-sm rounded-[10px] p-8 text-center hover:border-white/20 transition-colors">
-            <h3 className="font-display text-xl md:text-2xl font-bold text-white mb-3 leading-tight">
-              Ready to share your passion?
-            </h3>
-            <p className="text-white/65 mb-6 text-sm leading-relaxed">
-              Create retreats and build a business teaching quilters.
-            </p>
-            <Link
-              to="/creators"
-              className="inline-flex items-center justify-center gap-2 text-white px-6 py-3.5 text-sm font-semibold rounded-[6px] transition-opacity w-full shadow-lg hover:opacity-90"
-              style={{ background: QM_RUST }}
-            >
-              Start Creating <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-            </Link>
-          </div>
-
-          <div className="border border-white/10 bg-white/5 backdrop-blur-sm rounded-[10px] p-8 text-center hover:border-white/20 transition-colors">
-            <h3 className="font-display text-xl md:text-2xl font-bold text-white mb-3 leading-tight">
-              Ready to fill your calendar?
-            </h3>
-            <p className="text-white/65 mb-6 text-sm leading-relaxed">
-              Host quilting retreats and fill your mid-week slots.
-            </p>
-            <Link
-              to="/venues"
-              className="inline-flex items-center justify-center gap-2 text-white px-6 py-3.5 text-sm font-semibold rounded-[6px] transition-opacity w-full shadow-lg hover:opacity-90"
-              style={{ background: QM_TEAL }}
-            >
-              List Your Space <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-            </Link>
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+          <CtaCard
+            title="Ready to find your next retreat?"
+            description="Browse hundreds of quilting experiences nationwide."
+            cta="Explore Retreats"
+            to="/retreats"
+            buttonColor={QM_TEAL}
+          />
+          <CtaCard
+            title="Ready to share your passion?"
+            description="Create retreats and build a business teaching quilters."
+            cta="Start Creating"
+            to="/creators"
+            buttonColor={QM_RUST}
+          />
+          <CtaCard
+            title="Ready to fill your calendar?"
+            description="Host quilting retreats and fill your mid-week slots."
+            cta="List Your Space"
+            to="/venues"
+            buttonColor={QM_TEAL}
+          />
         </div>
       </div>
     </section>

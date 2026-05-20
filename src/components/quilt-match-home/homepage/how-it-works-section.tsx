@@ -41,14 +41,16 @@ function RoleCard({
   hoverBorder: string;
 }) {
   return (
-    <div className={`border-2 border-border bg-card rounded-[10px] p-8 hover:shadow-lg ${hoverBorder} transition-all`}>
+    <div
+      className={`flex flex-col h-full border-2 border-border bg-card rounded-[10px] p-8 hover:shadow-lg ${hoverBorder} transition-all`}
+    >
       <span
-        className="inline-block text-[11px] uppercase tracking-[0.14em] font-bold px-3.5 py-2 rounded-full mb-6"
+        className="inline-block text-[11px] uppercase tracking-[0.14em] font-bold px-3.5 py-2 rounded-full mb-6 shrink-0"
         style={badgeStyle}
       >
         {badge}
       </span>
-      <div className="space-y-4 mb-8">
+      <div className="flex flex-col flex-1 space-y-4 min-h-0">
         {items.map((item) => (
           <div key={item.label} className="flex items-start gap-3">
             <span className="text-xl shrink-0 leading-none" aria-hidden>
@@ -61,13 +63,18 @@ function RoleCard({
           </div>
         ))}
       </div>
-      <Link
-        to={to}
-        className="inline-flex items-center justify-center gap-2 text-white px-6 py-3 text-sm font-semibold rounded-[6px] transition-opacity w-full shadow-sm hover:opacity-90"
-        style={ctaStyle}
-      >
-        {cta} <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-      </Link>
+      <div className="mt-auto pt-6 w-full shrink-0">
+        <Link
+          to={to}
+          className="grid place-items-center w-full rounded-[6px] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 no-underline"
+          style={ctaStyle}
+        >
+          <span className="inline-flex items-center gap-2">
+            {cta}
+            <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          </span>
+        </Link>
+      </div>
     </div>
   );
 }
@@ -86,7 +93,7 @@ export function HowItWorksSection() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
           <RoleCard
             badge="For Quilters"
             badgeStyle={{ background: QM_TEAL_LIGHT, color: QM_TEAL }}
