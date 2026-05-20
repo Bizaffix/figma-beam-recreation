@@ -30,15 +30,8 @@ const FAQS = [
 
 export function FaqSection() {
   return (
-    <section className="py-20 px-5 border-t border-border">
+    <section className="py-12 px-5 bg-background">
       <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-14">
-          <h2 className="font-display text-4xl md:text-[2.6rem] font-bold text-foreground mb-3">
-            Frequently Asked Questions
-          </h2>
-          <p className="text-muted-foreground text-base">Everything you need to know about QuiltMatch</p>
-        </div>
-
         <div className="space-y-6">
           {FAQS.map((faq) => (
             <details
