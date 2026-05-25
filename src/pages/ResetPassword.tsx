@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 import { Eye, EyeOff, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 const ResetPassword = () => {
@@ -23,87 +22,25 @@ const ResetPassword = () => {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    const checkResetLink = async () => {
-      try {
-        // Check if we have hash fragments (Supabase password reset redirect)
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = hashParams.get('access_token');
-        const type = hashParams.get('type');
-        
-        // Also check query parameters
-        const token = searchParams.get('token');
-        const queryType = searchParams.get('type');
+    const token = searchParams.get('token');
+    if (token) {
+      setStatus('ready');
+      setMessage('Please enter your new password');
+      return;
+    }
 
-        // Supabase automatically processes hash fragments when the page loads
-        // We need to wait a bit for the session to be established
-        if (accessToken || (hashParams.has('access_token') && hashParams.has('refresh_token'))) {
-          // Wait for Supabase to process the hash and create a session
-          setTimeout(async () => {
-            const { data: { session }, error } = await supabase.auth.getSession();
-            
-            if (error) {
-              console.error('Reset link verification error:', error);
-              setStatus('error');
-              setMessage(error.message || 'Invalid or expired reset link. Please request a new password reset.');
-              return;
-            }
-
-            if (session) {
-              // Valid reset link - user can now set new password
-              setStatus('ready');
-              setMessage('Please enter your new password');
-              // Clear the hash from URL
-              window.history.replaceState({}, document.title, window.location.pathname);
-            } else {
-              setStatus('error');
-              setMessage('Invalid or expired reset link. Please request a new password reset.');
-            }
-          }, 1000);
-        } else if (token && (queryType === 'recovery' || type === 'recovery')) {
-          // Handle OTP-based password reset
-          const { error } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'recovery',
-          });
-
-          if (error) {
-            console.error('Reset link verification error:', error);
-            setStatus('error');
-            setMessage(error.message || 'Invalid or expired reset link. Please request a new password reset.');
-          } else {
-            setStatus('ready');
-            setMessage('Please enter your new password');
-          }
-        } else {
-          // Check if there's already a session (user might have clicked link elsewhere)
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            setStatus('ready');
-            setMessage('Please enter your new password');
-          } else {
-            // No valid reset parameters
-            setStatus('error');
-            setMessage('Invalid reset link. Please request a new password reset from the login page.');
-          }
-        }
-      } catch (error) {
-        console.error('Error checking reset link:', error);
-        setStatus('error');
-        setMessage('An unexpected error occurred. Please try again.');
-      }
-    };
-
-    checkResetLink();
+    setStatus('error');
+    setMessage('Invalid reset link. Please request a new password reset from the login page.');
   }, [searchParams]);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate passwords
-    if (password.length < 6) {
+    if (password.length < 8) {
       toast({
         title: "Error",
-        description: "Password must be at least 6 characters",
+        description: "Password must be at least 8 characters",
         variant: "destructive",
       });
       return;
@@ -120,7 +57,8 @@ const ResetPassword = () => {
 
     setLoading(true);
     try {
-      const { error } = await updatePassword(password);
+      const token = searchParams.get('token') || undefined;
+      const { error } = await updatePassword(password, token);
       if (error) {
         toast({
           title: "Error",
@@ -134,10 +72,6 @@ const ResetPassword = () => {
           title: "Password Updated",
           description: "Your password has been updated. Please sign in with your new password.",
         });
-        
-        // Sign out the user (they were auto-signed in by Supabase)
-        await supabase.auth.signOut();
-        
         // Redirect to login after 2 seconds
         setTimeout(() => {
           navigate('/login');
@@ -186,7 +120,7 @@ const ResetPassword = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={8}
                     className="pr-10"
                   />
                   <button
@@ -203,7 +137,7 @@ const ResetPassword = () => {
                   </button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Password must be at least 6 characters
+                  Password must be at least 8 characters
                 </p>
               </div>
 
@@ -217,7 +151,7 @@ const ResetPassword = () => {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={8}
                     className="pr-10"
                   />
                   <button

@@ -4,6 +4,7 @@
 // ============================================================
 
 import { supabase } from "@/lib/supabase";
+import { getBackendAccessToken } from "@/lib/backendAuth";
 import type {
   QuiltMatchRequest,
   QuiltMatchResponse,
@@ -51,13 +52,9 @@ export async function searchQuiltMatch(
     "Content-Type": "application/json",
   };
 
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData?.session?.access_token) {
-      headers["Authorization"] = `Bearer ${sessionData.session.access_token}`;
-    }
-  } catch {
-    // Not authenticated – anon key already set as fallback
+  const accessToken = getBackendAccessToken();
+  if (accessToken) {
+    headers["Authorization"] = `Bearer ${accessToken}`;
   }
 
   const url = `${supabaseUrl}/functions/v1/quiltmatch-ai`;

@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { env } from "@/lib/env";
 import { consumePostAuthRedirect, setPostAuthRedirect } from "@/lib/post-auth";
-import { supabase } from "@/lib/supabase";
 
 const ResendConfirmationForm = () => {
   const [resendEmail, setResendEmail] = useState("");
@@ -136,36 +136,8 @@ const Login = () => {
   };
 
   const handleGoogle = async () => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) {
-      toast({
-        title: "Unavailable",
-        description: "Sign-in isn’t configured yet.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setGoogleLoading(true);
-    try {
-      const redirectTo = `${window.location.origin}/home`;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo,
-        },
-      });
-      if (error) {
-        toast({
-          title: "Google sign-in failed",
-          description: error.message,
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setGoogleLoading(false);
-    }
+    window.location.href = `${env.apiUrl}/auth/oauth/google`;
   };
 
   const signupHref = nextPath ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup";

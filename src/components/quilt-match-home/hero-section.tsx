@@ -35,11 +35,11 @@ export function QuiltMatchHeroSection() {
             Explore Retreats <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
           <Link
-            to="/creators"
+            to="/signup"
             className="flex items-center justify-center gap-2 border-2 px-6 sm:px-8 py-3.5 sm:py-4 text-sm font-semibold rounded-[6px] transition-colors hover:bg-secondary w-full sm:w-auto"
             style={{ borderColor: "#B85C38", color: "#B85C38" }}
           >
-            Create Retreats <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            Sign Up <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
         </div>
       </div>

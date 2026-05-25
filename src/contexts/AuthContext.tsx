@@ -1,269 +1,198 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { createContext, useContext, useEffect, useRef, ReactNode } from 'react';
+import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { authActions } from '@/features/auth/authSlice';
+import {
+  selectAccessToken,
+  selectAuthRole,
+  selectAuthStatus,
+  selectAuthUser,
+} from '@/features/auth/authSelectors';
+import {
+  useChangePasswordMutation,
+  useForgotPasswordMutation,
+  useLoginMutation,
+  useLogoutMutation,
+  useRefreshSessionMutation,
+  useResendVerificationMutation,
+  useResetPasswordMutation,
+  useSignupMutation,
+} from '@/services/api/authApi';
+import type { AuthUser, BackendUserRole } from '@/types/auth.types';
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
-  role: 'instructor' | 'student' | 'admin' | 'location_owner' | null;
+  user: AuthUser | null;
+  session: { access_token: string | null; user: AuthUser | null } | null;
+  role: BackendUserRole | null;
   aiSubscriptionStatus: 'inactive' | 'active' | 'past_due' | 'canceled' | null;
   hasAiAccess: boolean;
   loading: boolean;
-  signUp: (email: string, password: string, role?: 'student' | 'instructor' | 'location_owner', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }, locationOwnerData?: { firstName: string; lastName: string; propertyName?: string }) => Promise<{ error: any; needsConfirmation?: boolean; data?: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any; role?: 'instructor' | 'student' | 'admin' | 'location_owner' | undefined; needsConfirmation?: boolean }>;
+  signUp: (email: string, password: string, role?: Exclude<BackendUserRole, 'admin'>, referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }, locationOwnerData?: { firstName: string; lastName: string; propertyName?: string }) => Promise<{ error: any; needsConfirmation?: boolean; data?: any }>;
+  signIn: (email: string, password: string) => Promise<{ error: any; role?: BackendUserRole | undefined; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<{ error: any }>;
   resetPassword: (email: string) => Promise<{ error: any }>;
-  updatePassword: (password: string) => Promise<{ error: any }>;
+  updatePassword: (password: string, token?: string, currentPassword?: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const asError = (error: unknown) => {
+  if (error && typeof error === 'object') {
+    const data = 'data' in error ? (error as { data?: { message?: string; error?: string } }).data : undefined;
+    if (data?.message || data?.error) {
+      return { message: data.message || data.error };
+    }
+    if ('message' in error && typeof (error as { message?: unknown }).message === 'string') {
+      return { message: (error as { message: string }).message };
+    }
+  }
+  return { message: 'An unexpected error occurred' };
+};
+
+const withUserMetadata = (user: AuthUser | null): AuthUser | null => {
+  if (!user) return null;
+  return {
+    ...user,
+    user_metadata: {
+      first_name: user.firstName,
+      last_name: user.lastName,
+      full_name: user.fullName,
+      avatar_url: user.avatarUrl,
+      ...user.user_metadata,
+    },
+    app_metadata: user.app_metadata || {},
+  };
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [role, setRole] = useState<'instructor' | 'student' | 'admin' | 'location_owner' | null>(null);
-  const [aiSubscriptionStatus, setAiSubscriptionStatus] = useState<'inactive' | 'active' | 'past_due' | 'canceled' | null>(null);
-  const [loading, setLoading] = useState(true);
+  const didRestoreSession = useRef(false);
+  const dispatch = useAppDispatch();
+  const user = withUserMetadata(useAppSelector(selectAuthUser));
+  const accessToken = useAppSelector(selectAccessToken);
+  const role = useAppSelector(selectAuthRole);
+  const authStatus = useAppSelector(selectAuthStatus);
+  const [login] = useLoginMutation();
+  const [signup] = useSignupMutation();
+  const [refreshSession] = useRefreshSessionMutation();
+  const [logout] = useLogoutMutation();
+  const [forgotPassword] = useForgotPasswordMutation();
+  const [resetPasswordMutation] = useResetPasswordMutation();
+  const [changePassword] = useChangePasswordMutation();
+  const [resendVerification] = useResendVerificationMutation();
 
   useEffect(() => {
-    // Check if Supabase is configured
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    
-    if (!supabaseUrl || !supabaseKey) {
-      // Supabase not configured - set no user and stop loading
-      console.warn('Supabase not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.');
-      setSession(null);
-      setUser(null);
-      setRole(null);
-      setLoading(false);
-      return;
-    }
+    if (didRestoreSession.current) return;
+    didRestoreSession.current = true;
 
-    // Get initial session
-    supabase.auth.getSession()
-      .then(({ data: { session }, error }) => {
-        if (error) {
-          console.error('Error getting session:', error);
-          setSession(null);
-          setUser(null);
-          setRole(null);
-          setAiSubscriptionStatus(null);
-          setLoading(false);
-          return;
-        }
-        
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          fetchUserRole(session.user.id);
-        } else {
-          setRole(null);
-          setLoading(false);
-        }
-      })
-      .catch((error) => {
-        console.error('Error in getSession:', error);
-        setSession(null);
-        setUser(null);
-        setRole(null);
-        setAiSubscriptionStatus(null);
-        setLoading(false);
+    dispatch(authActions.setAuthLoading());
+    refreshSession()
+      .unwrap()
+      .catch(() => {
+        dispatch(authActions.clearCredentials());
       });
+  }, [dispatch, refreshSession]);
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserRole(session.user.id);
-      } else {
-        setRole(null);
-        setAiSubscriptionStatus(null);
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchUserRole = async (userId: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    role: Exclude<BackendUserRole, 'admin'> = 'student',
+    referralCode?: string,
+    studentData?: { firstName: string; lastName: string },
+    instructorData?: { firstName: string; lastName: string; bio: string },
+    locationOwnerData?: { firstName: string; lastName: string; propertyName?: string }
+  ) => {
     try {
-      // Get role from profiles table (created automatically by database trigger)
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('role, ai_subscription_status')
-        .eq('id', userId)
-        .single();
-      
-      if (error) {
-        console.error('Error fetching user role:', error);
-        setRole('student'); // Default to student on error
-        setAiSubscriptionStatus('inactive');
-      } else if (profile?.role === 'instructor' || profile?.role === 'student' || profile?.role === 'admin' || profile?.role === 'location_owner') {
-        setRole(profile.role);
-        setAiSubscriptionStatus((profile.ai_subscription_status as 'inactive' | 'active' | 'past_due' | 'canceled' | null) || 'inactive');
-      } else {
-        // Default to student if no role is set
-        setRole('student');
-        setAiSubscriptionStatus('inactive');
+      const profileData =
+        role === 'instructor'
+          ? instructorData
+          : role === 'location_owner'
+            ? locationOwnerData
+            : studentData;
+
+      const data = await signup({
+        email,
+        password,
+        role,
+        referralCode,
+        firstName: profileData?.firstName,
+        lastName: profileData?.lastName,
+        bio: instructorData?.bio,
+        propertyName: locationOwnerData?.propertyName,
+      }).unwrap();
+
+      if (data.requiresEmailVerification) {
+        await logout().unwrap().catch(() => undefined);
       }
+
+      return {
+        error: null,
+        needsConfirmation: data.requiresEmailVerification !== false,
+        data,
+      };
     } catch (error) {
-      console.error('Error fetching user role:', error);
-      setRole('student'); // Default to student on error
-      setAiSubscriptionStatus('inactive');
-    } finally {
-      setLoading(false);
+      return { error: asError(error), needsConfirmation: false };
     }
-  };
-
-  const signUp = async (email: string, password: string, role: 'student' | 'instructor' | 'location_owner' = 'student', referralCode?: string, studentData?: { firstName: string; lastName: string }, instructorData?: { firstName: string; lastName: string; bio: string }, locationOwnerData?: { firstName: string; lastName: string; propertyName?: string }) => {
-    // Get the redirect URL - use production URL from env or current origin
-    const productionUrl = import.meta.env.VITE_SUPABASE_CONFIRM_URL || 'https://www.bookmyquiltretreat.com';
-    const redirectUrl = import.meta.env.PROD 
-      ? `${productionUrl}/auth/confirm`
-      : `${window.location.origin}/auth/confirm`;
-    
-    // Store role, referral code, and user data in user metadata so the database trigger can use it
-    const userMetadata: { role?: string; referred_by?: string; first_name?: string; last_name?: string; full_name?: string; bio?: string; property_name?: string } = {
-      role: role,
-    };
-    if (referralCode) {
-      userMetadata.referred_by = referralCode;
-    }
-    
-    // For students, use studentData; for instructors, use instructorData; for location owners, use locationOwnerData
-    if (role === 'instructor' && instructorData) {
-      userMetadata.first_name = instructorData.firstName;
-      userMetadata.last_name = instructorData.lastName;
-      userMetadata.full_name = `${instructorData.firstName} ${instructorData.lastName}`.trim();
-      userMetadata.bio = instructorData.bio;
-    } else if (role === 'student' && studentData) {
-      userMetadata.first_name = studentData.firstName;
-      userMetadata.last_name = studentData.lastName;
-      userMetadata.full_name = `${studentData.firstName} ${studentData.lastName}`.trim();
-    } else if (role === 'location_owner' && locationOwnerData) {
-      userMetadata.first_name = locationOwnerData.firstName;
-      userMetadata.last_name = locationOwnerData.lastName;
-      userMetadata.full_name = `${locationOwnerData.firstName} ${locationOwnerData.lastName}`.trim();
-      if (locationOwnerData.propertyName) {
-        userMetadata.property_name = locationOwnerData.propertyName;
-      }
-    }
-    
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: userMetadata,
-      },
-    });
-
-    // Note: With email confirmation enabled, user won't be automatically signed in
-    // They need to confirm their email first
-    if (data.user && !error) {
-      // Don't set user/session here - they need to confirm email first
-      // The profile will be created by the database trigger when they confirm
-    }
-
-    return { error, needsConfirmation: !error && data.user && !data.session, data };
   };
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    // Check if email is confirmed
-    if (error) {
-      // Check if error is due to unconfirmed email
-      if (error.message?.includes('Email not confirmed') || error.message?.includes('email_not_confirmed')) {
-        return { 
-          error: { 
-            ...error, 
-            message: 'Please verify your email before signing in. Check your inbox for the confirmation link.' 
-          },
-          needsConfirmation: true 
-        };
-      }
-      return { error, role: undefined };
+    try {
+      const data = await login({ email, password }).unwrap();
+      return { error: null, role: data.user.role };
+    } catch (error) {
+      const normalizedError = asError(error);
+      const needsConfirmation = normalizedError.message.toLowerCase().includes('verify');
+      return {
+        error: needsConfirmation
+          ? { message: 'Please verify your email before signing in. Check your inbox for the confirmation link.' }
+          : normalizedError,
+        role: undefined,
+        needsConfirmation,
+      };
     }
-
-    if (data.user) {
-      // Check if email is confirmed
-      if (!data.user.email_confirmed_at && !data.user.confirmed_at) {
-        return { 
-          error: { 
-            message: 'Please verify your email before signing in. Check your inbox for the confirmation link.' 
-          },
-          needsConfirmation: true 
-        };
-      }
-
-      setUser(data.user);
-      await fetchUserRole(data.user.id);
-      // Get the role after fetching
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single();
-      
-      return { error, role: profile?.role as 'instructor' | 'student' | 'admin' | 'location_owner' | undefined };
-    }
-
-    return { error, role: undefined };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-    setRole(null);
-    setAiSubscriptionStatus(null);
+    await logout().unwrap().catch(() => {
+      dispatch(authActions.clearCredentials());
+    });
   };
 
   const resendConfirmationEmail = async (email: string) => {
-    // Get the redirect URL - use production URL from env or current origin
-    const productionUrl = import.meta.env.VITE_SUPABASE_CONFIRM_URL || 'https://www.bookmyquiltretreat.com';
-    const redirectUrl = import.meta.env.PROD 
-      ? `${productionUrl}/auth/confirm`
-      : `${window.location.origin}/auth/confirm`;
-    
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email,
-      options: {
-        emailRedirectTo: redirectUrl,
-      },
-    });
-    return { error };
+    try {
+      await resendVerification({ email }).unwrap();
+      return { error: null };
+    } catch (error) {
+      return { error: asError(error) };
+    }
   };
 
   const resetPassword = async (email: string) => {
-    // Get the redirect URL - use production URL from env or current origin
-    const productionUrl = import.meta.env.VITE_SUPABASE_CONFIRM_URL || 'https://www.bookmyquiltretreat.com';
-    const redirectUrl = import.meta.env.PROD 
-      ? `${productionUrl}/auth/reset-password`
-      : `${window.location.origin}/auth/reset-password`;
-    
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: redirectUrl,
-    });
-    return { error };
+    try {
+      await forgotPassword({ email }).unwrap();
+      return { error: null };
+    } catch (error) {
+      return { error: asError(error) };
+    }
   };
 
-  const updatePassword = async (password: string) => {
-    const { error } = await supabase.auth.updateUser({
-      password: password,
-    });
-    return { error };
+  const updatePassword = async (password: string, token?: string, currentPassword?: string) => {
+    try {
+      if (token) {
+        await resetPasswordMutation({ token, password }).unwrap();
+      } else if (currentPassword) {
+        await changePassword({ currentPassword, newPassword: password }).unwrap();
+      } else {
+        return { error: { message: 'Password reset token is missing.' } };
+      }
+      return { error: null };
+    } catch (error) {
+      return { error: asError(error) };
+    }
   };
+
+  const aiSubscriptionStatus = user?.aiSubscriptionStatus || null;
+  const session = accessToken ? { access_token: accessToken, user } : null;
+  const loading = authStatus === 'idle' || authStatus === 'loading';
 
   return (
     <AuthContext.Provider

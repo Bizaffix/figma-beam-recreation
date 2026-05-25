@@ -33,7 +33,7 @@ import {
   Mail,
   Sparkles,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { getBackendAccessToken } from "@/lib/backendAuth";
 import { useToast } from "@/hooks/use-toast";
 import type { DraftListing } from "@/types/draft-listing";
 
@@ -163,9 +163,9 @@ export function DraftListingsPanel() {
         "Content-Type": "application/json",
       };
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session?.access_token) {
-        headers["Authorization"] = `Bearer ${sessionData.session.access_token}`;
+      const accessToken = getBackendAccessToken();
+      if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`;
       }
 
       const res = await fetch(`${supabaseUrl}/functions/v1/quiltmatch-admin`, {

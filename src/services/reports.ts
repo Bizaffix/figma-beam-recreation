@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { getBackendAccessToken } from "@/lib/backendAuth";
 
 export interface ReportParameters {
   [key: string]: any;
@@ -43,8 +43,8 @@ export interface FetchReportsResponse {
  */
 export const fetchReports = async (params: FetchReportsParams): Promise<FetchReportsResponse> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -52,7 +52,7 @@ export const fetchReports = async (params: FetchReportsParams): Promise<FetchRep
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -91,8 +91,8 @@ export const fetchReports = async (params: FetchReportsParams): Promise<FetchRep
  */
 export const createReport = async (params: CreateReportParams): Promise<Report> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -100,7 +100,7 @@ export const createReport = async (params: CreateReportParams): Promise<Report> 
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -141,8 +141,8 @@ export const updateReport = async (
   params: Partial<CreateReportParams>,
 ): Promise<Report> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -150,7 +150,7 @@ export const updateReport = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -182,8 +182,8 @@ export const updateReport = async (
  */
 export const deleteReport = async (reportId: string): Promise<void> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -191,7 +191,7 @@ export const deleteReport = async (reportId: string): Promise<void> => {
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -223,8 +223,8 @@ export interface GetReportParams {
  */
 export const getReport = async (reportId: string): Promise<Report> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -232,7 +232,7 @@ export const getReport = async (reportId: string): Promise<Report> => {
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
     };
 
@@ -308,8 +308,8 @@ export const fetchAttributionReport = async (
   params: AttributionReportParams,
 ): Promise<AttributionReportData> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -317,7 +317,7 @@ export const fetchAttributionReport = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -432,8 +432,8 @@ export const fetchGoalReport = async (
   params: GoalReportParams,
 ): Promise<GoalReportData> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -441,7 +441,7 @@ export const fetchGoalReport = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -483,8 +483,8 @@ export const fetchBreakdownReport = async (
   params: BreakdownReportParams,
 ): Promise<BreakdownReportData> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -492,7 +492,7 @@ export const fetchBreakdownReport = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -573,8 +573,8 @@ export const fetchFunnelReport = async (
   params: FunnelReportParams,
 ): Promise<FunnelReportData> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -582,7 +582,7 @@ export const fetchFunnelReport = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -647,8 +647,8 @@ export const fetchJourneyReport = async (
   params: JourneyReportParams,
 ): Promise<JourneyReportData> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -656,7 +656,7 @@ export const fetchJourneyReport = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -717,8 +717,8 @@ export const fetchRetentionReport = async (
   params: RetentionReportParams,
 ): Promise<RetentionRow[]> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -726,7 +726,7 @@ export const fetchRetentionReport = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -803,8 +803,8 @@ export const fetchRevenueReport = async (
   params: RevenueReportParams,
 ): Promise<RevenueReportData> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -812,7 +812,7 @@ export const fetchRevenueReport = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -875,8 +875,8 @@ export interface UtmReportParams {
  */
 export const fetchUtmReport = async (params: UtmReportParams): Promise<UtmReportData> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -884,7 +884,7 @@ export const fetchUtmReport = async (params: UtmReportParams): Promise<UtmReport
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
       "Content-Type": "application/json",
     };
@@ -957,8 +957,8 @@ export interface SessionListResponse {
  */
 export const fetchSessions = async (params: SessionListParams): Promise<SessionListResponse> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -966,7 +966,7 @@ export const fetchSessions = async (params: SessionListParams): Promise<SessionL
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
     };
 
@@ -1018,8 +1018,8 @@ export const fetchSessionStats = async (
   endDate: string | number,
 ): Promise<SessionStats> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -1027,7 +1027,7 @@ export const fetchSessionStats = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
     };
 
@@ -1069,8 +1069,8 @@ export const fetchWeeklySessions = async (
   timezone?: string,
 ): Promise<WeeklySessionData> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -1078,7 +1078,7 @@ export const fetchWeeklySessions = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
     };
 
@@ -1122,8 +1122,8 @@ export const fetchSessionDetail = async (
   endDate: string | number,
 ): Promise<SessionDetail> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -1131,7 +1131,7 @@ export const fetchSessionDetail = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
     };
 
@@ -1181,8 +1181,8 @@ export const fetchSessionActivity = async (
   endDate: string | number,
 ): Promise<SessionActivity[]> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -1190,7 +1190,7 @@ export const fetchSessionActivity = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
     };
 
@@ -1237,8 +1237,8 @@ export const fetchSessionProperties = async (
   endDate: string | number,
 ): Promise<SessionProperty[]> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -1246,7 +1246,7 @@ export const fetchSessionProperties = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
     };
 
@@ -1288,8 +1288,8 @@ export const fetchSessionDataProperties = async (
   endDate: string | number,
 ): Promise<SessionDataProperty[]> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -1297,7 +1297,7 @@ export const fetchSessionDataProperties = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
     };
 
@@ -1340,8 +1340,8 @@ export const fetchSessionDataValues = async (
   endDate: string | number,
 ): Promise<SessionDataValue[]> => {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData?.session) {
+    const accessToken = getBackendAccessToken();
+    if (!accessToken) {
       throw new Error("Not authenticated");
     }
 
@@ -1349,7 +1349,7 @@ export const fetchSessionDataValues = async (
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     const headers = {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseAnonKey,
     };
 

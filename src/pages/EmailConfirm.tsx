@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabase";
+import { useVerifyEmailMutation } from "@/services/api/authApi";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
@@ -10,108 +10,32 @@ const EmailConfirm = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [verifyEmailToken] = useVerifyEmailMutation();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Verifying your email...');
 
   useEffect(() => {
     const verifyEmail = async () => {
       try {
-        // Check if we have hash fragments (Supabase email confirmation redirect)
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = hashParams.get('access_token');
-        const type = hashParams.get('type');
-        
-        // Also check query parameters (for OTP verification)
         const token = searchParams.get('token');
-        const queryType = searchParams.get('type');
 
-        // Supabase automatically processes hash fragments when the page loads
-        // We need to wait a bit for the session to be established
-        if (accessToken || (hashParams.has('access_token') && hashParams.has('refresh_token'))) {
-          // Wait for Supabase to process the hash and create a session
-          // Check session after a short delay
-          setTimeout(async () => {
-            const { data: { session }, error } = await supabase.auth.getSession();
-            
-            if (error) {
-              console.error('Email verification error:', error);
-              setStatus('error');
-              setMessage(error.message || 'Failed to verify email. The link may have expired.');
-              return;
-            }
-
-            if (session) {
-              // Email is verified, but sign the user out so they must manually sign in
-              await supabase.auth.signOut();
-              
-              setStatus('success');
-              setMessage('Email verified successfully! You can now sign in.');
-              toast({
-                title: "Email Verified",
-                description: "Your email has been confirmed. Please sign in to continue.",
-              });
-              
-              // Clear the hash from URL
-              window.history.replaceState({}, document.title, window.location.pathname);
-              
-              // Redirect to login after 2 seconds
-              setTimeout(() => {
-                navigate('/login');
-              }, 2000);
-            } else {
-              setStatus('error');
-              setMessage('Failed to verify email. The link may have expired.');
-            }
-          }, 1000);
-        } else if (token && (queryType || type)) {
-          // Handle OTP-based verification
-          const { error } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: (queryType || type) as 'email',
-          });
-
-          if (error) {
-            console.error('Email verification error:', error);
-            setStatus('error');
-            setMessage(error.message || 'Failed to verify email. The link may have expired.');
-          } else {
-            // Email is verified, but sign the user out so they must manually sign in
-            await supabase.auth.signOut();
-            
-            setStatus('success');
-            setMessage('Email verified successfully! You can now sign in.');
-            toast({
-              title: "Email Verified",
-              description: "Your email has been confirmed. Please sign in to continue.",
-            });
-            
-            setTimeout(() => {
-              navigate('/login');
-            }, 2000);
-          }
-        } else {
-          // Check if there's already a session (user might have confirmed elsewhere)
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            // Sign out to ensure user must manually sign in
-            await supabase.auth.signOut();
-            
-            setStatus('success');
-            setMessage('Email already verified! You can sign in.');
-            toast({
-              title: "Email Verified",
-              description: "Your email has been confirmed. Please sign in to continue.",
-            });
-            
-            setTimeout(() => {
-              navigate('/login');
-            }, 2000);
-          } else {
-            // No valid confirmation parameters
-            setStatus('error');
-            setMessage('Invalid confirmation link. Please check your email and try again.');
-          }
+        if (!token) {
+          setStatus('error');
+          setMessage('Invalid confirmation link. Please check your email and try again.');
+          return;
         }
+
+        await verifyEmailToken({ token }).unwrap();
+        setStatus('success');
+        setMessage('Email verified successfully! You can now sign in.');
+        toast({
+          title: "Email Verified",
+          description: "Your email has been confirmed. Please sign in to continue.",
+        });
+
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
       } catch (error) {
         console.error('Error verifying email:', error);
         setStatus('error');
@@ -120,7 +44,7 @@ const EmailConfirm = () => {
     };
 
     verifyEmail();
-  }, [searchParams, navigate, toast]);
+  }, [searchParams, navigate, toast, verifyEmailToken]);
 
   return (
     <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-6">
