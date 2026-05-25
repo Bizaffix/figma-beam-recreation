@@ -12,7 +12,6 @@ import {
 
 const navLinks = [
   { to: "/retreats", label: "Explore Retreats" },
-  { to: "/", label: "Create Retreats" },
   { to: "/venues", label: "For Venue Hosts" },
   { to: "/how-it-works", label: "How It Works" },
   { to: "/creators", label: "Community" },

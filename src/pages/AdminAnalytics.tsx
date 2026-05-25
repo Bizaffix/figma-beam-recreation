@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabase";
+import { getBackendAccessToken } from "@/lib/backendAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -108,8 +108,8 @@ const AdminAnalytics = () => {
     try {
       setLoading(true);
 
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData?.session) {
+      const accessToken = getBackendAccessToken();
+      if (!accessToken) {
         toast({
           title: "Analytics Error",
           description: "Not authenticated",
@@ -122,7 +122,7 @@ const AdminAnalytics = () => {
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
       const headers = {
-        Authorization: `Bearer ${sessionData.session.access_token}`,
+        Authorization: `Bearer ${accessToken}`,
         apikey: supabaseAnonKey,
       };
 

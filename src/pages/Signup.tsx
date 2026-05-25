@@ -14,9 +14,9 @@ import { PRIVACY_POLICY } from "@/content/privacy-policy";
 import { STUDENT_TERMS_AND_CONDITIONS } from "@/content/student-terms-and-conditions";
 import { STUDENT_PRIVACY_POLICY } from "@/content/student-privacy-policy";
 import { createReferral, getCurrentAffiliate } from "@/lib/affiliate-tracking";
+import { env } from "@/lib/env";
 import { setPostAuthRedirect } from "@/lib/post-auth";
 import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
-import { supabase } from "@/lib/supabase";
 
 type SignupRole = "student" | "instructor" | "location_owner";
 
@@ -114,36 +114,9 @@ const Signup = () => {
   const handleGoogle = async () => {
     if (!selectedRole) return;
 
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) {
-      toast({
-        title: "Unavailable",
-        description: "Sign-up isn’t configured yet.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setGoogleLoading(true);
-    try {
-      sessionStorage.setItem("signup_intended_role", selectedRole);
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/home`,
-        },
-      });
-      if (error) {
-        toast({
-          title: "Google sign-up failed",
-          description: error.message,
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setGoogleLoading(false);
-    }
+    sessionStorage.setItem("signup_intended_role", selectedRole);
+    window.location.href = `${env.apiUrl}/auth/oauth/google?from=signup`;
   };
 
   const handleSignUp = async (e: FormEvent) => {

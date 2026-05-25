@@ -4,6 +4,7 @@
 // ============================================================
 
 import { supabase } from "@/lib/supabase";
+import { getBackendAccessToken } from "@/lib/backendAuth";
 import type {
   DiscoverRequest,
   DiscoverResponse,
@@ -31,13 +32,9 @@ export async function discoverRetreats(
     "Content-Type": "application/json",
   };
 
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData?.session?.access_token) {
-      headers["Authorization"] = `Bearer ${sessionData.session.access_token}`;
-    }
-  } catch {
-    // Anon key already set
+  const accessToken = getBackendAccessToken();
+  if (accessToken) {
+    headers["Authorization"] = `Bearer ${accessToken}`;
   }
 
   const url = `${supabaseUrl}/functions/v1/quiltmatch-discover`;
@@ -84,13 +81,9 @@ export async function expressInterest(
     "Content-Type": "application/json",
   };
 
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData?.session?.access_token) {
-      headers["Authorization"] = `Bearer ${sessionData.session.access_token}`;
-    }
-  } catch {
-    // Anon key already set
+  const accessToken = getBackendAccessToken();
+  if (accessToken) {
+    headers["Authorization"] = `Bearer ${accessToken}`;
   }
 
   const res = await fetch(`${supabaseUrl}/functions/v1/quiltmatch-interest`, {

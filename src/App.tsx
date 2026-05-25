@@ -174,7 +174,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <PlatformSettingsProvider>
           <PermissionsProvider>
@@ -189,6 +189,7 @@ const App = () => (
           <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
           {/* Email confirmation route - accessible to all (needs to handle sign-out) */}
           <Route path="/auth/confirm" element={<EmailConfirm />} />
+          <Route path="/auth/verify-email" element={<EmailConfirm />} />
           {/* Password reset route - accessible to all (needs to handle sign-out) */}
           <Route path="/auth/reset-password" element={<ResetPassword />} />
           {/* Public Legal Pages */}
