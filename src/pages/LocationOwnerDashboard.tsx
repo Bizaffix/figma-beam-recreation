@@ -5,7 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetMyVenuesQuery,
+  useLazyGetEventRequestsQuery,
+  useRespondToEventRequestMutation,
+  useLazyGetMyAffiliateQuery,
+  useLazyGetMyAffiliateLinksQuery,
+  useLazyGetMyCommissionsQuery,
+  useLazyGetConversationsQuery,
+} from "@/services/server";
+import { sumUnreadCount, toLegacyEventRequest, toLegacyAffiliateLink, toLegacyProperty } from "@/services/mappers";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -125,6 +134,13 @@ const LocationOwnerDashboard = () => {
   }>>([]);
   const [linkCopied, setLinkCopied] = useState(false);
   const [loadingAffiliate, setLoadingAffiliate] = useState(false);
+  const [fetchMyVenues] = useLazyGetMyVenuesQuery();
+  const [fetchEventRequestsQuery] = useLazyGetEventRequestsQuery();
+  const [respondToEventRequest] = useRespondToEventRequestMutation();
+  const [fetchMyAffiliate] = useLazyGetMyAffiliateQuery();
+  const [fetchMyAffiliateLinks] = useLazyGetMyAffiliateLinksQuery();
+  const [fetchMyCommissions] = useLazyGetMyCommissionsQuery();
+  const [fetchConversations] = useLazyGetConversationsQuery();
 
   useEffect(() => {
     if (user) {
@@ -143,64 +159,26 @@ const LocationOwnerDashboard = () => {
 
   const fetchUnreadMessages = async () => {
     if (!user) return;
-    
+
     try {
-      // Get all properties for this venue owner
-      const { data: properties, error: propertiesError } = await supabase
-        .from('properties')
-        .select('id')
-        .eq('owner_id', user.id);
-
-      if (propertiesError) throw propertiesError;
-
-      if (!properties || properties.length === 0) {
-        setUnreadMessages(0);
-        return;
-      }
-
-      // Get event requests for all properties
-      const propertyIds = properties.map(p => p.id);
-      const { data: eventRequests, error: requestsError } = await supabase
-        .from('event_requests')
-        .select('id')
-        .in('property_id', propertyIds);
-
-      if (requestsError) throw requestsError;
-
-      if (!eventRequests || eventRequests.length === 0) {
-        setUnreadMessages(0);
-        return;
-      }
-
-      // Count unread messages for all event requests
-      const eventRequestIds = eventRequests.map(er => er.id);
-      const { count, error: countError } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .in('related_id', eventRequestIds)
-        .eq('message_type', 'event_request')
-        .eq('receiver_id', user.id)
-        .eq('read', false);
-
-      if (countError) throw countError;
-      setUnreadMessages(count || 0);
+      const conversations = await fetchConversations().unwrap();
+      setUnreadMessages(sumUnreadCount(conversations, user.id));
     } catch (error) {
       console.error('Error fetching unread messages:', error);
     }
   };
 
   const fetchEventRequests = async () => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('event_requests')
-        .select('*')
-        .eq('property_id', selectedProperty?.id || '')
-        .order('created_at', { ascending: false });
+    if (!user || !selectedProperty) return;
 
-      if (error) throw error;
-      setEventRequests(data || []);
+    try {
+      const items = await fetchEventRequestsQuery({ venueId: selectedProperty.id, limit: 100 }).unwrap();
+      const mapped = items.map((item) => toLegacyEventRequest(item) as EventRequest);
+      setEventRequests(mapped);
+      setStats((prev) => ({
+        ...prev,
+        pendingRequests: mapped.filter((r) => r.status === 'pending').length,
+      }));
     } catch (error) {
       console.error('Error fetching event requests:', error);
     }
@@ -209,17 +187,17 @@ const LocationOwnerDashboard = () => {
   // Fetch approved events for calendar
   const fetchCalendarEvents = async () => {
     if (!user || !selectedProperty) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('event_requests')
-        .select('*')
-        .eq('property_id', selectedProperty.id)
-        .eq('status', 'approved')
-        .order('start_date', { ascending: true });
 
-      if (error) throw error;
-      setCalendarEvents(data || []);
+    try {
+      const items = await fetchEventRequestsQuery({
+        venueId: selectedProperty.id,
+        status: 'approved',
+        limit: 100,
+      }).unwrap();
+      const mapped = items
+        .map((item) => toLegacyEventRequest(item) as EventRequest)
+        .sort((a, b) => a.start_date.localeCompare(b.start_date));
+      setCalendarEvents(mapped);
     } catch (error) {
       console.error('Error fetching calendar events:', error);
     }
@@ -227,31 +205,38 @@ const LocationOwnerDashboard = () => {
 
   const fetchProperties = async () => {
     try {
-      const { data: properties, error } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('owner_id', user?.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      setProperties(properties || []);
-      
-      if (properties && properties.length > 0) {
-        setSelectedProperty(properties[0]);
-      }
-      
-      // Calculate stats
-      const stats = properties?.reduce((acc, prop) => {
+      const venues = await fetchMyVenues({ limit: 100, sort: "createdAt:desc" }).unwrap();
+      const mapped = venues.map((venue) => {
+        const legacy = toLegacyProperty(venue);
         return {
+          ...legacy,
+          views: Number(venue.viewCount ?? venue.views ?? 0),
+          saves: Number(venue.saveCount ?? venue.saves ?? 0),
+          inquiries: Number(venue.inquiryCount ?? venue.inquiries ?? 0),
+          base_pricing: (venue.basePricing ?? venue.base_pricing ?? {}) as Record<string, number>,
+          stay_types: (venue.stayTypes ?? venue.stay_types ?? []) as string[],
+          house_rules: (venue.houseRules ?? venue.house_rules ?? []) as string[],
+        } as Property;
+      });
+
+      setProperties(mapped);
+
+      if (mapped.length > 0) {
+        setSelectedProperty(mapped[0]);
+      }
+
+      const nextStats = mapped.reduce(
+        (acc, prop) => ({
           totalViews: acc.totalViews + (prop.views || 0),
           totalSaves: acc.totalSaves + (prop.saves || 0),
           totalInquiries: acc.totalInquiries + (prop.inquiries || 0),
-          publishedProperties: acc.publishedProperties + (prop.status === 'published' ? 1 : 0)
-        };
-      }, { totalViews: 0, totalSaves: 0, totalInquiries: 0, publishedProperties: 0 });
+          publishedProperties: acc.publishedProperties + (prop.status === 'published' || prop.status === 'verified' ? 1 : 0),
+          pendingRequests: acc.pendingRequests,
+        }),
+        { totalViews: 0, totalSaves: 0, totalInquiries: 0, publishedProperties: 0, pendingRequests: 0 },
+      );
 
-      setStats(stats);
+      setStats(nextStats);
     } catch (error) {
       console.error('Error fetching properties:', error);
     } finally {
@@ -262,116 +247,77 @@ const LocationOwnerDashboard = () => {
   const fetchAffiliateData = async () => {
     if (!user) return;
     setLoadingAffiliate(true);
-    
-    try {
-      // Get affiliate record for this venue manager
-      const { data: affiliate, error: affiliateError } = await supabase
-        .from('affiliates')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('affiliate_type', 'venue_partner')
-        .maybeSingle();
 
-      if (affiliateError || !affiliate) {
-        console.log('No affiliate record found for venue manager');
+    try {
+      const { affiliate, referrals: referralRows = [] } = await fetchMyAffiliate().unwrap();
+      const affiliateRecord = affiliate as Record<string, unknown> | undefined;
+      const affiliateType = String(affiliateRecord?.affiliateType ?? affiliateRecord?.affiliate_type ?? "");
+
+      if (!affiliateRecord || affiliateType !== "venue_partner") {
         setLoadingAffiliate(false);
         return;
       }
 
-      // Get affiliate link for organizer referral campaign
-      const { data: links, error: linksError } = await supabase
-        .from('affiliate_links')
-        .select(`
-          id,
-          full_url,
-          link_code,
-          clicks,
-          campaign:affiliate_campaigns(
-            name,
-            active_commission_value,
-            active_commission_type,
-            active_commission_base
-          )
-        `)
-        .eq('affiliate_id', affiliate.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (linksError) throw linksError;
-
-      if (links && links.length > 0) {
-        setAffiliateLink(links[0] as any);
+      const links = await fetchMyAffiliateLinks().unwrap();
+      if (links.length > 0) {
+        setAffiliateLink(toLegacyAffiliateLink(links[0] as Record<string, unknown>) as typeof affiliateLink);
       }
 
-      // Get referred users
-      const { data: referrals, error: referralsError } = await supabase
-        .from('affiliate_referrals')
-        .select(`
-          id,
-          referral_id:id,
-          referred_user_id,
-          referral_type,
-          created_at,
-          converted,
-          converted_at,
-          campaign:affiliate_campaigns(
-            active_commission_value,
-            active_commission_type,
-            active_commission_base
-          )
-        `)
-        .eq('affiliate_id', affiliate.id)
-        .order('created_at', { ascending: false });
-
-      if (referralsError) throw referralsError;
-
-      // Fetch profile data for referred users
-      if (referrals && referrals.length > 0) {
-        const userIds = referrals
-          .map(r => r.referred_user_id)
-          .filter(Boolean) as string[];
-
-        let profilesMap = new Map();
-        if (userIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, full_name, email, role')
-            .in('id', userIds);
-
-          if (profiles) {
-            profilesMap = new Map(profiles.map(p => [p.id, p]));
-          }
+      const commissions = await fetchMyCommissions().unwrap();
+      const commissionsByReferral = new Map<string, Array<{ amount: number; status: string; created_at: string }>>();
+      commissions.forEach((commission) => {
+        const row = commission as Record<string, unknown>;
+        const referralId = String(row.referralId ?? row.referral_id ?? "");
+        if (!referralId) return;
+        if (!commissionsByReferral.has(referralId)) {
+          commissionsByReferral.set(referralId, []);
         }
+        commissionsByReferral.get(referralId)!.push({
+          amount: Number(row.amount ?? 0),
+          status: String(row.status ?? "pending"),
+          created_at: String(row.createdAt ?? row.created_at ?? ""),
+        });
+      });
 
-        // Fetch commissions for each referral
-        const referralIds = referrals.map(r => r.id);
-        const commissionsMap = new Map();
-        if (referralIds.length > 0) {
-          const { data: commissions } = await supabase
-            .from('affiliate_commissions')
-            .select('referral_id, amount, status, created_at')
-            .in('referral_id', referralIds);
-
-          if (commissions) {
-            commissions.forEach(c => {
-              if (!commissionsMap.has(c.referral_id)) {
-                commissionsMap.set(c.referral_id, []);
+      const mappedReferrals = (referralRows as Record<string, unknown>[]).map((ref) => {
+        const profile = (ref.profile ?? ref.referredUser ?? ref.referred_user) as
+          | Record<string, unknown>
+          | undefined;
+        const campaign = ref.campaign as Record<string, unknown> | undefined;
+        const referralId = String(ref.id ?? ref.referral_id ?? "");
+        return {
+          id: referralId,
+          referral_id: referralId,
+          user_id: String(ref.referredUserId ?? ref.referred_user_id ?? ""),
+          referral_type: String(ref.referralType ?? ref.referral_type ?? "organizer"),
+          created_at: String(ref.createdAt ?? ref.created_at ?? ""),
+          converted: Boolean(ref.converted),
+          converted_at: String(ref.convertedAt ?? ref.converted_at ?? ""),
+          profile: profile
+            ? {
+                full_name: String(profile.fullName ?? profile.full_name ?? ""),
+                email: String(profile.email ?? ""),
+                role: String(profile.role ?? ""),
               }
-              commissionsMap.get(c.referral_id).push(c);
-            });
-          }
-        }
+            : undefined,
+          commissions: commissionsByReferral.get(referralId) ?? [],
+          campaign: campaign
+            ? {
+                active_commission_value: Number(
+                  campaign.activeCommissionValue ?? campaign.active_commission_value ?? 0,
+                ),
+                active_commission_type: String(
+                  campaign.activeCommissionType ?? campaign.active_commission_type ?? "",
+                ),
+                active_commission_base: String(
+                  campaign.activeCommissionBase ?? campaign.active_commission_base ?? "",
+                ),
+              }
+            : undefined,
+        };
+      });
 
-        const referralsWithData = referrals.map(ref => ({
-          ...ref,
-          profile: ref.referred_user_id ? profilesMap.get(ref.referred_user_id) : null,
-          commissions: commissionsMap.get(ref.id) || []
-        }));
-
-        setReferredUsers(referralsWithData as any);
-      } else {
-        setReferredUsers([]);
-      }
+      setReferredUsers(mappedReferrals);
     } catch (error) {
       console.error('Error fetching affiliate data:', error);
     } finally {
@@ -390,17 +336,13 @@ const LocationOwnerDashboard = () => {
 
   const handleEventRequest = async (requestId: string, action: 'approve' | 'decline') => {
     try {
-      const { error } = await supabase
-        .from('event_requests')
-        .update({ status: action === 'approve' ? 'approved' : 'declined' })
-        .eq('id', requestId);
-
-      if (error) throw error;
+      await respondToEventRequest({
+        id: requestId,
+        body: { status: action === 'approve' ? 'APPROVED' : 'DECLINED' },
+      }).unwrap();
 
       fetchEventRequests();
-      
-      // Send notification to instructor
-      // TODO: Implement notification system
+      fetchCalendarEvents();
     } catch (error) {
       console.error('Error updating event request:', error);
     }

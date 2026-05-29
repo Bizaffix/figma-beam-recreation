@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { Input } from "@/components/ui/input";
 import { Search, SlidersHorizontal, Calendar as CalendarIcon, MapPin, X, Filter, Sparkles, TrendingUp, Clock, Users, DollarSign, Monitor, Building2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { useGetRetreatsQuery, useGetVenuesQuery } from "@/services/server";
+import { mapRetreatForCard, toLegacyProperty } from "@/services/mappers";
 import { Header } from "@/components/Header";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Calendar } from "@/components/ui/calendar";
@@ -65,16 +66,38 @@ const Index = ({ hideAppHeader = false }: IndexProps) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"events" | "venues">("events");
   const [searchQuery, setSearchQuery] = useState("");
-  const [retreats, setRetreats] = useState<RetreatData[]>([]);
-  const [venues, setVenues] = useState<VenueData[]>([]);
-  const [loading, setLoading] = useState(true);
   const { role, user } = useAuth();
+
+  const { data: retreatsRaw = [], isLoading: loadingRetreats } = useGetRetreatsQuery({
+    status: "published",
+    limit: 100,
+    sort: "createdAt:desc",
+  });
+  const { data: venuesRaw = [], isLoading: loadingVenues } = useGetVenuesQuery({
+    limit: 100,
+    sort: "createdAt:desc",
+  });
+  const loading = loadingRetreats || loadingVenues;
+
+  const retreats = useMemo(
+    () =>
+      retreatsRaw
+        .map((retreat) => mapRetreatForCard(retreat))
+        .filter((retreat) => retreat.published) as RetreatData[],
+    [retreatsRaw],
+  );
+
+  const venues = useMemo(
+    () =>
+      venuesRaw
+        .map((venue) => toLegacyProperty(venue))
+        .filter((venue) => ["published", "verified"].includes(String(venue.status))) as VenueData[],
+    [venuesRaw],
+  );
   
   // Modal states
   const [selectedEvent, setSelectedEvent] = useState<RetreatData | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<VenueData | null>(null);
-  const [venueEvents, setVenueEvents] = useState<RetreatData[]>([]);
-  const [eventVenue, setEventVenue] = useState<VenueData | null>(null);
   
   // Filter states
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
@@ -87,88 +110,28 @@ const Index = ({ hideAppHeader = false }: IndexProps) => {
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("upcoming"); // upcoming, newest, price-low, price-high
-  
-  // Fetch published retreats from Supabase
-  useEffect(() => {
-    const fetchRetreats = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('retreats')
-          .select(`
-            *,
-            instructor:profiles!instructor_id(
-              full_name,
-              avatar_url,
-              bio,
-              facebook_url,
-              instagram_url,
-              pinterest_url
-            )
-          `)
-          .eq('published', true)
-          .order('created_at', { ascending: false });
 
-        if (error) {
-          console.error('Error fetching retreats:', error);
-        } else if (data) {
-          const transformedRetreats = data.map((retreat: any) => ({
-            id: retreat.id,
-            title: retreat.title,
-            description: retreat.description,
-            location: retreat.location,
-            date: retreat.date,
-            duration: retreat.duration,
-            level: retreat.level,
-            price: retreat.price,
-            total_spots: retreat.total_spots,
-            spots_available: retreat.spots_available,
-            image: retreat.image,
-            includes: retreat.includes || [],
-            schedule: retreat.schedule || [],
-            published: retreat.published,
-            instructor_id: retreat.instructor_id,
-            created_at: retreat.created_at,
-            location_images: retreat.location_images || null,
-            instructor: {
-              name: retreat.instructor?.full_name || 'Organizer',
-              avatar: retreat.instructor?.avatar_url || '',
-              bio: retreat.instructor?.bio || '',
-            },
-          }));
-          setRetreats(transformedRetreats);
-        }
-      } catch (error) {
-        console.error('Unexpected error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const eventVenue = useMemo(() => {
+    if (!selectedEvent) return null;
+    const match = venuesRaw
+      .map((venue) => toLegacyProperty(venue))
+      .find(
+        (venue) =>
+          venue.location === selectedEvent.location &&
+          ["published", "verified"].includes(String(venue.status)),
+      );
+    return (match as VenueData) || null;
+  }, [selectedEvent, venuesRaw]);
 
-    fetchRetreats();
-  }, []);
-
-  // Fetch published venues from Supabase
-  useEffect(() => {
-    const fetchVenues = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('properties')
-          .select('*')
-          .in('status', ['published', 'verified'])
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching venues:', error);
-        } else if (data) {
-          setVenues(data || []);
-        }
-      } catch (error) {
-        console.error('Unexpected error fetching venues:', error);
-      }
-    };
-
-    fetchVenues();
-  }, []);
+  const venueEvents = useMemo(() => {
+    if (!selectedVenue) return [];
+    return retreatsRaw
+      .filter((retreat) => {
+        const mapped = mapRetreatForCard(retreat);
+        return mapped.published && mapped.location === selectedVenue.location;
+      })
+      .map((retreat) => mapRetreatForCard(retreat)) as RetreatData[];
+  }, [selectedVenue, retreatsRaw]);
 
   // Get unique locations for filter dropdown
   const uniqueLocations = useMemo(() => {
@@ -346,99 +309,6 @@ const Index = ({ hideAppHeader = false }: IndexProps) => {
 
     return filtered;
   }, [venues, searchQuery, selectedLocation, sortBy]);
-
-  // Fetch venue for selected event
-  useEffect(() => {
-    const fetchEventVenue = async () => {
-      if (!selectedEvent) {
-        setEventVenue(null);
-        return;
-      }
-
-      try {
-        // Try to find venue by matching location
-        const { data, error } = await supabase
-          .from('properties')
-          .select('*')
-          .eq('location', selectedEvent.location)
-          .in('status', ['published', 'verified'])
-          .limit(1)
-          .maybeSingle();
-
-        if (!error && data) {
-          setEventVenue(data);
-        } else {
-          setEventVenue(null);
-        }
-      } catch (error) {
-        console.error('Error fetching venue for event:', error);
-        setEventVenue(null);
-      }
-    };
-
-    fetchEventVenue();
-  }, [selectedEvent]);
-
-  // Fetch events for selected venue
-  useEffect(() => {
-    const fetchVenueEvents = async () => {
-      if (!selectedVenue) {
-        setVenueEvents([]);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('retreats')
-          .select(`
-            *,
-            instructor:profiles!instructor_id(
-              full_name,
-              avatar_url,
-              bio
-            )
-          `)
-          .eq('published', true)
-          .eq('location', selectedVenue.location)
-          .order('date', { ascending: true });
-
-        if (!error && data) {
-          const transformedEvents = data.map((retreat: any) => ({
-            id: retreat.id,
-            title: retreat.title,
-            description: retreat.description,
-            location: retreat.location,
-            date: retreat.date,
-            duration: retreat.duration,
-            level: retreat.level,
-            price: retreat.price,
-            total_spots: retreat.total_spots,
-            spots_available: retreat.spots_available,
-            image: retreat.image,
-            includes: retreat.includes || [],
-            schedule: retreat.schedule || [],
-            published: retreat.published,
-            instructor_id: retreat.instructor_id,
-            created_at: retreat.created_at,
-            location_images: retreat.location_images || null,
-            instructor: {
-              name: retreat.instructor?.full_name || 'Organizer',
-              avatar: retreat.instructor?.avatar_url || '',
-              bio: retreat.instructor?.bio || '',
-            },
-          }));
-          setVenueEvents(transformedEvents);
-        } else {
-          setVenueEvents([]);
-        }
-      } catch (error) {
-        console.error('Error fetching events for venue:', error);
-        setVenueEvents([]);
-      }
-    };
-
-    fetchVenueEvents();
-  }, [selectedVenue]);
 
   // Check if any filters are active
   const hasActiveFilters = dateFrom || dateTo || selectedLocation !== "all" || minDays !== "all" || maxDays !== "all" || eventType !== "all" || minPrice || maxPrice || sortBy !== "upcoming";

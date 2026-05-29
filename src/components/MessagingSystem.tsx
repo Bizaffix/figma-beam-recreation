@@ -8,7 +8,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetConversationQuery,
+  useSendMessageMutation,
+  useStartConversationMutation,
+} from "@/services/server";
+import { toLegacyMessage } from "@/services/mappers";
 import { format, isToday, isYesterday } from "date-fns";
 import { 
   Send, 
@@ -79,7 +84,9 @@ interface Booking {
   created_at: string;
 }
 
-type MessagingContext = 'event_request' | 'retreat_detail' | 'organizer_dashboard' | 'inbox';
+type MessagingContext = "event_request" | "retreat_detail" | "organizer_dashboard" | "inbox";
+
+const POLL_MS = 20000;
 
 interface MessagingSystemProps {
   context?: MessagingContext;
@@ -114,8 +121,12 @@ const MessagingSystem = ({
     name: string;
     role: 'instructor' | 'location_owner' | 'student';
   }>>([]);
-  const [selectedRecipientId, setSelectedRecipientId] = useState('');
-  const [selectedRecipientName, setSelectedRecipientName] = useState('');
+  const [selectedRecipientId, setSelectedRecipientId] = useState("");
+  const [selectedRecipientName, setSelectedRecipientName] = useState("");
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [triggerGetConversation] = useLazyGetConversationQuery();
+  const [sendMessageMutation] = useSendMessageMutation();
+  const [startConversationMutation] = useStartConversationMutation();
 
   // Determine message context and fetch related data
   const getMessageContext = () => {
@@ -153,249 +164,155 @@ const MessagingSystem = ({
 
   const messageContext = getMessageContext();
 
-  useEffect(() => {
-    if (!messageContext.relatedId) return;
-    
-    fetchMessages();
-    fetchAvailableRecipients();
-  }, [messageContext.relatedId, context]);
+  const resolveConversation = async (): Promise<string | null> => {
+    if (!user?.id) return null;
 
-  // Real-time subscription for new messages
+    if (context === "retreat_detail" && retreat) {
+      const conv = await startConversationMutation({
+        otherUserId: retreat.instructor_id,
+        context: "RETREAT",
+        retreatId: String(retreat.id),
+      }).unwrap();
+      return String(conv.id);
+    }
+
+    if (context === "event_request" && eventRequest) {
+      const otherId =
+        role === "instructor" ? eventRequest.property_owner_id : eventRequest.instructor_id;
+      const isTemp = String(eventRequest.id).startsWith("temp-");
+      const conv = await startConversationMutation({
+        otherUserId: otherId,
+        context: "VENUE_REQUEST",
+        venueId: eventRequest.property_id,
+        ...(isTemp ? {} : { eventRequestId: eventRequest.id }),
+      }).unwrap();
+      return String(conv.id);
+    }
+
+    if (context === "organizer_dashboard" && booking) {
+      const conv = await startConversationMutation({
+        otherUserId: booking.student_id,
+        context: "BOOKING",
+        bookingId: String(booking.id),
+        retreatId: String(booking.retreat_id),
+      }).unwrap();
+      return String(conv.id);
+    }
+
+    return null;
+  };
+
+  const loadMessages = async (id: string) => {
+    if (!user?.id) return;
+    const data = await triggerGetConversation(id).unwrap();
+    const mapped = (data.messages ?? [])
+      .map((m) => toLegacyMessage(m as Record<string, unknown>, { currentUserId: user.id }))
+      .filter((m) => m != null) as Message[];
+    setMessages(mapped);
+    updateAvailableRecipients(mapped);
+  };
+
+  const updateAvailableRecipients = (threadMessages: Message[]) => {
+    const recipients: Array<{
+      id: string;
+      name: string;
+      role: "instructor" | "location_owner" | "student";
+    }> = [];
+
+    if (context === "retreat_detail" && retreat && role === "student") {
+      recipients.push({
+        id: retreat.instructor_id,
+        name: retreat.instructor_name,
+        role: "instructor",
+      });
+    } else if (context === "retreat_detail" && retreat && role === "instructor") {
+      const seen = new Set<string>();
+      for (const msg of threadMessages) {
+        if (msg.sender_role === "student" && !seen.has(msg.sender_id)) {
+          seen.add(msg.sender_id);
+          recipients.push({ id: msg.sender_id, name: msg.sender_name, role: "student" });
+        }
+      }
+    } else if (context === "organizer_dashboard" && booking) {
+      recipients.push({
+        id: booking.student_id,
+        name: booking.student_name,
+        role: "student",
+      });
+    }
+
+    setAvailableRecipients(recipients);
+  };
+
   useEffect(() => {
     if (!user || !messageContext.relatedId) return;
 
-    const channel = supabase
-      .channel(`messages-${messageContext.relatedId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `related_id=eq.${messageContext.relatedId}`
-        },
-        (payload) => {
-          const newMessage = payload.new as Message;
-          
-          // Only add message if it's relevant to this conversation
-          if (newMessage.sender_id === user?.id || 
-              newMessage.receiver_id === user?.id) {
-            setMessages(prev => [...prev, newMessage]);
-          }
-        }
-      )
-      .subscribe();
+    let active = true;
+    let pollId: ReturnType<typeof setInterval>;
 
-    return () => {
-      supabase.removeChannel(channel);
+    const init = async () => {
+      setLoading(true);
+      try {
+        const id = await resolveConversation();
+        if (!active || !id) return;
+        setConversationId(id);
+        await loadMessages(id);
+        pollId = setInterval(() => {
+          void loadMessages(id);
+        }, POLL_MS);
+      } catch (error) {
+        console.error("Error initializing conversation:", error);
+      } finally {
+        if (active) setLoading(false);
+      }
     };
-  }, [messageContext.relatedId]);
 
-  const fetchMessages = async () => {
-    if (!messageContext.relatedId) return;
-    
-    try {
-      let query = supabase
-        .from('messages')
-        .select('*')
-        .eq('related_id', messageContext.relatedId)
-        .order('created_at', { ascending: true });
-
-      // For retreat questions, only show messages between the two participants
-      if (context === 'retreat_detail' && retreat) {
-        // Get the current user's conversation partner
-        let partnerId: string | undefined;
-        
-        if (role === 'student') {
-          partnerId = retreat.instructor_id;
-        } else if (role === 'instructor') {
-          // For instructor, find the student they're conversing with
-          const { data: lastStudentMessage } = await supabase
-            .from('messages')
-            .select('sender_id')
-            .eq('related_id', messageContext.relatedId)
-            .eq('message_type', 'retreat_question')
-            .eq('sender_role', 'student')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-          
-          partnerId = lastStudentMessage?.sender_id;
-        }
-
-        if (partnerId) {
-          query = query.or(`and(sender_id.eq.${user?.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user?.id})`);
-        }
-      }
-
-      // For specific conversation contexts, filter by participants
-      if (context === 'organizer_dashboard' && booking) {
-        query = query.or(`sender_id.eq.${user?.id},receiver_id.eq.${user?.id}`);
-      }
-
-      const { data: messages, error } = await query;
-
-      if (error) throw error;
-      setMessages(messages || []);
-      
-      // Mark messages as read
-      if (messages && messages.length > 0) {
-        await supabase
-          .from('messages')
-          .update({ read: true })
-          .eq('related_id', messageContext.relatedId)
-          .neq('sender_id', user?.id);
-      }
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchAvailableRecipients = async () => {
-    try {
-      let recipients: Array<{ id: string; name: string; role: 'instructor' | 'location_owner' | 'student' }> = [];
-
-      switch (context) {
-        case 'retreat_detail':
-          if (retreat && role === 'student') {
-            // Student can message the retreat instructor
-            recipients.push({
-              id: retreat.instructor_id,
-              name: retreat.instructor_name,
-              role: 'instructor'
-            });
-          } else if (retreat && role === 'instructor') {
-            // Instructor can message students who booked this retreat
-            const { data: bookings } = await supabase
-              .from('bookings')
-              .select('student_id, student_name')
-              .eq('retreat_id', retreat.id)
-              .eq('status', 'confirmed');
-            
-            if (bookings) {
-              recipients = bookings.map(booking => ({
-                id: booking.student_id,
-                name: booking.student_name,
-                role: 'student'
-              }));
-            }
-          }
-          break;
-        
-        case 'organizer_dashboard':
-          if (booking) {
-            // Organizer can message the specific student
-            recipients.push({
-              id: booking.student_id,
-              name: booking.student_name,
-              role: 'student'
-            });
-          }
-          break;
-      }
-
-      setAvailableRecipients(recipients);
-    } catch (error) {
-      console.error('Error fetching recipients:', error);
-    }
-  };
+    void init();
+    return () => {
+      active = false;
+      clearInterval(pollId);
+    };
+  }, [user?.id, context, messageContext.relatedId, retreat?.id, eventRequest?.id, booking?.id]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !user || !messageContext.relatedId) return;
+    if (!newMessage.trim() || !user?.id || !conversationId) return;
 
     const messageText = newMessage.trim();
     setNewMessage("");
     setSending(true);
 
-    // Determine receiver based on context
-    let receiverId: string | undefined;
-    let receiverName: string | undefined;
+    const senderName =
+      user.fullName ??
+      [user.firstName, user.lastName].filter(Boolean).join(" ") ??
+      user.email?.split("@")[0] ??
+      "Unknown";
 
-    if (context === 'event_request') {
-      // For event requests, determine the other party
-      if (role === 'instructor') {
-        receiverId = eventRequest?.property_owner_id;
-        receiverName = 'Property Owner';
-      } else if (role === 'location_owner') {
-        receiverId = eventRequest?.instructor_id;
-        receiverName = eventRequest?.instructor_name;
-      } else if (role === 'student') {
-        // Students shouldn't be in event request context, but handle anyway
-        receiverId = eventRequest?.instructor_id;
-        receiverName = eventRequest?.instructor_name;
-      }
-    } else if (context === 'retreat_detail' && retreat) {
-      // For retreat questions, always set the instructor as receiver
-      if (role === 'student') {
-        receiverId = retreat.instructor_id;
-        receiverName = retreat.instructor_name;
-      } else if (role === 'instructor') {
-        // For instructor replying, try to determine the student from existing messages
-        const studentMessage = messages.find(m => m.sender_role === 'student');
-        if (studentMessage) {
-          receiverId = studentMessage.sender_id;
-          receiverName = studentMessage.sender_name;
-        }
-      }
-    } else if (selectedRecipientId) {
-      // Direct messaging
-      receiverId = selectedRecipientId;
-      receiverName = selectedRecipientName;
-    }
-
-    // Create optimistic message for instant display
     const optimisticMessage: Message = {
-      id: `temp-${Date.now()}`, // Temporary ID
+      id: `temp-${Date.now()}`,
       related_id: messageContext.relatedId,
       message_type: messageContext.messageType,
       sender_id: user.id,
-      sender_name: user.user_metadata?.first_name && user.user_metadata?.last_name 
-        ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-        : user.email?.split('@')[0] || 'Unknown',
-      sender_role: role as 'instructor' | 'location_owner' | 'student',
-      receiver_id: receiverId || null,
-      receiver_name: receiverName || null,
+      sender_name: senderName,
+      sender_role: role as "instructor" | "location_owner" | "student",
       content: messageText,
       created_at: new Date().toISOString(),
-      read: false
+      read: false,
     };
 
-    // Add message to local state instantly
-    setMessages(prev => [...prev, optimisticMessage]);
+    setMessages((prev) => [...prev, optimisticMessage]);
 
     try {
-      const messageData = {
-        related_id: messageContext.relatedId,
-        message_type: messageContext.messageType,
-        sender_id: user.id,
-        sender_name: optimisticMessage.sender_name,
-        sender_role: role as 'instructor' | 'location_owner' | 'student',
-        receiver_id: receiverId || null,
-        receiver_name: receiverName || null,
-        content: messageText,
-        read: false
-      };
-
-      const { data, error } = await supabase
-        .from('messages')
-        .insert(messageData)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Replace optimistic message with real message
-      if (data) {
-        setMessages(prev => prev.map(msg => 
-          msg.id === optimisticMessage.id ? data : msg
-        ));
+      const sent = await sendMessageMutation({
+        conversationId,
+        body: { body: messageText },
+      }).unwrap();
+      const legacy = toLegacyMessage(sent as Record<string, unknown>, { currentUserId: user.id });
+      if (legacy) {
+        setMessages((prev) => prev.map((msg) => (msg.id === optimisticMessage.id ? legacy : msg)));
       }
     } catch (error) {
-      console.error('Error sending message:', error);
-      // Remove optimistic message on error
-      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
+      console.error("Error sending message:", error);
+      setMessages((prev) => prev.filter((msg) => msg.id !== optimisticMessage.id));
     } finally {
       setSending(false);
     }

@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GripVertical, Plus, X, Upload, FileText, Image as ImageIcon, BookOpen, UtensilsCrossed, MapPin, Coffee, Scissors } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
+import { useUploadFileMutation } from "@/services/server";
 import { useAuth } from "@/contexts/AuthContext";
 
 export type BlockType = "class" | "open_sew" | "meal" | "field_trip" | "rest";
@@ -69,6 +69,7 @@ const templates = {
 function SortableBlock({ block, onUpdate, onDelete, user }: { block: ItineraryBlock; onUpdate: (block: ItineraryBlock) => void; onDelete: () => void; user?: { id: string } | null }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: block.id });
   const { toast } = useToast();
+  const [uploadFile] = useUploadFileMutation();
   const [uploadingPattern, setUploadingPattern] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const blockTypeInfo = blockTypeLabels[block.type];
@@ -94,24 +95,7 @@ function SortableBlock({ block, onUpdate, onDelete, user }: { block: ItineraryBl
 
     setUploadingPattern(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/patterns/${Date.now()}.${fileExt}`;
-      const filePath = fileName;
-
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-patterns')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-patterns')
-        .getPublicUrl(filePath);
+      const publicUrl = await uploadFile({ bucket: "retreat-patterns", file }).unwrap();
 
       onUpdate({ ...block, patternFile: publicUrl, patternFileName: file.name });
       toast({
@@ -145,24 +129,7 @@ function SortableBlock({ block, onUpdate, onDelete, user }: { block: ItineraryBl
 
     setUploadingImage(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/project-images/${Date.now()}.${fileExt}`;
-      const filePath = fileName;
-
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-project-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-project-images')
-        .getPublicUrl(filePath);
+      const publicUrl = await uploadFile({ bucket: "retreat-project-images", file }).unwrap();
 
       onUpdate({ ...block, projectImage: publicUrl, projectImageName: file.name });
       toast({

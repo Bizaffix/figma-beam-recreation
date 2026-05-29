@@ -10,7 +10,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetMyRetreatsQuery,
+  useLazyListBookingsQuery,
+  useApproveManualPaymentMutation,
+  useRejectManualPaymentMutation,
+  useProcessRefundMutation,
+  useStartConversationMutation,
+} from "@/services/server";
+import { toLegacyRetreat, toLegacyBooking } from "@/services/mappers";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { Users, DollarSign, CreditCard, AlertCircle, CheckCircle, Clock, RefreshCw, Mail, Phone, Calendar, Search, Filter, Download, UserCheck, UserX, TrendingUp, Activity, Send, MessageSquare, Bell, X } from "lucide-react";
 
@@ -33,6 +41,7 @@ interface Booking {
   refund_date?: string;
   price_variant?: string;
   add_ons?: { id: string; name: string; price: number }[];
+  amount?: number;
 }
 
 interface Retreat {
@@ -61,6 +70,12 @@ const UserManagement = () => {
   const [notifyMessage, setNotifyMessage] = useState("");
   const [sendingNotification, setSendingNotification] = useState<string | null>(null);
   const [processingApproval, setProcessingApproval] = useState<string | null>(null);
+  const [triggerGetMyRetreats] = useLazyGetMyRetreatsQuery();
+  const [triggerListBookings] = useLazyListBookingsQuery();
+  const [approveManualPaymentMutation] = useApproveManualPaymentMutation();
+  const [rejectManualPaymentMutation] = useRejectManualPaymentMutation();
+  const [processRefundMutation] = useProcessRefundMutation();
+  const [startConversationMutation] = useStartConversationMutation();
 
   // Calculate statistics
   const stats = {
@@ -88,20 +103,23 @@ const UserManagement = () => {
       if (!user) return;
 
       try {
-        const { data, error } = await supabase
-          .from('retreats')
-          .select('id, title, date, location, price, deposit_amount, total_spots, spots_available')
-          .eq('instructor_id', user.id)
-          .eq('published', true)
-          .order('date', { ascending: true });
-
-        if (error) {
-          console.error('Error fetching retreats:', error);
-        } else {
-          setRetreats(data || []);
-        }
+        const items = await triggerGetMyRetreats({ limit: 100, status: "published" }).unwrap();
+        const mapped = items
+          .map((item) => toLegacyRetreat(item))
+          .filter((r) => r.published)
+          .map((r) => ({
+            id: Number(r.id),
+            title: String(r.title ?? ""),
+            date: String(r.date ?? ""),
+            location: String(r.location ?? ""),
+            price: Number(r.price ?? 0),
+            deposit_amount: Number(r.deposit_amount ?? r.depositAmount ?? 0) || undefined,
+            total_spots: Number(r.total_spots ?? 0),
+            spots_available: Number(r.spots_available ?? 0),
+          })) as Retreat[];
+        setRetreats(mapped);
       } catch (error) {
-        console.error('Unexpected error:', error);
+        console.error('Error fetching retreats:', error);
       }
     };
 
@@ -114,25 +132,24 @@ const UserManagement = () => {
       if (!user) return;
 
       try {
-        const { data, error } = await supabase
-          .from('bookings')
-          .select('*')
-          .in('retreat_id', retreats.map(r => r.id))
-          .neq('payment_status', 'cancelled') // Exclude cancelled bookings
-          .order('booking_date', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching bookings:', error);
-          toast({
-            title: "Error",
-            description: "Failed to load bookings",
-            variant: "destructive",
-          });
-        } else {
-          setBookings(data || []);
-        }
+        const retreatIds = new Set(retreats.map((r) => String(r.id)));
+        const items = await triggerListBookings({ limit: 500 }).unwrap();
+        const mapped = items
+          .map((item) => toLegacyBooking(item) as Booking)
+          .filter((b) => retreatIds.has(String(b.retreat_id)))
+          .filter((b) => b.payment_status !== 'cancelled')
+          .sort(
+            (a, b) =>
+              new Date(b.booking_date).getTime() - new Date(a.booking_date).getTime(),
+          );
+        setBookings(mapped);
       } catch (error) {
-        console.error('Unexpected error:', error);
+        console.error('Error fetching bookings:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load bookings",
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }
@@ -140,7 +157,6 @@ const UserManagement = () => {
 
     if (retreats.length > 0) {
       fetchBookings();
-      // Check for expired pending approvals on load
       checkExpiredPendingApprovals();
     } else {
       setLoading(false);
@@ -173,7 +189,7 @@ const UserManagement = () => {
   };
 
   // Process refund
-  const processRefund = async (booking: Booking) => {
+  const handleProcessRefund = async (booking: Booking) => {
     if (!refundReason.trim()) {
       toast({
         title: "Error",
@@ -186,23 +202,8 @@ const UserManagement = () => {
     setProcessingRefund(booking.id);
 
     try {
-      // In a real implementation, this would call Stripe API to process refund
-      // For now, we'll simulate the refund process
-      
-      const { error } = await supabase
-        .from('bookings')
-        .update({
-          payment_status: 'refunded',
-          refund_reason: refundReason.trim(),
-          refund_date: new Date().toISOString(),
-        })
-        .eq('id', booking.id);
+      await processRefundMutation({ bookingId: booking.id, reason: refundReason.trim() }).unwrap();
 
-      if (error) {
-        throw error;
-      }
-
-      // Update local state
       setBookings(prev => prev.map(b => 
         b.id === booking.id 
           ? { ...b, payment_status: 'refunded', refund_reason: refundReason.trim(), refund_date: new Date().toISOString() }
@@ -233,28 +234,7 @@ const UserManagement = () => {
     setProcessingApproval(booking.id);
 
     try {
-      // Update booking to approved status (payment received, registration complete)
-      const { data: updatedBooking, error: updateError } = await supabase
-        .from('bookings')
-        .update({
-          manual_payment_status: 'approved',
-          payment_status: 'paid_manual',
-          status: 'confirmed', // Ensure status is confirmed
-        })
-        .eq('id', booking.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        console.error('Error updating booking:', updateError);
-        throw updateError;
-      }
-
-      if (!updatedBooking) {
-        throw new Error('Booking update returned no data - booking may not exist or update failed');
-      }
-
-      console.log('Booking approved successfully:', updatedBooking);
+      await approveManualPaymentMutation(booking.id).unwrap();
 
       // Send confirmation email to user
       const retreat = getRetreatDetails(booking.retreat_id);
@@ -291,25 +271,6 @@ BookMyQuiltRetreat Team
       if (emailError) {
         console.error('Error sending confirmation email:', emailError);
         // Don't throw - booking is already approved
-      }
-
-      // Also save to messages table for in-app notifications (optional)
-      try {
-        await supabase
-          .from('messages')
-          .insert({
-            message_type: 'attendee_communication',
-            related_id: booking.id,
-            sender_id: user?.id,
-            sender_name: user?.user_metadata?.full_name || 'Instructor',
-            sender_role: 'instructor',
-            receiver_email: booking.email,
-            content: `Your manual payment has been approved and your registration for "${retreat?.title || 'the retreat'}" is now confirmed.`,
-            read: false,
-          });
-      } catch (error) {
-        console.warn('Could not save confirmation message to database (this is optional):', error);
-        // Continue - email notification was successful
       }
 
       // Update local state
@@ -355,38 +316,14 @@ BookMyQuiltRetreat Team
         return;
       }
 
-      // Immediately cancel the booking (same as auto-cancellation)
-      const { data: updatedBooking, error: updateError } = await supabase
-        .from('bookings')
-        .update({
-          payment_status: 'cancelled',
-          status: 'cancelled',
-          manual_payment_status: null,
-        })
-        .eq('id', booking.id)
-        .select()
-        .single();
+      await rejectManualPaymentMutation({
+        bookingId: booking.id,
+        body: {
+          reason: "Manual payment claim rejected by organizer",
+        },
+      }).unwrap();
 
-      if (updateError) {
-        console.error('Error updating booking:', updateError);
-        throw updateError;
-      }
-
-      if (!updatedBooking) {
-        throw new Error('Booking update returned no data - booking may not exist or update failed');
-      }
-
-      console.log('Booking updated successfully:', updatedBooking);
-
-      // Restore spot (increment spots available)
-      const { error: spotsError } = await supabase.rpc('increment_spots', { retreat_id: booking.retreat_id });
-      
-      if (spotsError) {
-        console.error('Error incrementing spots:', spotsError);
-        // Don't throw - booking is already cancelled, spots can be fixed manually
-      }
-
-      // Send cancellation notification via email and message
+      // Send cancellation notification via email
       const retreat = getRetreatDetails(booking.retreat_id);
       const cancellationEmailSubject = `Registration Cancelled: ${retreat?.title || 'Your Retreat Registration'}`;
       const cancellationEmailMessage = `
@@ -414,25 +351,6 @@ BookMyQuiltRetreat Team
         console.error('Error sending cancellation email:', emailError);
       }
 
-      // Also save to messages table for in-app notifications (optional - email already sent)
-      try {
-        await supabase
-          .from('messages')
-          .insert({
-            message_type: 'booking_cancelled',
-            related_id: booking.id,
-            sender_id: user?.id,
-            sender_name: user?.user_metadata?.full_name || 'Instructor',
-            sender_role: 'instructor',
-            receiver_email: booking.email,
-            content: `Your booking has been cancelled because your manual payment claim was rejected by the organizer. Your spot has been released.`,
-            read: false,
-          });
-      } catch (error) {
-        console.warn('Could not save cancellation message to database (this is optional):', error);
-        // Continue - email notification was successful
-      }
-
       // Remove from local state (cancelled bookings are excluded from the query)
       setBookings(prev => prev.filter(b => b.id !== booking.id));
 
@@ -454,53 +372,37 @@ BookMyQuiltRetreat Team
 
   // Check and cancel expired pending approvals (called on component mount and periodically)
   const checkExpiredPendingApprovals = async () => {
+    if (retreats.length === 0) return;
+
     try {
-      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-      
-      // Find bookings that are still pending approval and were created more than 48 hours ago
-      const { data: expiredPendingBookings, error: fetchPendingError } = await supabase
-        .from('bookings')
-        .select('id, retreat_id, full_name, email, booking_date, created_at')
-        .eq('payment_status', 'paid_manual')
-        .eq('manual_payment_status', 'pending_approval')
-        .lt('booking_date', fortyEightHoursAgo);
+      const retreatIds = new Set(retreats.map((r) => String(r.id)));
+      const fortyEightHoursAgoTimestamp = Date.now() - 48 * 60 * 60 * 1000;
+      const items = await triggerListBookings({ limit: 500 }).unwrap();
+      const expiredBookings = items
+        .map((item) => toLegacyBooking(item) as Booking)
+        .filter((b) => retreatIds.has(String(b.retreat_id)))
+        .filter(
+          (b) =>
+            b.payment_status === 'paid_manual' &&
+            b.manual_payment_status === 'pending_approval',
+        )
+        .filter((b) => {
+          const bookingDate = b.booking_date || b.created_at || new Date().toISOString();
+          return new Date(bookingDate).getTime() < fortyEightHoursAgoTimestamp;
+        });
 
-      if (fetchPendingError) {
-        console.error('Error fetching expired pending bookings:', fetchPendingError);
+      if (expiredBookings.length === 0) {
         return;
       }
 
-      const expiredBookings = expiredPendingBookings || [];
-
-      if (!expiredBookings || expiredBookings.length === 0) {
-        return;
-      }
-
-      // Cancel expired pending approvals and restore spots
       for (const booking of expiredBookings) {
-        // Check if booking is actually older than 48 hours
-        const bookingDate = booking.booking_date || booking.created_at || new Date().toISOString();
-        const bookingTimestamp = new Date(bookingDate).getTime();
-        const fortyEightHoursAgoTimestamp = Date.now() - (48 * 60 * 60 * 1000);
-        
-        if (bookingTimestamp > fortyEightHoursAgoTimestamp) {
-          continue; // Skip if not actually expired
-        }
+        await rejectManualPaymentMutation({
+          bookingId: booking.id,
+          body: {
+            reason: "Payment not completed within 48-hour deadline",
+          },
+        }).unwrap();
 
-        // Update booking status
-        await supabase
-          .from('bookings')
-          .update({
-            payment_status: 'cancelled',
-            status: 'cancelled',
-            manual_payment_status: null,
-          })
-          .eq('id', booking.id);
-
-        // Restore spot (increment spots available)
-        await supabase.rpc('increment_spots', { retreat_id: booking.retreat_id });
-
-        // Send cancellation notification via email and message
         const retreat = getRetreatDetails(booking.retreat_id);
         const cancellationEmailSubject = `Registration Cancelled: ${retreat?.title || 'Your Retreat Registration'}`;
         const cancellationEmailMessage = `
@@ -516,7 +418,6 @@ Thank you,
 BookMyQuiltRetreat Team
         `.trim();
 
-        // Send email notification
         const { error: emailError } = await sendCustomEmail({
           emails: [booking.email],
           subject: cancellationEmailSubject,
@@ -527,32 +428,10 @@ BookMyQuiltRetreat Team
         if (emailError) {
           console.error('Error sending cancellation email:', emailError);
         }
-
-        // Also save to messages table for in-app notifications (optional - email already sent)
-        try {
-          await supabase
-            .from('messages')
-            .insert({
-              message_type: 'booking_cancelled',
-              related_id: booking.id,
-              sender_id: null, // System messages don't have a sender_id
-              sender_name: 'System',
-              sender_role: 'system',
-              receiver_email: booking.email,
-              content: `Your booking has been cancelled because payment was not completed within 48 hours. Your spot has been released.`,
-              read: false,
-            });
-        } catch (error) {
-          console.warn('Could not save cancellation message to database (this is optional):', error);
-          // Continue - email notification was successful
-        }
       }
 
-      // Remove cancelled bookings from local state (they're excluded from query)
-      if (expiredBookings.length > 0) {
-        const cancelledIds = expiredBookings.map(b => b.id);
-        setBookings(prev => prev.filter(b => !cancelledIds.includes(b.id)));
-      }
+      const cancelledIds = expiredBookings.map((b) => b.id);
+      setBookings((prev) => prev.filter((b) => !cancelledIds.includes(b.id)));
     } catch (error) {
       console.error('Error checking expired rejections:', error);
     }
@@ -572,27 +451,12 @@ BookMyQuiltRetreat Team
     setSendingNotification(booking.id);
 
     try {
-      // In a real implementation, this would send an email or push notification
-      // For now, we'll simulate the notification process and store it in the messages table
-      
-      const { error } = await supabase
-        .from('messages')
-        .insert({
-          message_type: 'attendee_communication',
-          related_id: booking.id,
-          sender_id: user?.id,
-          sender_name: user?.user_metadata?.first_name && user?.user_metadata?.last_name 
-  ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`.trim()
-  : 'Instructor',
-          sender_role: 'instructor',
-          receiver_email: booking.email,
-          content: notifyMessage.trim(),
-          read: false,
-        });
-
-      if (error) {
-        throw error;
-      }
+      await startConversationMutation({
+        relatedId: booking.id,
+        messageType: "ATTENDEE_COMMUNICATION",
+        participantEmail: booking.email,
+        initialMessage: notifyMessage.trim(),
+      }).unwrap();
 
       toast({
         title: "Notification Sent",
@@ -1041,7 +905,7 @@ BookMyQuiltRetreat Team
                                             Cancel
                                           </Button>
                                           <Button
-                                            onClick={() => booking && processRefund(booking)}
+                                            onClick={() => booking && handleProcessRefund(booking)}
                                             disabled={processingRefund === booking.id}
                                             className="flex-1 bg-red-600 hover:bg-red-700"
                                           >
@@ -1266,7 +1130,7 @@ BookMyQuiltRetreat Team
                                         Cancel
                                       </Button>
                                       <Button
-                                        onClick={() => booking && processRefund(booking)}
+                                        onClick={() => booking && handleProcessRefund(booking)}
                                         disabled={processingRefund === booking.id}
                                         className="flex-1 bg-red-600 hover:bg-red-700"
                                       >

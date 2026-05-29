@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Heart, Shield } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { useSearchQuiltMatchMutation } from "@/services/server";
 import { useToast } from "@/hooks/use-toast";
 import { saveStudentContext } from "@/lib/quiltmatch-tracking";
 import { getPersonalityId, getDreamSentence } from "@/lib/quiltmatch-tracking";
@@ -29,6 +29,7 @@ export function ExitIntentModal({ open, onOpenChange, onSaved }: ExitIntentModal
   const [name, setName] = useState("");
   const [alertMe, setAlertMe] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [searchQuiltMatch] = useSearchQuiltMatchMutation();
 
   const personalityId = getPersonalityId();
   const personality = PERSONALITY_TYPES.find((p) => p.id === personalityId);
@@ -44,18 +45,20 @@ export function ExitIntentModal({ open, onOpenChange, onSaved }: ExitIntentModal
     try {
       saveStudentContext({ name: name.trim(), email: email.trim() });
 
-      // Save to student_query_log or a leads table
-      await supabase.from("student_query_log").insert({
-        raw_query: dream || "Exit intent capture",
-        student_name: name.trim() || null,
-        student_email: email.trim(),
-        session_id: null,
-        parsed_filters_json: {
-          personality_type: personalityId || null,
-          alert_new_matches: alertMe,
-          capture_type: "exit_intent",
+      await searchQuiltMatch({
+        query: dream || "Exit intent capture",
+        filters: {
+          studentContext: {
+            name: name.trim() || undefined,
+            email: email.trim(),
+          },
+          metadata: {
+            personality_type: personalityId || null,
+            alert_new_matches: alertMe,
+            capture_type: "exit_intent",
+          },
         },
-      });
+      }).unwrap();
 
       toast({
         title: "Results saved!",

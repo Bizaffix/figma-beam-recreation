@@ -41,7 +41,7 @@ const skillColors: Record<string, string> = {
 export function MatchCard({ match }: MatchCardProps) {
   const navigate = useNavigate();
   const isReal = match.type === "real";
-  const image = (match as Record<string, unknown>).image as string | undefined;
+  const image = (match as unknown as Record<string, unknown>).image as string | undefined;
 
   const handleBookNow = () => {
     if (isReal && match.id) {

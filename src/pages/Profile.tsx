@@ -9,7 +9,11 @@ import { BottomNav } from "@/components/BottomNav";
 import { Calendar, MapPin, Mail, Phone, Edit, Upload, X, Facebook, Instagram, Save, GraduationCap, Users, Loader2, Building2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
+import {
+  useGetUserProfileQuery,
+  useUpdateUserProfileMutation,
+  useUploadUserAvatarMutation,
+} from "@/services/server";
 import { useToast } from "@/hooks/use-toast";
 
 const Profile = () => {
@@ -21,6 +25,10 @@ const Profile = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [switchingRole, setSwitchingRole] = useState(false);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: profile } = useGetUserProfileQuery(undefined, { skip: !user });
+  const [updateUserProfile] = useUpdateUserProfileMutation();
+  const [uploadUserAvatar] = useUploadUserAvatarMutation();
   
   const [profileData, setProfileData] = useState({
     full_name: "",
@@ -31,37 +39,20 @@ const Profile = () => {
     pinterest_url: "",
   });
 
-  // Fetch profile data
+  // Sync profile data from RTK Query
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user) return;
+    if (!profile) return;
 
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('full_name, avatar_url, bio, facebook_url, instagram_url, pinterest_url')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          console.error('Error fetching profile:', error);
-        } else if (data) {
-          setProfileData({
-            full_name: data.full_name || "",
-            avatar_url: data.avatar_url || "",
-            bio: data.bio || "",
-            facebook_url: data.facebook_url || "",
-            instagram_url: data.instagram_url || "",
-            pinterest_url: data.pinterest_url || "",
-          });
-        }
-      } catch (error) {
-        console.error('Unexpected error:', error);
-      }
-    };
-
-    fetchProfile();
-  }, [user]);
+    const social = profile.socialMedia ?? {};
+    setProfileData({
+      full_name: profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "",
+      avatar_url: profile.avatarUrl || "",
+      bio: profile.bio || "",
+      facebook_url: String(social.facebook ?? social.facebook_url ?? ""),
+      instagram_url: String(social.instagram ?? social.instagram_url ?? ""),
+      pinterest_url: String(social.pinterest ?? social.pinterest_url ?? ""),
+    });
+  }, [profile]);
 
   const handleLogout = async () => {
     await signOut();
@@ -73,34 +64,21 @@ const Profile = () => {
 
     setSwitchingRole(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', user.id);
-
-      if (error) {
-        console.error('Error switching role:', error);
-        toast({
-          title: "Error",
-          description: error.message || "Failed to switch profile",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: `Switched to ${newRole === 'student' ? 'Attendee' : newRole === 'instructor' ? 'Organizer' : 'Venue Owner'} profile`,
-        });
-        // Reload the page to update the role in AuthContext
-        setTimeout(() => {
-          if (newRole === 'instructor') {
-            window.location.href = '/instructor/dashboard';
-          } else if (newRole === 'location_owner') {
-            window.location.href = '/location-owner/dashboard';
-          } else {
-            window.location.href = '/home';
-          }
-        }, 1000);
-      }
+      await updateUserProfile({ role: newRole }).unwrap();
+      toast({
+        title: "Success",
+        description: `Switched to ${newRole === 'student' ? 'Attendee' : newRole === 'instructor' ? 'Organizer' : 'Venue Owner'} profile`,
+      });
+      // Reload the page to update the role in AuthContext
+      setTimeout(() => {
+        if (newRole === 'instructor') {
+          window.location.href = '/instructor/dashboard';
+        } else if (newRole === 'location_owner') {
+          window.location.href = '/location-owner/dashboard';
+        } else {
+          window.location.href = '/home';
+        }
+      }, 1000);
     } catch (error) {
       console.error('Unexpected error:', error);
       toast({
@@ -140,35 +118,7 @@ const Profile = () => {
     setUploadingImage(true);
 
     try {
-      // Create a unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-      const filePath = `profiles/${fileName}`;
-
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Error uploading image:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload image",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-images')
-        .getPublicUrl(filePath);
-
-      // Update profile data with the image URL
+      const publicUrl = await uploadUserAvatar(file).unwrap();
       setProfileData(prev => ({ ...prev, avatar_url: publicUrl }));
 
       toast({
@@ -195,51 +145,31 @@ const Profile = () => {
     setLoading(true);
 
     try {
-      // For students, don't update bio (keep existing or null)
-      const updateData: {
-        full_name: string;
-        avatar_url: string;
-        facebook_url: string | null;
-        instagram_url: string | null;
-        pinterest_url: string | null;
-        bio?: string;
-      } = {
-        full_name: profileData.full_name,
-        avatar_url: profileData.avatar_url,
-        facebook_url: profileData.facebook_url || null,
-        instagram_url: profileData.instagram_url || null,
-        pinterest_url: profileData.pinterest_url || null,
-      };
+      const nameParts = profileData.full_name.trim().split(/\s+/);
+      const firstName = nameParts[0] ?? "";
+      const lastName = nameParts.slice(1).join(" ") || undefined;
 
-      // Only include bio for instructors
-      if (role === 'instructor') {
-        updateData.bio = profileData.bio;
-      }
+      await updateUserProfile({
+        firstName,
+        lastName,
+        ...(role === "instructor" ? { bio: profileData.bio } : {}),
+        socialMedia: {
+          facebook: profileData.facebook_url || "",
+          instagram: profileData.instagram_url || "",
+          pinterest: profileData.pinterest_url || "",
+        },
+      }).unwrap();
 
-      const { error } = await supabase
-        .from('profiles')
-        .update(updateData)
-        .eq('id', user.id);
-
-      if (error) {
-        console.error('Error updating profile:', error);
-        toast({
-          title: "Error",
-          description: error.message || "Failed to save profile",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: "Profile updated successfully",
-        });
-        setIsEditing(false);
-      }
+      toast({
+        title: "Success",
+        description: "Profile updated successfully",
+      });
+      setIsEditing(false);
     } catch (error) {
       console.error('Unexpected error:', error);
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
         variant: "destructive",
       });
     } finally {

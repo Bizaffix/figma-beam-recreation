@@ -8,8 +8,20 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
-import { format, isToday, isYesterday, formatDistanceToNow } from "date-fns";
+import {
+  useLazyGetConversationsQuery,
+  useLazyGetConversationQuery,
+  useSendMessageMutation,
+} from "@/services/server";
+import {
+  mapRetreatForCard,
+  sumUnreadCount,
+  getOtherParticipant,
+  getUserDisplayName,
+  toLegacyMessage,
+  conversationUnreadCount,
+} from "@/services/mappers";
+import { format, isToday, isYesterday } from "date-fns";
 import { 
   Send, 
   MessageSquare, 
@@ -35,7 +47,10 @@ interface Message {
   related_id?: string;
 }
 
+const POLL_MS = 30000;
+
 interface Conversation {
+  conversation_id: string;
   retreat_id: string;
   retreat_title: string;
   retreat_location: string;
@@ -68,6 +83,9 @@ const StudentMessages = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEventFilter, setSelectedEventFilter] = useState<string>("all");
   const [retreats, setRetreats] = useState<Retreat[]>([]);
+  const [triggerGetConversations] = useLazyGetConversationsQuery();
+  const [triggerGetConversation] = useLazyGetConversationQuery();
+  const [sendMessageMutation] = useSendMessageMutation();
 
   useEffect(() => {
     if (role !== 'student') {
@@ -90,210 +108,140 @@ const StudentMessages = () => {
   });
 
   useEffect(() => {
-    if (!user || role !== 'student') return;
-
-    const channel = supabase
-      .channel('messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `receiver_id=eq.${user.id}`
-        },
-        (payload) => {
-          const newMessage = payload.new as Message;
-          
-          // Update conversations list to show new message
-          fetchConversations();
-          
-          // If currently viewing the conversation with this sender, update messages
-          if (selectedConversation && 
-              selectedConversation.participant_id === newMessage.sender_id &&
-              selectedConversation.retreat_id === newMessage.related_id) {
-            fetchMessages(selectedConversation.retreat_id);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, role, selectedConversation]);
+    if (!user || role !== "student") return;
+    const interval = setInterval(fetchConversations, POLL_MS);
+    return () => clearInterval(interval);
+  }, [user, role]);
 
   useEffect(() => {
-    if (selectedConversation) {
-      fetchMessages(selectedConversation.retreat_id);
-    }
-  }, [selectedConversation]);
+    if (!selectedConversation?.conversation_id) return;
+    fetchMessages(selectedConversation.conversation_id);
+    const interval = setInterval(
+      () => fetchMessages(selectedConversation.conversation_id),
+      POLL_MS,
+    );
+    return () => clearInterval(interval);
+  }, [selectedConversation?.conversation_id]);
 
   const fetchConversations = async () => {
+    if (!user?.id) return;
     try {
-      // Get all messages involving this student for retreat questions
-      const { data: studentMessages, error: messagesError } = await supabase
-        .from('messages')
-        .select('id, sender_id, sender_name, sender_role, receiver_id, created_at, content, read, related_id')
-        .eq('message_type', 'retreat_question')
-        .or(`sender_id.eq.${user?.id},receiver_id.eq.${user?.id}`)
-        .order('created_at', { ascending: false });
-
-      if (messagesError) throw messagesError;
-
-      // Group messages by retreat_id and get unique retreats
-      const retreatIds = [...new Set(studentMessages?.map(m => m.related_id) || [])];
-      
-      // Get retreat details for all retreats that have conversations
-      const { data: retreatsData, error: retreatsError } = await supabase
-        .from('retreats')
-        .select('id, title, location, date, level, instructor_id')
-        .in('id', retreatIds.map(id => parseInt(id)));
-
-      if (retreatsError) throw retreatsError;
-      setRetreats(retreatsData || []);
-
-      // For each retreat, create conversation from messages
-      const conversationsData: Conversation[] = [];
-
-      for (const retreat of retreatsData || []) {
-        // Get all messages for this retreat
-        const retreatMessages = studentMessages?.filter(m => m.related_id === retreat.id.toString()) || [];
-        
-        if (retreatMessages.length > 0) {
-          // Find the most recent message
-          const lastMessage = retreatMessages[0];
-          
-          // Find the other participant (instructor)
-          const instructorMessage = retreatMessages.find(m => m.sender_id !== user?.id);
-          const participantId = instructorMessage?.sender_id || retreat.instructor_id;
-          const participantName = instructorMessage?.sender_name || 'Instructor';
-          
-          // Count unread messages from instructor
-          const unreadCount = retreatMessages.filter(m => 
-            m.sender_id !== user?.id && 
-            m.receiver_id && m.receiver_id === user?.id && 
-            m.read === false
-          ).length;
-
-          conversationsData.push({
-            retreat_id: retreat.id.toString(),
-            retreat_title: retreat.title,
-            retreat_location: retreat.location,
-            retreat_date: retreat.date,
-            retreat_level: retreat.level,
-            last_message: {
-              id: lastMessage.id,
-              sender_id: lastMessage.sender_id,
-              sender_name: lastMessage.sender_name,
-              sender_role: lastMessage.sender_role,
-              content: lastMessage.content,
-              created_at: lastMessage.created_at,
-              read: lastMessage.read || false,
-              message_type: 'retreat_question',
-              related_id: retreat.id.toString()
-            },
-            unread_count: unreadCount,
-            participant_id: participantId,
-            participant_name: participantName,
-            participant_role: 'instructor'
-          });
-        }
-      }
-
-      // Sort conversations by most recent message
-      conversationsData.sort((a, b) => 
-        new Date(b.last_message.created_at).getTime() - new Date(a.last_message.created_at).getTime()
+      const items = await triggerGetConversations(undefined).unwrap();
+      const retreatConversations = items.filter(
+        (c) => c.retreatId != null || c.context === "RETREAT",
       );
 
+      const retreatMap = new Map<string, Retreat>();
+      const conversationsData: Conversation[] = [];
+
+      for (const raw of retreatConversations) {
+        const c = raw as Record<string, unknown>;
+        const other = getOtherParticipant(c, user.id);
+        const otherUser = (other?.user ?? {}) as Record<string, unknown>;
+        const otherId = String(other?.userId ?? otherUser.id ?? "");
+        const lastRaw = Array.isArray(c.messages) ? (c.messages[0] as Record<string, unknown>) : null;
+        const lastMessage = toLegacyMessage(lastRaw, { currentUserId: user.id });
+        if (!lastMessage) continue;
+
+        const retreatRaw = c.retreat as Record<string, unknown> | undefined;
+        const card = retreatRaw ? mapRetreatForCard(retreatRaw) : null;
+        const retreatId = String(c.retreatId ?? card?.id ?? "");
+
+        if (card) {
+          retreatMap.set(String(card.id), {
+            id: Number(card.id),
+            title: card.title,
+            location: card.location,
+            date: card.date,
+            level: card.level,
+          });
+        }
+
+        conversationsData.push({
+          conversation_id: String(c.id),
+          retreat_id: retreatId,
+          retreat_title: card?.title ?? String(retreatRaw?.title ?? "Retreat"),
+          retreat_location: card?.location ?? "",
+          retreat_date: card?.date ?? "",
+          retreat_level: card?.level ?? "",
+          last_message: lastMessage,
+          unread_count: conversationUnreadCount(c, user.id),
+          participant_id: otherId,
+          participant_name: getUserDisplayName(otherUser),
+          participant_role: "instructor",
+        });
+      }
+
+      conversationsData.sort(
+        (a, b) =>
+          new Date(b.last_message.created_at).getTime() -
+          new Date(a.last_message.created_at).getTime(),
+      );
+
+      setRetreats(Array.from(retreatMap.values()));
       setConversations(conversationsData);
     } catch (error) {
-      console.error('Error fetching conversations:', error);
+      console.error("Error fetching conversations:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchMessages = async (retreatId: string) => {
+  const fetchMessages = async (conversationId: string) => {
+    if (!user?.id) return;
     try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('related_id', retreatId)
-        .eq('message_type', 'retreat_question')
-        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setMessages(data || []);
-
-      // Mark messages as read
-      const unreadMessages = data?.filter(m => m.receiver_id === user.id && !m.read);
-      if (unreadMessages && unreadMessages.length > 0) {
-        await supabase
-          .from('messages')
-          .update({ read: true })
-          .eq('receiver_id', user.id)
-          .eq('read', false);
-      }
+      const data = await triggerGetConversation(conversationId).unwrap();
+      const mapped = (data.messages ?? [])
+        .map((m) => toLegacyMessage(m as Record<string, unknown>, { currentUserId: user.id }))
+        .filter((m) => m != null) as Message[];
+      setMessages(mapped);
+      fetchConversations();
     } catch (error) {
-      console.error('Error fetching messages:', error);
+      console.error("Error fetching messages:", error);
     }
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedConversation || sending) return;
+    if (!newMessage.trim() || !selectedConversation || !user?.id || sending) return;
 
     setSending(true);
+    const senderName =
+      user.fullName ??
+      [user.firstName, user.lastName].filter(Boolean).join(" ") ??
+      user.email?.split("@")[0] ??
+      "Student";
+
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      sender_id: user.id,
+      sender_name: senderName,
+      sender_role: "student",
+      receiver_id: selectedConversation.participant_id,
+      receiver_name: selectedConversation.participant_name,
+      content: newMessage.trim(),
+      created_at: new Date().toISOString(),
+      read: false,
+      message_type: "retreat_question",
+      related_id: selectedConversation.retreat_id,
+    };
+
+    setMessages((prev) => [...prev, optimisticMessage]);
+    const body = newMessage.trim();
+    setNewMessage("");
+
     try {
-      const optimisticMessage: Message = {
-        id: `temp-${Date.now()}`,
-        sender_id: user.id,
-        sender_name: user.user_metadata?.first_name && user.user_metadata?.last_name 
-          ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-          : user.email?.split('@')[0] || 'Student',
-        sender_role: 'student',
-        receiver_id: selectedConversation.participant_id,
-        receiver_name: selectedConversation.participant_name,
-        content: newMessage.trim(),
-        created_at: new Date().toISOString(),
-        read: false,
-        message_type: 'retreat_question',
-        related_id: selectedConversation.retreat_id
-      };
-
-      // Add optimistic message
-      setMessages(prev => [...prev, optimisticMessage]);
-      setNewMessage("");
-
-      const { data, error } = await supabase
-        .from('messages')
-        .insert({
-          sender_id: user.id,
-          sender_name: optimisticMessage.sender_name,
-          sender_role: 'student',
-          receiver_id: selectedConversation.participant_id,
-          receiver_name: selectedConversation.participant_name,
-          content: optimisticMessage.content,
-          message_type: 'retreat_question',
-          related_id: selectedConversation.retreat_id
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Replace optimistic message with real message
-      setMessages(prev => prev.map(msg => 
-        msg.id === optimisticMessage.id ? data : msg
-      ));
-
-      // Refresh conversations to update last message
+      const sent = await sendMessageMutation({
+        conversationId: selectedConversation.conversation_id,
+        body: { body },
+      }).unwrap();
+      const legacy = toLegacyMessage(sent as Record<string, unknown>, { currentUserId: user.id });
+      if (legacy) {
+        setMessages((prev) => prev.map((msg) => (msg.id === optimisticMessage.id ? legacy : msg)));
+      }
       fetchConversations();
     } catch (error) {
-      console.error('Error sending message:', error);
-      // Remove optimistic message on error
-      setMessages(prev => prev.filter(msg => !msg.id.startsWith('temp-')));
+      console.error("Error sending message:", error);
+      setMessages((prev) => prev.filter((msg) => msg.id !== optimisticMessage.id));
     } finally {
       setSending(false);
     }
@@ -368,15 +316,15 @@ const StudentMessages = () => {
             <div>
               <h1 className="text-xl font-semibold">Messages</h1>
               <p className="text-sm text-muted-foreground">
-                {conversations.reduce((acc, conv) => acc + conv.unread_count, 0) > 0 
-                  ? `${conversations.reduce((acc, conv) => acc + conv.unread_count, 0)} unread` 
-                  : 'All caught up!'}
+                {sumUnreadCount(conversations, user?.id) > 0
+                  ? `${sumUnreadCount(conversations, user?.id)} unread`
+                  : "All caught up!"}
               </p>
             </div>
           </div>
-          {conversations.reduce((acc, conv) => acc + conv.unread_count, 0) > 0 && (
+          {sumUnreadCount(conversations, user?.id) > 0 && (
             <Badge variant="destructive" className="animate-pulse">
-              {conversations.reduce((acc, conv) => acc + conv.unread_count, 0)}
+              {sumUnreadCount(conversations, user?.id)}
             </Badge>
           )}
         </div>

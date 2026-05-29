@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CheckCircle2, Users, Home, AlertCircle } from "lucide-react";
 import { fetchEventRooms, holdBed, getAttendeeProfileForBed, expireHeldInventory, type EventRoom, type EventBed } from "@/lib/event-capacity";
-import { supabase } from "@/lib/supabase";
 
 interface BedSelectionProps {
   eventId: number;

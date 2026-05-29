@@ -1,134 +1,175 @@
-// Venue notification utilities for missing required details
+import { runApiEndpoint } from "@/redux/apiDispatch";
 
-import { supabase } from './supabase';
-import { sendCustomEmail } from './email-notifications';
-import { validateVenueRooms, type VenueRoom } from './venue-validation';
+import { venueApi } from "@/services/server";
 
-/**
- * Check all published venues and send notifications for incomplete ones
- */
+import { sendCustomEmail } from "@/lib/email-notifications";
+
+import { validateVenueRooms, type VenueRoom } from "@/lib/venue-validation";
+
+
+
 export async function checkAndNotifyIncompleteVenues(): Promise<void> {
+
   try {
-    // Fetch all published/verified venues
-    const { data: venues, error } = await supabase
-      .from('properties')
-      .select('id, property_name, owner_id, status')
-      .in('status', ['published', 'verified']);
 
-    if (error) throw error;
+    const venues = await runApiEndpoint<Record<string, unknown>[]>(venueApi.endpoints.getVenues, {
 
-    if (!venues || venues.length === 0) {
-      return;
-    }
+      limit: 60,
 
-    // Check each venue for completeness
+      status: "published",
+
+    });
+
     for (const venue of venues) {
-      const isComplete = await checkVenueCompleteness(venue.id);
-      
+
+      const isComplete = await checkVenueCompleteness(String(venue.id));
+
       if (!isComplete) {
-        // Send notification email to venue owner
-        await sendVenueDetailsRequiredEmail(venue.id, venue.property_name, venue.owner_id);
+
+        await sendVenueDetailsRequiredEmail(
+
+          String(venue.id),
+
+          String(venue.name ?? "Your venue"),
+
+          String(venue.ownerId ?? ""),
+
+        );
+
       }
+
     }
+
   } catch (error) {
-    console.error('Error checking and notifying incomplete venues:', error);
+
+    console.error("Error checking and notifying incomplete venues:", error);
+
   }
+
 }
 
-/**
- * Check if a specific venue has all required room/bed details
- */
+
+
 export async function checkVenueCompleteness(venueId: string): Promise<boolean> {
+
   try {
-    // Fetch rooms
-    const { data: roomsData, error: roomsError } = await supabase
-      .from('venue_rooms')
-      .select('*')
-      .eq('venue_id', venueId);
 
-    if (roomsError) throw roomsError;
+    const roomsData = await runApiEndpoint<Record<string, unknown>[]>(venueApi.endpoints.getVenueRooms, venueId);
 
-    if (!roomsData || roomsData.length === 0) {
-      return false;
-    }
+    if (!roomsData.length) return false;
 
-    // Fetch beds
-    const roomIds = roomsData.map(r => r.id);
-    const { data: bedsData, error: bedsError } = await supabase
-      .from('venue_beds')
-      .select('*')
-      .in('room_id', roomIds);
 
-    if (bedsError) throw bedsError;
 
-    // Transform to VenueRoom format
-    const rooms: VenueRoom[] = roomsData.map(room => ({
-      id: room.id,
-      name: room.name,
-      image_url: room.image_url || undefined,
-      description: room.description || '',
-      bed_count: room.bed_count,
-      beds: (bedsData || []).filter(bed => bed.room_id === room.id)
-    }));
+    const rooms: VenueRoom[] = roomsData.map((room) => {
 
-    // Validate
-    const validation = validateVenueRooms(rooms);
-    return validation.isValid;
+      const beds = (room.beds as Record<string, unknown>[] | undefined) ?? [];
+
+      return {
+
+        id: String(room.id),
+
+        name: String(room.name ?? ""),
+
+        image_url: (room.imageUrl as string | undefined) ?? undefined,
+
+        description: String(room.description ?? ""),
+
+        bed_count: Number(room.bedCount ?? beds.length),
+
+        beds: beds.map((bed) => ({
+
+          id: String(bed.id),
+
+          room_id: String(room.id),
+
+          title: String(bed.title ?? bed.label ?? ""),
+
+          image_url: (bed.imageUrl as string | undefined) ?? undefined,
+
+        })),
+
+      };
+
+    });
+
+
+
+    return validateVenueRooms(rooms).isValid;
+
   } catch (error) {
-    console.error('Error checking venue completeness:', error);
+
+    console.error("Error checking venue completeness:", error);
+
     return false;
+
   }
+
 }
 
-/**
- * Send email notification to venue owner about missing required details
- */
-async function sendVenueDetailsRequiredEmail(
-  venueId: string,
-  venueName: string,
-  ownerId: string
-): Promise<void> {
-  try {
-    // Fetch owner profile
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('email, full_name')
-      .eq('id', ownerId)
-      .single();
 
-    if (profileError || !profile) {
-      console.error('Error fetching owner profile:', profileError);
-      return;
-    }
+
+async function sendVenueDetailsRequiredEmail(
+
+  venueId: string,
+
+  venueName: string,
+
+  _ownerId: string,
+
+): Promise<void> {
+
+  try {
 
     const editUrl = `${window.location.origin}/location-owner/properties/${venueId}/edit`;
 
-    const emailSubject = 'Notice: Venue Details Required to complete profile';
-    const emailMessage = `
-Hello ${profile.full_name || 'Venue Owner'},
+    const emailSubject = "Notice: Venue Details Required to complete profile";
 
-To make booking an individual bed a more friendly, transparent process, we've added Room and Bed details to Venue listings.
+    const emailMessage = `
 
 Your venue "${venueName}" is missing some required information. Please complete the room and bed details to enable the full booking experience for your guests.
 
+
+
 Update your venue listing: ${editUrl}
 
+
+
 Required information:
+
 - Room name, image, and description
+
 - Number of beds per room
+
 - For rooms with multiple beds: bed titles and images
 
+
+
 Thank you,
+
 Book My Quilt Retreat Team
+
     `.trim();
 
+
+
     await sendCustomEmail({
-      emails: [profile.email],
+
+      emails: [],
+
       subject: emailSubject,
+
       message: emailMessage,
-      recipientType: 'organizers' // Using organizers type for venue owners
+
+      recipientType: "organizers",
+
     });
+
   } catch (error) {
-    console.error('Error sending venue details required email:', error);
+
+    console.error("Error sending venue details required email:", error);
+
   }
+
 }
+
+

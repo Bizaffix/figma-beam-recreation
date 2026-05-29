@@ -5,7 +5,7 @@ import "./index.css";
 import { Elements } from "@stripe/react-stripe-js";
 import { getStripe } from "./lib/stripe";
 import { Provider } from "react-redux";
-import { store } from "./app/store";
+import { store } from "./redux/store";
 
 const stripePromise = getStripe();
 

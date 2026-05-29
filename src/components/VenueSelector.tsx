@@ -21,7 +21,11 @@ import {
   Star,
   MessageSquare
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetVenuesQuery,
+  useCreateEventRequestMutation,
+} from "@/services/server";
+import { toLegacyProperty } from "@/services/mappers";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import MessagingSystem from "@/components/MessagingSystem";
@@ -72,6 +76,8 @@ export const VenueSelector = ({ selectedLocation, onLocationChange }: VenueSelec
   const [messagingVenue, setMessagingVenue] = useState<Property | null>(null);
   const { toast } = useToast();
   const { user, role } = useAuth();
+  const [triggerGetVenues] = useLazyGetVenuesQuery();
+  const [createEventRequestMutation] = useCreateEventRequestMutation();
 
   useEffect(() => {
     if (locationType === 'venue') {
@@ -82,14 +88,11 @@ export const VenueSelector = ({ selectedLocation, onLocationChange }: VenueSelec
   const fetchPublishedVenues = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('properties')
-        .select('*')
-        .in('status', ['published', 'verified'])
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setVenues(data || []);
+      const items = await triggerGetVenues({ limit: 100 }).unwrap();
+      const published = items
+        .map((v) => toLegacyProperty(v))
+        .filter((v) => ["published", "verified"].includes(String(v.status ?? "")));
+      setVenues(published as unknown as Property[]);
     } catch (error) {
       console.error('Error fetching venues:', error);
       toast({
@@ -138,33 +141,26 @@ export const VenueSelector = ({ selectedLocation, onLocationChange }: VenueSelec
     if (!user || role !== 'instructor') return null;
 
     try {
-      // Create a temporary event request for messaging purposes
-      const { data, error } = await supabase
-        .from('event_requests')
-        .insert({
-          event_title: 'Venue Inquiry',
-          instructor_name: user.user_metadata?.first_name && user.user_metadata?.last_name 
-            ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-            : user.email?.split('@')[0] || 'Instructor',
-          instructor_id: user.id,
-          property_name: venue.property_name,
-          property_id: venue.id,
-          property_owner_id: venue.owner_id,
-          start_date: new Date().toISOString().split('T')[0],
-          end_date: new Date().toISOString().split('T')[0],
-          expected_headcount: 1,
-          status: 'pending',
-          basic_schedule: {
-            check_in: 'Flexible',
-            check_out: 'Flexible',
-            sewing_hours: 'Flexible',
-            meals: []
-          }
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await createEventRequestMutation({
+        eventTitle: "Venue Inquiry",
+        instructorName: user.user_metadata?.first_name && user.user_metadata?.last_name
+          ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+          : user.email?.split("@")[0] || "Instructor",
+        instructorId: user.id,
+        propertyName: venue.property_name,
+        venueId: venue.id,
+        propertyOwnerId: venue.owner_id,
+        startDate: new Date().toISOString().split("T")[0],
+        endDate: new Date().toISOString().split("T")[0],
+        expectedAttendees: 1,
+        status: "pending",
+        basicSchedule: {
+          check_in: "Flexible",
+          check_out: "Flexible",
+          sewing_hours: "Flexible",
+          meals: [],
+        },
+      }).unwrap();
       return data;
     } catch (error) {
       console.error('Error creating event request for messaging:', error);

@@ -1,46 +1,139 @@
-import { supabase } from "@/lib/supabase";
+import { runApiEndpoint } from "@/redux/apiDispatch";
+
+import { contentApi } from "@/services/server";
+
 import type { NewsItemFull, NewsItemSummary } from "@/lib/content/types";
 
-export async function fetchPublishedNewsItems(limit = 80): Promise<NewsItemSummary[]> {
-  const { data, error } = await supabase
-    .from("news_items")
-    .select("slug,headline,summary_markdown,image_url,tags,related_retreat_slug,published_at")
-    .eq("status", "published")
-    .order("published_at", { ascending: false })
-    .limit(limit);
 
-  if (error) {
-    if (error.code === "42P01" || error.message.includes("does not exist")) {
-      return [];
-    }
-    throw error;
-  }
-  return (data ?? []) as NewsItemSummary[];
+
+type BackendNewsSummary = {
+
+  slug: string;
+
+  headline: string;
+
+  summaryMarkdown: string;
+
+  imageUrl?: string | null;
+
+  tags?: string[];
+
+  relatedRetreatSlug?: string | null;
+
+  publishedAt?: string | null;
+
+};
+
+
+
+type BackendNewsItem = BackendNewsSummary & {
+
+  bodyMarkdown: string;
+
+};
+
+
+
+const mapNewsSummary = (item: BackendNewsSummary): NewsItemSummary => ({
+
+  slug: item.slug,
+
+  headline: item.headline,
+
+  summary_markdown: item.summaryMarkdown,
+
+  image_url: item.imageUrl ?? null,
+
+  tags: item.tags ?? [],
+
+  related_retreat_slug: item.relatedRetreatSlug ?? null,
+
+  published_at: item.publishedAt ?? null,
+
+});
+
+
+
+const mapNewsFull = (item: BackendNewsItem): NewsItemFull => ({
+
+  ...mapNewsSummary(item),
+
+  body_markdown: item.bodyMarkdown,
+
+});
+
+
+
+function isNotFound(error: unknown): boolean {
+
+  return Boolean(
+
+    error &&
+
+      typeof error === "object" &&
+
+      "status" in error &&
+
+      (error as { status: number }).status === 404,
+
+  );
+
 }
+
+
+
+export async function fetchPublishedNewsItems(limit = 80): Promise<NewsItemSummary[]> {
+
+  const items = await runApiEndpoint<BackendNewsSummary[]>(contentApi.endpoints.getNewsItems, {
+
+    limit,
+
+    sort: "publishedAt:desc",
+
+  });
+
+  return items.map((item) => mapNewsSummary(item as BackendNewsSummary));
+
+}
+
+
 
 export async function fetchNewsItemBySlug(slug: string): Promise<NewsItemFull | null> {
-  const { data, error } = await supabase
-    .from("news_items")
-    .select("slug,headline,summary_markdown,body_markdown,image_url,tags,related_retreat_slug,published_at")
-    .eq("slug", slug)
-    .eq("status", "published")
-    .maybeSingle();
 
-  if (error) {
-    if (error.code === "42P01" || error.message.includes("does not exist")) {
-      return null;
-    }
+  try {
+
+    const item = await runApiEndpoint<BackendNewsItem>(contentApi.endpoints.getNewsItemBySlug, slug);
+
+    return mapNewsFull(item as BackendNewsItem);
+
+  } catch (error) {
+
+    if (isNotFound(error)) return null;
+
     throw error;
+
   }
-  return data as NewsItemFull | null;
+
 }
+
+
 
 export function newsTimeBucket(date: string | null): "Today" | "This week" | "Earlier" {
+
   if (!date) return "Earlier";
+
   const d = new Date(date).getTime();
+
   const now = Date.now();
+
   const day = 86400000;
+
   if (now - d < day) return "Today";
+
   if (now - d < 7 * day) return "This week";
+
   return "Earlier";
+
 }
+
+

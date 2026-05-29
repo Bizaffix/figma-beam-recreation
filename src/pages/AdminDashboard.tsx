@@ -8,7 +8,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetAdminUsersQuery,
+  useLazyGetAdminBookingsQuery,
+  useLazyGetAdminRetreatsQuery,
+  useLazyGetAdminVenuesQuery,
+  useUpdateAdminUserMutation,
+  useLazyGetEmailTemplatesQuery,
+  useCreateEmailTemplateMutation,
+  useDeleteEmailTemplateMutation,
+  useLazyGetVenueByIdQuery,
+  useUploadFileMutation,
+} from "@/services/server";
+import { toLegacyRetreat, toLegacyProperty, toLegacyBooking, mapLegacyProfile } from "@/services/mappers";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 import { useToast } from "@/hooks/use-toast";
@@ -89,6 +101,16 @@ const AdminDashboard = () => {
   const { role, user, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [fetchAdminUsers] = useLazyGetAdminUsersQuery();
+  const [fetchAdminBookings] = useLazyGetAdminBookingsQuery();
+  const [fetchAdminRetreats] = useLazyGetAdminRetreatsQuery();
+  const [fetchAdminVenues] = useLazyGetAdminVenuesQuery();
+  const [updateAdminUser] = useUpdateAdminUserMutation();
+  const [fetchEmailTemplates] = useLazyGetEmailTemplatesQuery();
+  const [createEmailTemplate] = useCreateEmailTemplateMutation();
+  const [deleteEmailTemplate] = useDeleteEmailTemplateMutation();
+  const [fetchVenueById] = useLazyGetVenueByIdQuery();
+  const [uploadFile] = useUploadFileMutation();
   const [loading, setLoading] = useState(true);
   const [totalRevenue, setTotalRevenue] = useState<number>(0);
   const [totalBookings, setTotalBookings] = useState<number>(0);
@@ -169,161 +191,103 @@ const AdminDashboard = () => {
     if (!user) return;
 
     try {
-      // Fetch all bookings
-      const { data: bookingsData, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('id, full_name, email, skill_level, amount, status, created_at, retreat_id')
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const bookingsRaw = await fetchAdminBookings({ limit: 50, sort: "createdAt:desc" }).unwrap();
+      const bookingsData = bookingsRaw.map((b) => toLegacyBooking(b));
 
-      if (bookingsError) {
-        console.error('Error fetching bookings:', bookingsError);
-        console.error('Bookings error details:', bookingsError);
-        toast({
-          title: "Error",
-          description: bookingsError.message || "Failed to load bookings",
-          variant: "destructive",
-        });
-      } else {
-        console.log('Bookings fetched:', bookingsData?.length || 0);
-        const confirmedBookings = bookingsData?.filter(b => b.status === 'confirmed') || [];
-        const revenue = confirmedBookings.reduce((sum, booking) => sum + Number(booking.amount || 0), 0);
-        setTotalRevenue(revenue);
-        setTotalBookings(confirmedBookings.length);
-        setRecentBookings(bookingsData || []);
-      }
+      const confirmedBookings = bookingsData.filter((b) => b.status === "confirmed");
+      const revenue = confirmedBookings.reduce((sum, booking) => sum + Number(booking.amount || 0), 0);
+      setTotalRevenue(revenue);
+      setTotalBookings(confirmedBookings.length);
+      setRecentBookings(bookingsData as Booking[]);
 
-      // Fetch retreats to get instructor info
-      const { data: retreatsData } = await supabase
-        .from('retreats')
-        .select('id, title, instructor_id');
+      const retreatsRaw = await fetchAdminRetreats({ limit: 500 }).unwrap();
+      const retreatsData = retreatsRaw.map((r) => toLegacyRetreat(r));
 
-      // Fetch all instructors
-      const { data: instructorsData, error: instructorsError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('role', 'instructor');
+      const instructorsData = await fetchAdminUsers({ role: "instructor", limit: 500 }).unwrap();
+      setTotalInstructors(instructorsData.length);
 
-      if (!instructorsError && instructorsData) {
-        setTotalInstructors(instructorsData.length);
-      }
+      const studentsData = await fetchAdminUsers({ role: "student", limit: 500 }).unwrap();
+      setTotalStudents(studentsData.length);
 
-      // Fetch all students
-      const { data: studentsData, error: studentsError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('role', 'student');
+      const locationOwnersData = await fetchAdminUsers({ role: "location_owner", limit: 500 }).unwrap();
+      setTotalLocationOwners(locationOwnersData.length);
 
-      if (!studentsError && studentsData) {
-        setTotalStudents(studentsData.length);
-      }
+      const recentInstructorsData = instructorsData
+        .slice()
+        .sort((a, b) => String(b.createdAt ?? b.created_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? "")))
+        .slice(0, 4)
+        .map((u) => mapLegacyProfile(u));
+      setRecentInstructors(recentInstructorsData);
 
-      // Fetch all location owners
-      const { data: locationOwnersData, error: locationOwnersError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('role', 'location_owner');
+      const recentStudentsData = studentsData
+        .slice()
+        .sort((a, b) => String(b.createdAt ?? b.created_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? "")))
+        .slice(0, 4)
+        .map((u) => mapLegacyProfile(u));
+      setRecentStudents(recentStudentsData);
 
-      if (!locationOwnersError && locationOwnersData) {
-        setTotalLocationOwners(locationOwnersData.length);
-      }
+      const venuesRaw = await fetchAdminVenues({ limit: 500, status: "published" }).unwrap();
+      const recentVenuesData = venuesRaw
+        .map((v) => toLegacyProperty(v))
+        .slice(0, 4);
+      setRecentVenues(recentVenuesData);
 
-      // Fetch recent instructors with avatars for thumbnails
-      const { data: recentInstructorsData } = await supabase
-        .from('profiles')
-        .select('id, avatar_url, full_name')
-        .eq('role', 'instructor')
-        .order('created_at', { ascending: false })
-        .limit(4);
+      const draftEventsData = retreatsData
+        .filter((r) => !r.published)
+        .map((r) => ({
+          id: Number(r.id),
+          title: String(r.title ?? ""),
+          instructor_id: String(r.instructor_id ?? ""),
+          created_at: String(r.created_at ?? ""),
+          updated_at: String(r.updated_at ?? r.created_at ?? ""),
+          published: Boolean(r.published),
+          image: r.image as string | undefined,
+        }));
+      setDraftEvents(draftEventsData);
+      setRecentDraftEvents(draftEventsData.slice(0, 4));
 
-      if (recentInstructorsData) {
-        setRecentInstructors(recentInstructorsData);
-      }
+      const draftVenuesData = (await fetchAdminVenues({ limit: 500, status: "draft" }).unwrap())
+        .map((v) => toLegacyProperty(v))
+        .map((v) => ({
+          id: String(v.id),
+          property_name: String(v.property_name ?? ""),
+          owner_id: String(v.owner_id ?? ""),
+          status: String(v.status ?? "draft"),
+          created_at: String(v.created_at ?? ""),
+          updated_at: String(v.updated_at ?? v.created_at ?? ""),
+          photos: v.photos as string[] | undefined,
+        }));
+      setDraftVenues(draftVenuesData);
+      setRecentDraftVenues(draftVenuesData.slice(0, 4));
 
-      // Fetch recent students with avatars for thumbnails
-      const { data: recentStudentsData } = await supabase
-        .from('profiles')
-        .select('id, avatar_url, full_name')
-        .eq('role', 'student')
-        .order('created_at', { ascending: false })
-        .limit(4);
-
-      if (recentStudentsData) {
-        setRecentStudents(recentStudentsData);
-      }
-
-      // Fetch recent venues with photos for thumbnails
-      const { data: recentVenuesData } = await supabase
-        .from('properties')
-        .select('id, photos, property_name, status')
-        .eq('status', 'published')
-        .order('created_at', { ascending: false })
-        .limit(4);
-
-      if (recentVenuesData) {
-        setRecentVenues(recentVenuesData);
-      }
-
-      // Fetch draft events (retreats with published=false)
-      const { data: draftEventsData, error: draftEventsError } = await supabase
-        .from('retreats')
-        .select('id, title, instructor_id, created_at, updated_at, published, image')
-        .eq('published', false)
-        .order('updated_at', { ascending: false });
-
-      if (!draftEventsError && draftEventsData) {
-        setDraftEvents(draftEventsData || []);
-        setRecentDraftEvents(draftEventsData.slice(0, 4));
-      }
-
-      // Fetch draft venues (properties with status='draft')
-      const { data: draftVenuesData, error: draftVenuesError } = await supabase
-        .from('properties')
-        .select('id, property_name, owner_id, status, created_at, updated_at, photos')
-        .eq('status', 'draft')
-        .order('updated_at', { ascending: false });
-
-      if (!draftVenuesError && draftVenuesData) {
-        setDraftVenues(draftVenuesData || []);
-        setRecentDraftVenues(draftVenuesData.slice(0, 4));
-      }
-
-      if (draftEventsData || draftVenuesData) {
+      if (draftEventsData.length || draftVenuesData.length) {
         const ids = new Set<string>();
-        (draftEventsData || []).forEach((e: any) => e?.instructor_id && ids.add(e.instructor_id));
-        (draftVenuesData || []).forEach((v: any) => v?.owner_id && ids.add(v.owner_id));
+        draftEventsData.forEach((e) => e.instructor_id && ids.add(e.instructor_id));
+        draftVenuesData.forEach((v) => v.owner_id && ids.add(v.owner_id));
 
         if (ids.size > 0) {
-          const { data: profilesData } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', Array.from(ids));
-
-          if (profilesData) {
-            const map: Record<string, string> = {};
-            profilesData.forEach((p: any) => {
-              map[p.id] = p.full_name || 'Unknown';
-            });
-            setProfileNamesById(map);
-          }
+          const allUsers = await fetchAdminUsers({ limit: 500 }).unwrap();
+          const map: Record<string, string> = {};
+          allUsers.forEach((p) => {
+            if (ids.has(String(p.id))) {
+              const legacy = mapLegacyProfile(p);
+              map[String(p.id)] = String(legacy.full_name || "Unknown");
+            }
+          });
+          setProfileNamesById(map);
         }
       }
 
-      // Enrich bookings with retreat info
-      if (bookingsData && retreatsData) {
-        const enrichedBookings = bookingsData.map(booking => {
-          const retreat = retreatsData.find(r => r.id === booking.retreat_id);
-          return {
-            ...booking,
-            retreat: retreat ? { title: retreat.title, instructor_id: retreat.instructor_id } : undefined,
-          };
-        });
-        setRecentBookings(enrichedBookings);
-      } else if (bookingsData) {
-        // Set bookings even if retreats fetch failed
-        setRecentBookings(bookingsData);
-      }
-
+      const enrichedBookings = bookingsData.map((booking) => {
+        const retreat = retreatsData.find((r) => String(r.id) === String(booking.retreat_id));
+        return {
+          ...booking,
+          retreat: retreat
+            ? { title: String(retreat.title ?? ""), instructor_id: String(retreat.instructor_id ?? "") }
+            : undefined,
+        };
+      });
+      setRecentBookings(enrichedBookings as Booking[]);
     } catch (error) {
       console.error('Unexpected error:', error);
       toast({
@@ -344,22 +308,8 @@ const AdminDashboard = () => {
   const fetchStudentsList = async () => {
     setLoadingStudents(true);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, created_at')
-        .eq('role', 'student')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching students:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load students list",
-          variant: "destructive",
-        });
-      } else {
-        setStudentsList(data || []);
-      }
+      const data = await fetchAdminUsers({ role: "student", limit: 500, sort: "createdAt:desc" }).unwrap();
+      setStudentsList(data.map((u) => mapLegacyProfile(u)) as UserProfile[]);
     } catch (error) {
       console.error('Unexpected error fetching students:', error);
       toast({
@@ -375,22 +325,8 @@ const AdminDashboard = () => {
   const fetchInstructorsList = async () => {
     setLoadingInstructors(true);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, created_at, discount, first_event_free_eligible, first_event_free_used')
-        .eq('role', 'instructor')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching instructors:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load instructors list",
-          variant: "destructive",
-        });
-      } else {
-        setInstructorsList(data || []);
-      }
+      const data = await fetchAdminUsers({ role: "instructor", limit: 500, sort: "createdAt:desc" }).unwrap();
+      setInstructorsList(data.map((u) => mapLegacyProfile(u)) as UserProfile[]);
     } catch (error) {
       console.error('Unexpected error fetching instructors:', error);
       toast({
@@ -406,22 +342,8 @@ const AdminDashboard = () => {
   const fetchLocationOwnersList = async () => {
     setLoadingLocationOwners(true);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, created_at, discount, first_event_free_eligible, first_event_free_used')
-        .eq('role', 'location_owner')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching location owners:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load location owners list",
-          variant: "destructive",
-        });
-      } else {
-        setLocationOwnersList(data || []);
-      }
+      const data = await fetchAdminUsers({ role: "location_owner", limit: 500, sort: "createdAt:desc" }).unwrap();
+      setLocationOwnersList(data.map((u) => mapLegacyProfile(u)) as UserProfile[]);
     } catch (error) {
       console.error('Unexpected error fetching location owners:', error);
       toast({
@@ -616,14 +538,9 @@ const AdminDashboard = () => {
         value: Number(discountValue),
       };
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({ discount: discountData })
-        .in('id', Array.from(selected));
-
-      if (error) {
-        throw error;
-      }
+      await Promise.all(
+        Array.from(selected).map((id) => updateAdminUser({ id, body: { discount: discountData } }).unwrap()),
+      );
 
       toast({
         title: "Success",
@@ -655,14 +572,7 @@ const AdminDashboard = () => {
 
   const handleRemoveDiscount = async (userId: string, recipientType: 'instructors' | 'location_owners') => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ discount: null })
-        .eq('id', userId);
-
-      if (error) {
-        throw error;
-      }
+      await updateAdminUser({ id: userId, body: { discount: null } }).unwrap();
 
       toast({
         title: "Success",
@@ -697,14 +607,14 @@ const AdminDashboard = () => {
     }
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ first_event_free_eligible: true, first_event_free_used: false })
-        .in('id', Array.from(selected));
-
-      if (error) {
-        throw error;
-      }
+      await Promise.all(
+        Array.from(selected).map((id) =>
+          updateAdminUser({
+            id,
+            body: { firstEventFreeEligible: true, firstEventFreeUsed: false },
+          }).unwrap(),
+        ),
+      );
 
       toast({
         title: "Success",
@@ -731,14 +641,7 @@ const AdminDashboard = () => {
 
   const handleRemoveFirstEventFree = async (userId: string, recipientType: 'instructors' | 'location_owners') => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ first_event_free_eligible: false })
-        .eq('id', userId);
-
-      if (error) {
-        throw error;
-      }
+      await updateAdminUser({ id: userId, body: { firstEventFreeEligible: false } }).unwrap();
 
       toast({
         title: "Success",
@@ -788,34 +691,7 @@ const AdminDashboard = () => {
     setUploadingImage(true);
 
     try {
-      // Create a unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/email-images/${Date.now()}.${fileExt}`;
-      const filePath = fileName;
-
-      // Upload to Supabase Storage (using retreat-images bucket)
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Error uploading image:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload image",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-images')
-        .getPublicUrl(filePath);
-
+      const publicUrl = await uploadFile({ bucket: "email-images", file }).unwrap();
       setEmailImages(prev => [...prev, publicUrl]);
 
       toast({
@@ -893,30 +769,7 @@ const AdminDashboard = () => {
     setUploadingSectionImages(prev => ({ ...prev, [sectionId]: true }));
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/email-images/${Date.now()}.${fileExt}`;
-      const filePath = fileName;
-
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Error uploading image:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload image",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-images')
-        .getPublicUrl(filePath);
+      const publicUrl = await uploadFile({ bucket: "email-images", file }).unwrap();
 
       setEmailSections(prev =>
         prev.map(s => s.id === sectionId
@@ -955,25 +808,12 @@ const AdminDashboard = () => {
     if (!user) return;
     setLoadingTemplates(true);
     try {
-      const { data, error } = await supabase
-        .from('email_templates')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching templates:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load templates and drafts",
-          variant: "destructive",
-        });
-      } else {
-        const templatesList = (data || []).filter(t => t.type === 'template');
-        const draftsList = (data || []).filter(t => t.type === 'draft');
-        setTemplates(templatesList as EmailTemplate[]);
-        setDrafts(draftsList as EmailTemplate[]);
-      }
+      const data = await fetchEmailTemplates().unwrap();
+      const userTemplates = data.filter((t) => String(t.userId ?? t.user_id) === user.id);
+      const templatesList = userTemplates.filter((t) => t.type === "template");
+      const draftsList = userTemplates.filter((t) => t.type === "draft");
+      setTemplates(templatesList as unknown as EmailTemplate[]);
+      setDrafts(draftsList as unknown as EmailTemplate[]);
     } catch (error) {
       console.error('Unexpected error fetching templates:', error);
     } finally {
@@ -1022,35 +862,26 @@ const AdminDashboard = () => {
       // Combine all images from all sections
       const allImages = emailSections.flatMap(s => s.images);
 
-      const { error } = await supabase
-        .from('email_templates')
-        .insert({
-          user_id: user.id,
-          name: templateName.trim(),
-          type: type,
-          subject: notificationSubject,
-          message: combinedMessage || ' ',
-          images: allImages,
-          recipient_type: notificationRecipients || null,
-          sections: emailSections, // Store sections as JSONB
-        });
+      await createEmailTemplate({
+        userId: user.id,
+        user_id: user.id,
+        name: templateName.trim(),
+        type,
+        subject: notificationSubject,
+        message: combinedMessage || " ",
+        images: allImages,
+        recipientType: notificationRecipients || null,
+        recipient_type: notificationRecipients || null,
+        sections: emailSections,
+      }).unwrap();
 
-      if (error) {
-        console.error('Error saving template:', error);
-        toast({
-          title: "Error",
-          description: error.message || "Failed to save " + type,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: type.charAt(0).toUpperCase() + type.slice(1) + " saved successfully",
-        });
-        setSaveTemplateDialogOpen(false);
-        setTemplateName('');
-        fetchTemplatesAndDrafts();
-      }
+      toast({
+        title: "Success",
+        description: type.charAt(0).toUpperCase() + type.slice(1) + " saved successfully",
+      });
+      setSaveTemplateDialogOpen(false);
+      setTemplateName("");
+      fetchTemplatesAndDrafts();
     } catch (error: any) {
       console.error('Unexpected error saving template:', error);
       toast({
@@ -1102,31 +933,17 @@ const AdminDashboard = () => {
     }
 
     try {
-      const { error } = await supabase
-        .from('email_templates')
-        .delete()
-        .eq('id', templateId)
-        .eq('user_id', user?.id);
-
-      if (error) {
-        console.error('Error deleting template:', error);
-        toast({
-          title: "Error",
-          description: "Failed to delete template",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: "Template deleted successfully",
-        });
-        fetchTemplatesAndDrafts();
-      }
-    } catch (error: any) {
-      console.error('Unexpected error deleting template:', error);
+      await deleteEmailTemplate(templateId).unwrap();
+      toast({
+        title: "Success",
+        description: "Template deleted successfully",
+      });
+      fetchTemplatesAndDrafts();
+    } catch (error: unknown) {
+      console.error('Error deleting template:', error);
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: error instanceof Error ? error.message : "Failed to delete template",
         variant: "destructive",
       });
     }
@@ -1205,7 +1022,7 @@ const AdminDashboard = () => {
       if (error) {
         toast({
           title: "Error",
-          description: error,
+          description: String(error),
           variant: "destructive",
         });
       } else {
@@ -2756,15 +2573,8 @@ const AdminDashboard = () => {
                           onClick={async () => {
                             setLoadingVenueDetails(true);
                             try {
-                              const { data, error } = await supabase
-                                .from('properties')
-                                .select('*')
-                                .eq('id', venue.id)
-                                .single();
-                              
-                              if (error) throw error;
-                              
-                              setSelectedVenue(data);
+                              const venueRaw = await fetchVenueById(String(venue.id)).unwrap();
+                              setSelectedVenue(toLegacyProperty(venueRaw));
                               setViewVenueDialogOpen(true);
                             } catch (error) {
                               console.error('Error fetching venue details:', error);

@@ -6,12 +6,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetVenueByIdQuery,
+  useCreateVenueMutation,
+  useUpdateVenueMutation,
+  useUploadFileMutation,
+} from "@/services/server";
+import { toLegacyProperty } from "@/services/mappers";
 import { ArrowLeft, Upload, Image as ImageIcon, MapPin, Plus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useDropzone } from "react-dropzone";
 import { createReferral, getCurrentAffiliate } from "@/lib/affiliate-tracking";
 import { VenueRoomManager } from "@/components/VenueRoomManager";
+import { CalendarSyncSection } from "@/components/venue/CalendarSyncSection";
 import { validateVenueRooms, type VenueValidationResult } from "@/lib/venue-validation";
 
 interface VenueData {
@@ -30,6 +37,10 @@ const VenueRegistration = () => {
   const [isEditing, setIsEditing] = useState(!!id);
   const [venueValidation, setVenueValidation] = useState<VenueValidationResult | null>(null);
   const [venueId, setVenueId] = useState<string | null>(null);
+  const [fetchVenueById] = useLazyGetVenueByIdQuery();
+  const [createVenue] = useCreateVenueMutation();
+  const [updateVenue] = useUpdateVenueMutation();
+  const [uploadFile] = useUploadFileMutation();
 
   const [venueData, setVenueData] = useState<VenueData>({
     title: "",
@@ -40,27 +51,23 @@ const VenueRegistration = () => {
 
   // Load existing venue data if editing
   useEffect(() => {
-    if (id && isEditing) {
+    if (id && isEditing && user) {
       const fetchVenue = async () => {
         try {
-          const { data, error } = await supabase
-            .from('properties')
-            .select('*')
-            .eq('id', id)
-            .eq('owner_id', user?.id)
-            .single();
+          const data = await fetchVenueById(id).unwrap();
+          const legacy = toLegacyProperty(data);
 
-          if (error) throw error;
-
-          if (data) {
-            setVenueData({
-              title: data.property_name || "",
-              description: data.description || "",
-              address: data.location || "",
-              photos: data.photos || []
-            });
-            setVenueId(data.id);
+          if (String(legacy.owner_id) !== user.id) {
+            throw new Error("Not authorized to edit this venue");
           }
+
+          setVenueData({
+            title: String(legacy.property_name || ""),
+            description: String(legacy.description || ""),
+            address: String(legacy.location || ""),
+            photos: (legacy.photos as string[]) || [],
+          });
+          setVenueId(String(legacy.id));
         } catch (error) {
           console.error('Error fetching venue:', error);
           toast({
@@ -73,7 +80,7 @@ const VenueRegistration = () => {
 
       fetchVenue();
     }
-  }, [id, isEditing, user]);
+  }, [id, isEditing, user, fetchVenueById]);
 
   const updateVenueData = (field: keyof VenueData, value: any) => {
     setVenueData(prev => ({
@@ -89,25 +96,7 @@ const VenueRegistration = () => {
     onDrop: async (acceptedFiles) => {
       const uploadPromises = acceptedFiles.map(async (file) => {
         try {
-          // Generate unique file name
-          const fileName = `${user?.id}/${Date.now()}-${file.name}`;
-          
-          // Upload to Supabase storage
-          const { data, error } = await supabase.storage
-            .from('venue-images')
-            .upload(fileName, file, {
-              cacheControl: '3600',
-              upsert: false
-            });
-
-          if (error) throw error;
-
-          // Get public URL
-          const { data: { publicUrl } } = supabase.storage
-            .from('venue-images')
-            .getPublicUrl(fileName);
-
-          return publicUrl;
+          return await uploadFile({ bucket: "venue-images", file }).unwrap();
         } catch (error) {
           console.error('Error uploading file:', error);
           toast({
@@ -132,43 +121,11 @@ const VenueRegistration = () => {
     }
   });
 
-  const removePhoto = async (index: number) => {
-    const photoUrl = venueData.photos[index];
-    
-    try {
-      // Extract file path from the public URL
-      const urlParts = photoUrl.split('/');
-      const fileName = urlParts[urlParts.length - 1];
-      const filePath = `${user?.id}/${fileName}`;
-      
-      // Delete from Supabase storage
-      const { error } = await supabase.storage
-        .from('venue-images')
-        .remove([filePath]);
-
-      if (error) {
-        console.error('Error deleting file from storage:', error);
-        toast({
-          title: "Delete Error",
-          description: "Failed to delete image from storage",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Remove from state
-      setVenueData(prev => ({
-        ...prev,
-        photos: prev.photos.filter((_, i) => i !== index)
-      }));
-    } catch (error) {
-      console.error('Error removing photo:', error);
-      toast({
-        title: "Delete Error",
-        description: "Failed to delete image",
-        variant: "destructive",
-      });
-    }
+  const removePhoto = (index: number) => {
+    setVenueData(prev => ({
+      ...prev,
+      photos: prev.photos.filter((_, i) => i !== index)
+    }));
   };
 
   const handleSave = async (publish: boolean = false) => {
@@ -214,81 +171,33 @@ const VenueRegistration = () => {
     setSaving(true);
 
     try {
-      const propertyData = {
-        owner_id: user.id,
-        property_name: venueData.title,
+      const venuePayload = {
+        name: venueData.title,
         description: venueData.description,
-        location: venueData.address,
-        photos: venueData.photos,
-        status: publish ? 'published' : 'draft',
-        // Set default values for other required fields
+        city: venueData.address,
+        galleryImages: venueData.photos,
+        coverImageUrl: venueData.photos[0] ?? null,
+        status: publish ? "published" : "draft",
         sleeps: 10,
-        max_quilters: 8,
-        property_type: 'retreat_center',
-        plan: 'free',
-        views: 0,
-        saves: 0,
-        inquiries: 0,
-        base_pricing: {},
-        stay_types: [],
-        dedicated_sewing_room: false,
-        max_sewing_stations: 8,
-        outlets_near_stations: false,
-        iron_support: false,
-        cutting_stations: 2,
-        pressing_stations: 2,
-        irons_provided: false,
-        design_walls: '',
-        quiet_hours: '',
-        natural_light: '',
-        accessibility: false,
-        supported_formats: [],
-        pricing: {},
-        min_notice: 7,
-        min_group_size: 4,
-        max_group_size: 12,
-        house_rules: [],
-        blocked_dates: [],
-        availability_calendar: [],
-        headline: venueData.title,
-        verified: false,
-        primary_goal: '',
-        risk_preference: 50,
-        booking_control: ''
+        maxCapacity: 8,
       };
 
-      let result;
+      let savedVenue;
       if (isEditing && id) {
-        // Update existing venue
-        result = await supabase
-          .from('properties')
-          .update(propertyData)
-          .eq('id', id)
-          .eq('owner_id', user.id)
-          .select();
+        savedVenue = await updateVenue({ id, body: venuePayload }).unwrap();
       } else {
-        // Create new venue
-        result = await supabase
-          .from('properties')
-          .insert([propertyData])
-          .select();
+        savedVenue = await createVenue(venuePayload).unwrap();
       }
 
-      if (result.error) throw result.error;
-
-      // Set venue ID for room management
-      const savedVenueId = result.data?.[0]?.id;
-      if (savedVenueId) {
-        setVenueId(savedVenueId);
-      }
+      const savedVenueId = String(savedVenue.id);
+      setVenueId(savedVenueId);
 
       // Create affiliate referral if venue was published and user was referred
-      if (publish && result.data && result.data.length > 0) {
-        const venueId = result.data[0].id;
+      if (publish && savedVenueId) {
         const affiliateData = getCurrentAffiliate();
         if (affiliateData) {
           try {
-            await createReferral('venue', user.id, venueId);
+            await createReferral("venue", user.id);
             // Note: Conversion will happen when venue is verified/activated by admin
           } catch (affiliateError) {
             console.error('Error creating affiliate referral:', affiliateError);
@@ -475,6 +384,9 @@ const VenueRegistration = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* Calendar Sync — venue host settings (after booking/room setup) */}
+          {isEditing && venueId && <CalendarSyncSection venueId={venueId} />}
 
           {/* Actions */}
           <div className="flex justify-end gap-4">

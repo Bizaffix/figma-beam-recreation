@@ -14,7 +14,7 @@ import { PRIVACY_POLICY } from "@/content/privacy-policy";
 import { STUDENT_TERMS_AND_CONDITIONS } from "@/content/student-terms-and-conditions";
 import { STUDENT_PRIVACY_POLICY } from "@/content/student-privacy-policy";
 import { createReferral, getCurrentAffiliate } from "@/lib/affiliate-tracking";
-import { env } from "@/lib/env";
+import { buildGoogleOAuthStartUrl } from "@/lib/google-oauth";
 import { setPostAuthRedirect } from "@/lib/post-auth";
 import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 
@@ -111,12 +111,26 @@ const Signup = () => {
     return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
   };
 
-  const handleGoogle = async () => {
+  const handleGoogle = () => {
     if (!selectedRole) return;
 
+    if (selectedRole === "instructor" || selectedRole === "student" || selectedRole === "location_owner") {
+      if (!agreedToTerms || !agreedToPrivacy) {
+        toast({
+          title: "Error",
+          description: "Please read and agree to the terms and privacy policy before continuing.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    if (nextPath) {
+      setPostAuthRedirect(nextPath);
+    }
+
     setGoogleLoading(true);
-    sessionStorage.setItem("signup_intended_role", selectedRole);
-    window.location.href = `${env.apiUrl}/auth/oauth/google?from=signup`;
+    window.location.href = buildGoogleOAuthStartUrl({ from: "signup" });
   };
 
   const handleSignUp = async (e: FormEvent) => {

@@ -1,141 +1,291 @@
-import { supabase } from "@/lib/supabase";
+import { runApiEndpoint } from "@/redux/apiDispatch";
+
+import { contentApi } from "@/services/server";
+
 import type { AdminBlogRow, AdminNewsRow, ContentStatus } from "@/lib/content/types";
 
+
+
+type BackendBlogPost = {
+
+  id: string;
+
+  slug: string;
+
+  title: string;
+
+  status: string;
+
+  category: string;
+
+  publishedAt?: string | null;
+
+  createdAt: string;
+
+};
+
+
+
+type BackendNewsItem = {
+
+  id: string;
+
+  slug: string;
+
+  headline: string;
+
+  status: string;
+
+  publishedAt?: string | null;
+
+  createdAt: string;
+
+};
+
+
+
+const mapAdminBlogRow = (item: BackendBlogPost): AdminBlogRow => ({
+
+  id: item.id,
+
+  slug: item.slug,
+
+  title: item.title,
+
+  status: item.status,
+
+  category: item.category,
+
+  published_at: item.publishedAt ?? null,
+
+  created_at: item.createdAt,
+
+});
+
+
+
+const mapAdminNewsRow = (item: BackendNewsItem): AdminNewsRow => ({
+
+  id: item.id,
+
+  slug: item.slug,
+
+  headline: item.headline,
+
+  status: item.status,
+
+  published_at: item.publishedAt ?? null,
+
+  created_at: item.createdAt,
+
+});
+
+
+
 export function slugifyTitle(text: string): string {
+
   return text
+
     .toLowerCase()
+
     .trim()
+
     .replace(/[^\w\s-]/g, "")
+
     .replace(/\s+/g, "-")
+
     .replace(/-+/g, "-")
+
     .replace(/^-|-$/g, "")
+
     .slice(0, 80);
+
 }
 
-async function ensureUniqueSlug(table: "blog_posts" | "news_items", base: string): Promise<string> {
-  let slug = base || "post";
-  let n = 0;
-  while (n < 50) {
-    const candidate = n === 0 ? slug : `${slug}-${n + 1}`;
-    const { data } = await supabase.from(table).select("id").eq("slug", candidate).maybeSingle();
-    if (!data) return candidate;
-    n++;
-  }
-  return `${slug}-${Date.now()}`;
-}
+
 
 export type CreateBlogInput = {
+
   title: string;
+
   slug?: string;
+
   excerpt: string;
+
   body_markdown: string;
+
   category?: string;
+
   cover_image_url?: string | null;
+
   seo_title?: string | null;
+
   seo_description?: string | null;
+
   publish?: boolean;
+
 };
+
+
 
 export type CreateNewsInput = {
+
   headline: string;
+
   slug?: string;
+
   summary_markdown: string;
+
   body_markdown: string;
+
   publish?: boolean;
+
 };
 
+
+
 export async function adminCreateBlogPost(input: CreateBlogInput): Promise<{ id: string; slug: string }> {
+
   const baseSlug = slugifyTitle(input.slug?.trim() || input.title);
+
   if (!baseSlug) throw new Error("Enter a title or URL slug.");
-  const slug = await ensureUniqueSlug("blog_posts", baseSlug);
+
   const publish = Boolean(input.publish);
 
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .insert({
-      slug,
-      title: input.title.trim().slice(0, 200),
-      excerpt: input.excerpt.trim().slice(0, 500),
-      body_markdown: input.body_markdown,
-      cover_image_url: input.cover_image_url?.trim() || null,
-      category: (input.category?.trim() || "general").slice(0, 64),
-      tags: [],
-      seo_title: input.seo_title?.trim().slice(0, 70) || null,
-      seo_description: input.seo_description?.trim().slice(0, 170) || null,
-      status: publish ? "published" : "draft",
-      published_at: publish ? new Date().toISOString() : null,
-    })
-    .select("id,slug")
-    .single();
+  const coverUrl = input.cover_image_url?.trim();
 
-  if (error) throw error;
-  return data as { id: string; slug: string };
+
+
+  const post = await runApiEndpoint(contentApi.endpoints.adminUpsertBlogPost, {
+
+    body: {
+
+      title: input.title.trim().slice(0, 200),
+
+      slug: baseSlug,
+
+      excerpt: input.excerpt.trim().slice(0, 500),
+
+      bodyMarkdown: input.body_markdown,
+
+      ...(coverUrl ? { coverImageUrl: coverUrl } : {}),
+
+      category: (input.category?.trim() || "general").slice(0, 64),
+
+      tags: [],
+
+      ...(input.seo_title?.trim() ? { seoTitle: input.seo_title.trim().slice(0, 70) } : {}),
+
+      ...(input.seo_description?.trim()
+
+        ? { seoDescription: input.seo_description.trim().slice(0, 170) }
+
+        : {}),
+
+      status: publish ? "published" : "draft",
+
+    },
+
+  });
+
+
+
+  return { id: String((post as BackendBlogPost).id), slug: String((post as BackendBlogPost).slug) };
+
 }
+
+
 
 export async function adminCreateNewsItem(input: CreateNewsInput): Promise<{ id: string; slug: string }> {
+
   const baseSlug = slugifyTitle(input.slug?.trim() || input.headline);
+
   if (!baseSlug) throw new Error("Enter a headline or URL slug.");
-  const slug = await ensureUniqueSlug("news_items", baseSlug);
+
   const publish = Boolean(input.publish);
 
-  const { data, error } = await supabase
-    .from("news_items")
-    .insert({
-      slug,
-      headline: input.headline.trim().slice(0, 200),
-      summary_markdown: input.summary_markdown.trim().slice(0, 500),
-      body_markdown: input.body_markdown,
-      tags: [],
-      status: publish ? "published" : "draft",
-      published_at: publish ? new Date().toISOString() : null,
-    })
-    .select("id,slug")
-    .single();
 
-  if (error) throw error;
-  return data as { id: string; slug: string };
+
+  const item = await runApiEndpoint(contentApi.endpoints.adminUpsertNewsItem, {
+
+    body: {
+
+      headline: input.headline.trim().slice(0, 200),
+
+      slug: baseSlug,
+
+      summaryMarkdown: input.summary_markdown.trim().slice(0, 500),
+
+      bodyMarkdown: input.body_markdown,
+
+      tags: [],
+
+      status: publish ? "published" : "draft",
+
+    },
+
+  });
+
+
+
+  return { id: String((item as BackendNewsItem).id), slug: String((item as BackendNewsItem).slug) };
+
 }
+
+
 
 export async function adminListContent(): Promise<{ blogs: AdminBlogRow[]; news: AdminNewsRow[] }> {
-  const [blogsRes, newsRes] = await Promise.all([
-    supabase
-      .from("blog_posts")
-      .select("id,slug,title,status,category,published_at,created_at")
-      .order("created_at", { ascending: false })
-      .limit(100),
-    supabase
-      .from("news_items")
-      .select("id,slug,headline,status,published_at,created_at")
-      .order("created_at", { ascending: false })
-      .limit(100),
+
+  const [blogItems, newsItems] = await Promise.all([
+
+    runApiEndpoint<Record<string, unknown>[]>(contentApi.endpoints.adminGetBlogPosts, { limit: 100, sort: "createdAt:desc" }),
+
+    runApiEndpoint<Record<string, unknown>[]>(contentApi.endpoints.adminGetNewsItems, { limit: 100, sort: "createdAt:desc" }),
+
   ]);
 
-  if (blogsRes.error) throw blogsRes.error;
-  if (newsRes.error) throw newsRes.error;
+
 
   return {
-    blogs: (blogsRes.data ?? []) as AdminBlogRow[],
-    news: (newsRes.data ?? []) as AdminNewsRow[],
+
+    blogs: blogItems.map((item) => mapAdminBlogRow(item as BackendBlogPost)),
+
+    news: newsItems.map((item) => mapAdminNewsRow(item as BackendNewsItem)),
+
   };
+
 }
+
+
 
 export async function adminSetContentStatus(
-  kind: "blog" | "news",
-  id: string,
-  status: ContentStatus,
-): Promise<void> {
-  const patch: { status: ContentStatus; published_at?: string } = { status };
-  if (status === "published") {
-    patch.published_at = new Date().toISOString();
-  }
 
-  const table = kind === "blog" ? "blog_posts" : "news_items";
-  const { error } = await supabase.from(table).update(patch).eq("id", id);
-  if (error) throw error;
+  kind: "blog" | "news",
+
+  id: string,
+
+  status: ContentStatus,
+
+): Promise<void> {
+
+  const endpoint =
+
+    kind === "blog" ? contentApi.endpoints.adminUpsertBlogPost : contentApi.endpoints.adminUpsertNewsItem;
+
+  await runApiEndpoint(endpoint, { slug: id, body: { status } });
+
 }
+
+
 
 export async function adminDeleteContent(kind: "blog" | "news", id: string): Promise<void> {
-  const table = kind === "blog" ? "blog_posts" : "news_items";
-  const { error } = await supabase.from(table).delete().eq("id", id);
-  if (error) throw error;
+
+  const endpoint =
+
+    kind === "blog" ? contentApi.endpoints.adminDeleteBlogPost : contentApi.endpoints.adminDeleteNewsItem;
+
+  await runApiEndpoint(endpoint, id);
+
 }
+
+

@@ -1,17 +1,14 @@
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { QuiltMatchSiteHeader } from "@/components/quilt-match-home/site-header";
 import { QuiltMatchSiteFooter } from "@/components/quilt-match-home/site-footer";
-import { fetchNewsItemBySlug } from "@/lib/content/news";
+import { useGetNewsItemBySlugQuery } from "@/services/server";
 import { renderMarkdown } from "@/lib/markdown";
 
 export default function QuiltMatchNewsPostPage() {
   const { slug = "" } = useParams<{ slug: string }>();
-  const { data: item, isLoading, isError } = useQuery({
-    queryKey: ["news", "item", slug],
-    queryFn: () => fetchNewsItemBySlug(slug),
-    enabled: Boolean(slug),
+  const { data: item, isLoading, isError } = useGetNewsItemBySlugQuery(slug, {
+    skip: !slug,
   });
 
   useEffect(() => {

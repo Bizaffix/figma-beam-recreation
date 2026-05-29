@@ -35,8 +35,12 @@ import {
   Image as ImageIcon,
   Pencil,
 } from "lucide-react";
-import { getDraftByToken } from "@/services/discover";
-import { supabase } from "@/lib/supabase";
+import { getDraftByToken, getInterestCount } from "@/services/server/quiltmatch/discover";
+import {
+  useUpdateDraftListingByTokenMutation,
+  useClaimDraftListingMutation,
+  useUploadFileMutation,
+} from "@/services/server";
 import { useToast } from "@/hooks/use-toast";
 import type { DraftListing } from "@/types/draft-listing";
 
@@ -65,6 +69,9 @@ export default function ClaimListing() {
   const { toast } = useToast();
 
   const token = searchParams.get("token") || "";
+  const [updateDraftListingByToken] = useUpdateDraftListingByTokenMutation();
+  const [claimDraftListing] = useClaimDraftListingMutation();
+  const [uploadFile] = useUploadFileMutation();
   const [listing, setListing] = useState<DraftListing | null>(null);
   const [loading, setLoading] = useState(true);
   const [expired, setExpired] = useState(false);
@@ -154,11 +161,8 @@ export default function ClaimListing() {
         if (data.organizer_email) setClaimerEmail(data.organizer_email);
 
         // Fetch interest count
-        const { count } = await supabase
-          .from("listing_interests")
-          .select("*", { count: "exact", head: true })
-          .eq("draft_listing_id", data.id);
-        setInterestCount(count || 0);
+        const count = await getInterestCount(data.id);
+        setInterestCount(count);
       }
       setLoading(false);
     }
@@ -175,13 +179,7 @@ export default function ClaimListing() {
 
     setUploadingImage(true);
     try {
-      const ext = file.name.split(".").pop();
-      const path = `draft-listings/${listing?.id || "temp"}/${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from("listing-images").upload(path, file);
-      if (error) throw error;
-
-      const { data: urlData } = supabase.storage.from("listing-images").getPublicUrl(path);
-      const publicUrl = urlData.publicUrl;
+      const publicUrl = await uploadFile({ bucket: "listing-images", file }).unwrap();
 
       if (isMain) {
         setEditMainImage(publicUrl);
@@ -216,38 +214,34 @@ export default function ClaimListing() {
     );
   };
 
+  const buildListingPayload = () => ({
+    title: editTitle,
+    description: editDescription,
+    pricing: editPricing,
+    dates: editDates,
+    rooming: editRooming,
+    locationCity: editLocationCity,
+    locationRegion: editLocationRegion,
+    mainImageUrl: editMainImage || null,
+    additionalImages: editAdditionalImages,
+    amenities: editAmenities,
+    skillLevels: editSkillLevels,
+    maxCapacity: editMaxCapacity ? parseInt(editMaxCapacity) : null,
+    policies: editPolicies || null,
+    cancellationPolicy: editCancellationPolicy || null,
+    depositInfo: editDepositInfo || null,
+    websiteUrl: editWebsiteUrl || null,
+    facebookUrl: editFacebookUrl || null,
+    instagramUrl: editInstagramUrl || null,
+    organizerName: claimerName,
+    organizerEmail: claimerEmail,
+    organizerPhone: claimerPhone || null,
+  });
+
   const handleSaveDraft = async () => {
     if (!listing) return;
     try {
-      const { error } = await supabase
-        .from("draft_listings")
-        .update({
-          title: editTitle,
-          description: editDescription,
-          pricing: editPricing,
-          dates: editDates,
-          rooming: editRooming,
-          location_city: editLocationCity,
-          location_region: editLocationRegion,
-          main_image_url: editMainImage || null,
-          additional_images: editAdditionalImages,
-          amenities: editAmenities,
-          skill_levels: editSkillLevels,
-          max_capacity: editMaxCapacity ? parseInt(editMaxCapacity) : null,
-          policies: editPolicies || null,
-          cancellation_policy: editCancellationPolicy || null,
-          deposit_info: editDepositInfo || null,
-          website_url: editWebsiteUrl || null,
-          facebook_url: editFacebookUrl || null,
-          instagram_url: editInstagramUrl || null,
-          organizer_name: claimerName,
-          organizer_email: claimerEmail,
-          organizer_phone: claimerPhone || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("invite_token", token);
-
-      if (error) throw error;
+      await updateDraftListingByToken({ token, body: buildListingPayload() }).unwrap();
       toast({ title: "Draft saved! You can come back anytime." });
     } catch (err) {
       console.error("Save draft error:", err);
@@ -268,45 +262,17 @@ export default function ClaimListing() {
 
     setSubmitting(true);
     try {
-      const { error } = await supabase
-        .from("draft_listings")
-        .update({
+      await claimDraftListing({
+        token,
+        body: {
+          ...buildListingPayload(),
           status: "pending_approval",
-          // Contact info
-          organizer_name: claimerName,
-          organizer_email: claimerEmail,
-          organizer_phone: claimerPhone || null,
-          claimer_role: claimerRole,
-          // Edited listing fields
-          title: editTitle,
-          description: editDescription,
-          pricing: editPricing,
-          dates: editDates,
-          rooming: editRooming,
-          location_city: editLocationCity,
-          location_region: editLocationRegion,
-          main_image_url: editMainImage || null,
-          additional_images: editAdditionalImages,
-          amenities: editAmenities,
-          skill_levels: editSkillLevels,
-          max_capacity: editMaxCapacity ? parseInt(editMaxCapacity) : null,
-          policies: editPolicies || null,
-          cancellation_policy: editCancellationPolicy || null,
-          deposit_info: editDepositInfo || null,
-          website_url: editWebsiteUrl || null,
-          facebook_url: editFacebookUrl || null,
-          instagram_url: editInstagramUrl || null,
-          // Application answers
-          application_about: aboutRetreat || null,
-          application_events_hosted: eventsHosted,
-          application_notes: anythingElse || null,
-          // Timestamps
-          claimed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("invite_token", token);
-
-      if (error) throw error;
+          claimerRole: claimerRole,
+          applicationAbout: aboutRetreat || null,
+          applicationEventsHosted: eventsHosted,
+          applicationNotes: anythingElse || null,
+        },
+      }).unwrap();
 
       setStep(5);
       toast({ title: "Listing claimed successfully!" });

@@ -16,7 +16,28 @@ import { StatCard } from "@/components/StatCard";
 import { PayoutCard } from "@/components/PayoutCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetMyRetreatsQuery,
+  useCreateRetreatMutation,
+  useUpdateRetreatMutation,
+  usePublishRetreatMutation,
+  useDeleteRetreatMutation,
+  useLazyGetRetreatByIdQuery,
+  useLazyGetInstructorBookingsQuery,
+  useLazyGetUserProfileQuery,
+  useMarkFirstEventFreeUsedMutation,
+  useLazyGetCampaignsQuery,
+  useLazyGetMyAffiliateQuery,
+  useLazyGetConversationsQuery,
+  useUploadFileMutation,
+} from "@/services/server";
+import {
+  fromLegacyRetreatPayload,
+  mapLegacyProfile,
+  sumUnreadCount,
+  toLegacyRetreat,
+  toLegacyBooking,
+} from "@/services/mappers";
 import { useToast } from "@/hooks/use-toast";
 import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
 import { format } from "date-fns";
@@ -168,6 +189,19 @@ const InstructorDashboard = () => {
   const { role, user } = useAuth();
   const { toast } = useToast();
   const { instructorFeeRate, settings: platformSettings } = usePlatformSettings();
+  const [fetchMyRetreats] = useLazyGetMyRetreatsQuery();
+  const [createRetreat] = useCreateRetreatMutation();
+  const [updateRetreat] = useUpdateRetreatMutation();
+  const [publishRetreat] = usePublishRetreatMutation();
+  const [deleteRetreat] = useDeleteRetreatMutation();
+  const [fetchRetreatById] = useLazyGetRetreatByIdQuery();
+  const [fetchInstructorBookings] = useLazyGetInstructorBookingsQuery();
+  const [fetchUserProfile] = useLazyGetUserProfileQuery();
+  const [markFirstEventFreeUsed] = useMarkFirstEventFreeUsedMutation();
+  const [fetchCampaigns] = useLazyGetCampaignsQuery();
+  const [fetchMyAffiliate] = useLazyGetMyAffiliateQuery();
+  const [fetchConversations] = useLazyGetConversationsQuery();
+  const [uploadFile] = useUploadFileMutation();
   const [allRetreats, setAllRetreats] = useState<Retreat[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | 'new' | null>(null);
@@ -231,99 +265,66 @@ const InstructorDashboard = () => {
     return null;
   }
 
-  // Fetch retreats and stats from Supabase
+  // Fetch retreats and stats from API
   useEffect(() => {
     const fetchData = async () => {
       if (!user) return;
 
       try {
-        // Fetch retreats
-        const { data: retreatsData, error: retreatsError } = await supabase
-          .from('retreats')
-          .select('*')
-          .eq('instructor_id', user.id)
-          .order('created_at', { ascending: false });
+        const retreatsRaw = await fetchMyRetreats({ limit: 200 }).unwrap();
+        const retreatsData = retreatsRaw.map((r) => toLegacyRetreat(r) as Retreat);
 
-        if (retreatsError) {
-          console.error('Error fetching retreats:', retreatsError);
-          toast({
-            title: "Error",
-            description: "Failed to load retreats",
-            variant: "destructive",
-          });
-        } else {
-          setAllRetreats(retreatsData || []);
-        }
+        setAllRetreats(retreatsData);
 
-        // Calculate published and draft counts
-        const published = retreatsData?.filter(r => r.published) || [];
-        const drafts = retreatsData?.filter(r => !r.published) || [];
+        const published = retreatsData.filter((r) => r.published);
+        const drafts = retreatsData.filter((r) => !r.published);
         setPublishedCount(published.length);
         setDraftCount(drafts.length);
 
-        // Calculate completed retreats (retreats where end date has passed)
-        const completed = retreatsData?.filter(r => isRetreatCompleted(r.date)) || [];
+        const completed = retreatsData.filter((r) => isRetreatCompleted(r.date));
         setCompletedRetreats(completed.length);
 
-        // Fetch bookings for stats
-        const retreatIds = retreatsData?.map(r => r.id) || [];
+        const retreatIds = retreatsData.map((r) => String(r.id));
         let totalBookedSeats = 0;
-        console.log('Instructor retreat IDs:', retreatIds);
-        
-        if (retreatIds.length > 0) {
-          const { data: bookingsData, error: bookingsError } = await supabase
-            .from('bookings')
-            .select('amount, status, retreat_id')
-            .in('retreat_id', retreatIds)
-            .eq('status', 'confirmed');
 
-          if (bookingsError) {
-            console.error('Error fetching bookings for instructor:', bookingsError);
-            toast({
-              title: "Error",
-              description: bookingsError.message || "Failed to load bookings",
-              variant: "destructive",
-            });
-          } else {
-            console.log('Bookings fetched for instructor:', bookingsData?.length || 0, bookingsData);
-            const revenue = bookingsData?.reduce((sum, booking) => sum + Number(booking.amount || 0), 0) || 0;
-            const students = bookingsData?.length || 0;
+        if (retreatIds.length > 0) {
+          try {
+            const bookingsRaw = await fetchInstructorBookings({ limit: 500, status: "confirmed" }).unwrap();
+            const bookingsData = bookingsRaw
+              .map((b) => toLegacyBooking(b))
+              .filter((b) => retreatIds.includes(String(b.retreat_id)));
+
+            const revenue = bookingsData.reduce((sum, booking) => sum + Number(booking.amount || 0), 0);
+            const students = bookingsData.length;
             totalBookedSeats = students;
             setTotalRevenue(revenue);
             setStudentsServed(students);
             setBookedSeats(totalBookedSeats);
+          } catch (bookingsError) {
+            console.error("Error fetching bookings for instructor:", bookingsError);
           }
-        } else {
-          console.log('No retreat IDs found for instructor');
         }
 
-        // Calculate expected revenue from published retreats and booked seats ratio
-        // Expected Revenue = (Total potential revenue from published retreats) * (Booked Seats / Total Seats)
-        const publishedRetreats = published || [];
-        const totalSpotsForPublished = publishedRetreats.reduce((sum, retreat) => sum + Number(retreat.total_spots || 0), 0);
-        const bookedSeatsCount = totalBookedSeats;
-        const totalRevenuePotential = publishedRetreats.reduce((sum, retreat) => {
-          return sum + (Number(retreat.price || 0) * Number(retreat.total_spots || 0));
-        }, 0);
-        
-        // Expected revenue based on booking rate
-        const expected = totalSpotsForPublished > 0 
-          ? Math.round(totalRevenuePotential * (bookedSeatsCount / totalSpotsForPublished))
-          : 0;
+        const totalSpotsForPublished = published.reduce((sum, retreat) => sum + Number(retreat.total_spots || 0), 0);
+        const totalRevenuePotential = published.reduce(
+          (sum, retreat) => sum + Number(retreat.price || 0) * Number(retreat.total_spots || 0),
+          0,
+        );
+        const expected =
+          totalSpotsForPublished > 0
+            ? Math.round(totalRevenuePotential * (totalBookedSeats / totalSpotsForPublished))
+            : 0;
         setExpectedRevenue(expected);
 
-        // Fetch invites count (users referred by this instructor)
-        const { data: referredUsers, error: invitesError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('referred_by', user.id);
-
-        if (!invitesError && referredUsers) {
-          setInvitesCount(referredUsers.length);
+        try {
+          const affiliateData = await fetchMyAffiliate().unwrap();
+          const referrals = (affiliateData.referrals as unknown[]) ?? [];
+          setInvitesCount(referrals.length);
+        } catch {
+          setInvitesCount(0);
         }
-
       } catch (error) {
-        console.error('Unexpected error:', error);
+        console.error("Unexpected error:", error);
       } finally {
         setLoading(false);
       }
@@ -343,57 +344,26 @@ const InstructorDashboard = () => {
       }
 
       try {
-        // Check if "First Event Free Program" campaign is active
-        const { data: campaign, error: campaignError } = await supabase
-          .from('affiliate_campaigns')
-          .select('is_active')
-          .eq('name', 'First Event Free Program')
-          .maybeSingle();
+        const campaigns = await fetchCampaigns().unwrap();
+        const campaign = campaigns.find((c) => c.name === "First Event Free Program");
+        setFirstEventFreeCampaignActive(Boolean(campaign?.isActive ?? campaign?.is_active));
 
-        if (!campaignError && campaign) {
-          setFirstEventFreeCampaignActive(campaign.is_active);
-        } else if (campaignError) {
-          console.error('Error fetching First Event Free campaign:', campaignError);
-          setFirstEventFreeCampaignActive(false);
-        }
-
-        // Get organizer profile to check first_event_free_eligible
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('first_event_free_eligible, first_event_free_used')
-          .eq('id', user.id)
-          .single();
-
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
+        const profile = await fetchUserProfile().unwrap();
+        if (profile) {
+          const legacy = mapLegacyProfile(profile as unknown as Record<string, unknown>);
+          setFirstEventFreeEligible(Boolean(legacy.first_event_free_eligible));
+          setFirstEventFreeUsed(Boolean(legacy.first_event_free_used));
+        } else {
           setFirstEventFreeEligible(false);
           setFirstEventFreeUsed(false);
-        } else if (profile) {
-          setFirstEventFreeEligible(profile.first_event_free_eligible || false);
-          setFirstEventFreeUsed(profile.first_event_free_used || false);
         }
 
-        // Check if this is their first published event
-        let query = supabase
-          .from('retreats')
-          .select('id')
-          .eq('instructor_id', user.id)
-          .eq('published', true);
-        
-        // Only exclude current event if editingId is a number (existing event)
-        if (typeof editingId === 'number') {
-          query = query.neq('id', editingId);
-        }
-        
-        const { data: existingEvents, error: eventsError } = await query;
-
-        if (eventsError) {
-          console.error('Error checking existing events:', eventsError);
-          setIsFirstEvent(false);
-          return;
-        }
-
-        setIsFirstEvent(!existingEvents || existingEvents.length === 0);
+        const publishedRetreats = await fetchMyRetreats({ limit: 200, status: "published" }).unwrap();
+        const existingEvents = publishedRetreats.filter((r) => {
+          if (typeof editingId === "number" && String(r.id) === String(editingId)) return false;
+          return true;
+        });
+        setIsFirstEvent(existingEvents.length === 0);
       } catch (error) {
         console.error('Error checking first event free:', error);
         setIsFirstEvent(false);
@@ -411,30 +381,8 @@ const InstructorDashboard = () => {
       if (!user || role !== 'instructor') return;
 
       try {
-        // Get all retreats for this instructor
-        const { data: retreats, error: retreatsError } = await supabase
-          .from('retreats')
-          .select('id')
-          .eq('instructor_id', user.id);
-
-        if (retreatsError) throw retreatsError;
-
-        // Count unread messages for all retreats
-        let totalUnread = 0;
-        for (const retreat of retreats || []) {
-          const { count, error: countError } = await supabase
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('related_id', retreat.id.toString())
-            .eq('message_type', 'retreat_question')
-            .eq('sender_role', 'student')
-            .eq('read', false);
-
-          if (countError) throw countError;
-          totalUnread += count || 0;
-        }
-
-        setUnreadMessages(totalUnread);
+        const conversations = await fetchConversations({ limit: 200 }).unwrap();
+        setUnreadMessages(sumUnreadCount(conversations, user.id));
       } catch (error) {
         console.error('Error fetching unread messages:', error);
       }
@@ -495,62 +443,39 @@ const InstructorDashboard = () => {
       };
 
       if (editingId === 'new') {
-        // Create new draft if it doesn't exist yet
         if (autoSaveDraftId === null) {
-          const { data, error } = await supabase
-            .from('retreats')
-            .insert([retreatData])
-            .select()
-            .single();
-
-          if (error) {
+          try {
+            const created = await createRetreat(fromLegacyRetreatPayload(retreatData)).unwrap();
+            const data = toLegacyRetreat(created) as Retreat;
+            setAutoSaveDraftId(data.id);
+            setEditingId(data.id);
+            setAllRetreats(prev => [data, ...prev]);
+          } catch (error) {
             console.error('Error auto-saving draft:', error);
             return;
           }
-          
-          setAutoSaveDraftId(data.id);
-          setEditingId(data.id); // Update editingId to the new draft ID
-          setAllRetreats(prev => [data, ...prev]);
         } else {
-          // Update existing draft
-          const { error } = await supabase
-            .from('retreats')
-            .update({
-              ...retreatData,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', autoSaveDraftId)
-            .eq('instructor_id', user.id);
-
-          if (error) {
+          try {
+            await updateRetreat({ id: String(autoSaveDraftId), body: fromLegacyRetreatPayload(retreatData) }).unwrap();
+            setAllRetreats(prev => prev.map(r => 
+              r.id === autoSaveDraftId ? { ...r, ...retreatData } : r
+            ));
+          } catch (error) {
             console.error('Error auto-saving draft:', error);
             return;
           }
-
-          setAllRetreats(prev => prev.map(r => 
-            r.id === autoSaveDraftId ? { ...r, ...retreatData } : r
-          ));
         }
       } else if (typeof editingId === 'number') {
-        // Update existing retreat as draft
         const { spots_available, ...updateData } = retreatData;
-        const { error } = await supabase
-          .from('retreats')
-          .update({
-            ...updateData,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', editingId)
-          .eq('instructor_id', user.id);
-
-        if (error) {
+        try {
+          await updateRetreat({ id: String(editingId), body: fromLegacyRetreatPayload(updateData) }).unwrap();
+          setAllRetreats(prev => prev.map(r => 
+            r.id === editingId ? { ...r, ...updateData, spots_available: r.spots_available } : r
+          ));
+        } catch (error) {
           console.error('Error auto-saving draft:', error);
           return;
         }
-
-        setAllRetreats(prev => prev.map(r => 
-          r.id === editingId ? { ...r, ...updateData, spots_available: r.spots_available } : r
-        ));
       }
 
       setLastSaved(new Date());
@@ -660,30 +585,7 @@ const InstructorDashboard = () => {
     setUploadingImage(true);
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-      const filePath = `retreats/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Error uploading image:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload image",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-images')
-        .getPublicUrl(filePath);
+      const publicUrl = await uploadFile({ bucket: "retreat-images", file }).unwrap();
 
       setFormData(prev => ({ ...prev, image: publicUrl }));
       setImagePreview(publicUrl);
@@ -885,35 +787,7 @@ const InstructorDashboard = () => {
     setUploadingLocationImage(true);
 
     try {
-      // Create a unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/locations/${Date.now()}.${fileExt}`;
-      const filePath = fileName;
-
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-location-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Error uploading location image:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload image",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-location-images')
-        .getPublicUrl(filePath);
-
-      // Add to location images array
+      const publicUrl = await uploadFile({ bucket: "retreat-location-images", file }).unwrap();
       setLocationImages(prev => [...prev, publicUrl]);
 
       toast({
@@ -977,29 +851,22 @@ const InstructorDashboard = () => {
         if (autoSaveDraftId) {
           // Update existing auto-saved draft
           const { spots_available, ...updateData } = retreatData;
-          const { error } = await supabase
-            .from('retreats')
-            .update({
-              ...updateData,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', autoSaveDraftId)
-            .eq('instructor_id', user.id);
-
-          if (error) {
+          try {
+            await updateRetreat({ id: String(autoSaveDraftId), body: fromLegacyRetreatPayload(updateData) }).unwrap();
+          } catch (error) {
             console.error('Error updating retreat:', error);
             toast({
               title: "Error",
-              description: error.message || "Failed to update retreat",
+              description: error instanceof Error ? error.message : "Failed to update retreat",
               variant: "destructive",
             });
-          } else {
+            return;
+          }
+
+          {
             // Mark first_event_free_used if this was their first event and they were eligible
             if (retreatData.published && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
-              await supabase
-                .from('profiles')
-                .update({ first_event_free_used: true })
-                .eq('id', user.id);
+              await markFirstEventFreeUsed().unwrap();
               setFirstEventFreeUsed(true);
             }
 
@@ -1053,27 +920,12 @@ const InstructorDashboard = () => {
             cancelEditing();
           }
         } else {
-          // Create new retreat
-          const { data, error } = await supabase
-            .from('retreats')
-            .insert([retreatData])
-            .select()
-            .single();
-
-          if (error) {
-            console.error('Error creating retreat:', error);
-            toast({
-              title: "Error",
-              description: error.message || "Failed to create retreat",
-              variant: "destructive",
-            });
-          } else {
+          try {
+            const created = await createRetreat(fromLegacyRetreatPayload(retreatData)).unwrap();
+            const data = toLegacyRetreat(created) as Retreat;
             // Mark first_event_free_used if this was their first event and they were eligible
             if (data.published && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
-              await supabase
-                .from('profiles')
-                .update({ first_event_free_used: true })
-                .eq('id', user.id);
+              await markFirstEventFreeUsed().unwrap();
               setFirstEventFreeUsed(true);
             }
 
@@ -1122,37 +974,37 @@ const InstructorDashboard = () => {
             });
             setAllRetreats(prev => [data, ...prev]);
             cancelEditing();
+          } catch (error) {
+            console.error('Error creating retreat:', error);
+            toast({
+              title: "Error",
+              description: error instanceof Error ? error.message : "Failed to create retreat",
+              variant: "destructive",
+            });
           }
         }
       } else if (typeof editingId === 'number') {
         const { spots_available, ...updateData } = retreatData;
-        const { error } = await supabase
-          .from('retreats')
-          .update({
-            ...updateData,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', editingId)
-          .eq('instructor_id', user.id);
-
-        if (error) {
+        try {
+          await updateRetreat({ id: String(editingId), body: fromLegacyRetreatPayload(updateData) }).unwrap();
+        } catch (error) {
           console.error('Error updating retreat:', error);
           toast({
             title: "Error",
-            description: error.message || "Failed to update retreat",
+            description: error instanceof Error ? error.message : "Failed to update retreat",
             variant: "destructive",
           });
-        } else {
+          return;
+        }
+
+        {
           // Check if retreat was just published (update from draft to published)
           const wasDraft = allRetreats.find(r => r.id === editingId)?.published === false;
           const isNowPublished = retreatData.published;
           
           // Mark first_event_free_used if this was their first event and they were eligible
           if (isNowPublished && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
-            await supabase
-              .from('profiles')
-              .update({ first_event_free_used: true })
-              .eq('id', user.id);
+            await markFirstEventFreeUsed().unwrap();
             setFirstEventFreeUsed(true);
           }
 
@@ -1179,12 +1031,8 @@ const InstructorDashboard = () => {
           
           // Send email notifications if retreat was just published
           if (wasDraft && isNowPublished) {
-            // Fetch the updated retreat data
-            const { data: updatedRetreat } = await supabase
-              .from('retreats')
-              .select('*')
-              .eq('id', editingId)
-              .single();
+            const updatedRetreatRaw = await fetchRetreatById(String(editingId)).unwrap();
+            const updatedRetreat = toLegacyRetreat(updatedRetreatRaw) as Retreat;
             
             if (updatedRetreat) {
               // Call email notification in background (don't wait for it)
@@ -1231,21 +1079,13 @@ const InstructorDashboard = () => {
     if (!retreat || !user) return;
 
     try {
-      const { error } = await supabase
-        .from('retreats')
-        .update({ published: !retreat.published })
-        .eq('id', id)
-        .eq('instructor_id', user.id);
-
-      if (error) {
-        console.error('Error updating retreat:', error);
-        toast({
-          title: "Error",
-          description: "Failed to update retreat status",
-          variant: "destructive",
-        });
+      if (!retreat.published) {
+        await publishRetreat(String(id)).unwrap();
       } else {
-        const newPublishedStatus = !retreat.published;
+        await updateRetreat({ id: String(id), body: { status: "draft", published: false } }).unwrap();
+      }
+
+      const newPublishedStatus = !retreat.published;
         setAllRetreats(prev => prev.map(r => 
           r.id === id ? { ...r, published: newPublishedStatus } : r
         ));
@@ -1272,7 +1112,6 @@ const InstructorDashboard = () => {
           title: "Success",
           description: newPublishedStatus ? "Retreat published successfully!" : "Retreat unpublished",
         });
-      }
     } catch (error) {
       console.error('Unexpected error:', error);
       toast({
@@ -1336,31 +1175,18 @@ const InstructorDashboard = () => {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('retreats')
-        .delete()
-        .eq('id', id)
-        .eq('instructor_id', user.id);
+      await deleteRetreat(String(id)).unwrap();
 
-      if (error) {
-        console.error('Error deleting retreat:', error);
-        toast({
-          title: "Error",
-          description: "Failed to delete retreat",
-          variant: "destructive",
-        });
-      } else {
-        setAllRetreats(prev => prev.filter(r => r.id !== id));
-        toast({
-          title: "Success",
-          description: "Retreat deleted successfully",
-        });
-      }
+      setAllRetreats(prev => prev.filter(r => r.id !== id));
+      toast({
+        title: "Success",
+        description: "Retreat deleted successfully",
+      });
     } catch (error) {
-      console.error('Unexpected error:', error);
+      console.error('Error deleting retreat:', error);
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: "Failed to delete retreat",
         variant: "destructive",
       });
     }

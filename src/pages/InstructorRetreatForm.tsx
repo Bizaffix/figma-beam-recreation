@@ -19,7 +19,28 @@ import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetMyRetreatsQuery,
+  useLazyGetRetreatByIdQuery,
+  useCreateRetreatMutation,
+  useUpdateRetreatMutation,
+  usePublishRetreatMutation,
+  useDeleteRetreatMutation,
+  useLazyGetInstructorBookingsQuery,
+  useLazyGetUserProfileQuery,
+  useMarkFirstEventFreeUsedMutation,
+  useLazyGetVenueByIdQuery,
+  useLazyGetCampaignsQuery,
+  useLazyGetAdminUsersQuery,
+  useUploadFileMutation,
+} from "@/services/server";
+import {
+  fromLegacyRetreatPayload,
+  mapLegacyProfile,
+  toLegacyRetreat,
+  toLegacyProperty,
+  toLegacyBooking,
+} from "@/services/mappers";
 import { useToast } from "@/hooks/use-toast";
 import { notifyStudentsAboutNewRetreat } from "@/lib/email-notifications";
 import { createPassiveCommission } from "@/lib/affiliate-tracking";
@@ -181,6 +202,19 @@ const InstructorRetreatForm = () => {
   const { role, user } = useAuth();
   const { toast } = useToast();
   const { instructorFeeRate, settings: platformSettings } = usePlatformSettings();
+  const [fetchMyRetreats] = useLazyGetMyRetreatsQuery();
+  const [fetchRetreatById] = useLazyGetRetreatByIdQuery();
+  const [createRetreat] = useCreateRetreatMutation();
+  const [updateRetreat] = useUpdateRetreatMutation();
+  const [publishRetreat] = usePublishRetreatMutation();
+  const [deleteRetreat] = useDeleteRetreatMutation();
+  const [fetchInstructorBookings] = useLazyGetInstructorBookingsQuery();
+  const [fetchUserProfile] = useLazyGetUserProfileQuery();
+  const [markFirstEventFreeUsed] = useMarkFirstEventFreeUsedMutation();
+  const [fetchVenueById] = useLazyGetVenueByIdQuery();
+  const [fetchCampaigns] = useLazyGetCampaignsQuery();
+  const [fetchAdminUsers] = useLazyGetAdminUsersQuery();
+  const [uploadFile] = useUploadFileMutation();
   
   const [draftRetreats, setDraftRetreats] = useState<Retreat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -291,18 +325,8 @@ const InstructorRetreatForm = () => {
       if (!user) return;
 
       try {
-        const { data, error } = await supabase
-          .from('retreats')
-          .select('*')
-          .eq('instructor_id', user.id)
-          .eq('published', false)
-          .order('updated_at', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching drafts:', error);
-        } else {
-          setDraftRetreats(data || []);
-        }
+        const items = await fetchMyRetreats({ limit: 200, status: "draft" }).unwrap();
+        setDraftRetreats(items.map((r) => toLegacyRetreat(r) as Retreat));
       } catch (error) {
         console.error('Unexpected error:', error);
       } finally {
@@ -319,26 +343,21 @@ const InstructorRetreatForm = () => {
       if (!user) return;
 
       try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('full_name, avatar_url, bio, discount')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          console.error('Error fetching instructor profile:', error);
+        const profile = await fetchUserProfile().unwrap();
+        if (profile) {
+          const legacy = mapLegacyProfile(profile as unknown as Record<string, unknown>);
+          setInstructorProfile({
+            name: String(legacy.full_name || user.email?.split('@')[0] || 'Instructor'),
+            avatar: String(legacy.avatar_url || ''),
+            bio: String(legacy.bio || ''),
+            discount: (legacy.discount as { type: 'percentage' | 'fixed'; value: number } | null) ?? null,
+          });
+        } else {
           setInstructorProfile({
             name: user.email?.split('@')[0] || 'Instructor',
             avatar: '',
             bio: '',
             discount: null,
-          });
-        } else {
-          setInstructorProfile({
-            name: data.full_name || user.email?.split('@')[0] || 'Instructor',
-            avatar: data.avatar_url || '',
-            bio: data.bio || '',
-            discount: data.discount || null,
           });
         }
       } catch (error) {
@@ -364,18 +383,9 @@ const InstructorRetreatForm = () => {
       }
 
       try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('discount')
-          .eq('id', selectedVenue.owner_id)
-          .single();
-
-        if (error) {
-          console.error('Error fetching venue owner discount:', error);
-          setVenueOwnerDiscount(null);
-        } else {
-          setVenueOwnerDiscount(data.discount || null);
-        }
+        const owners = await fetchAdminUsers({ role: "location_owner", limit: 200 }).unwrap();
+        const owner = owners.find((o) => String(o.id) === selectedVenue.owner_id);
+        setVenueOwnerDiscount((owner?.discount as typeof venueOwnerDiscount) ?? null);
       } catch (error) {
         console.error('Unexpected error fetching venue owner discount:', error);
         setVenueOwnerDiscount(null);
@@ -397,56 +407,26 @@ const InstructorRetreatForm = () => {
 
       try {
         // Check if "First Event Free Program" campaign is active
-        const { data: campaign, error: campaignError } = await supabase
-          .from('affiliate_campaigns')
-          .select('is_active')
-          .eq('name', 'First Event Free Program')
-          .maybeSingle();
+        const campaigns = await fetchCampaigns().unwrap();
+        const campaign = campaigns.find((c) => c.name === "First Event Free Program");
+        setFirstEventFreeCampaignActive(Boolean(campaign?.isActive ?? campaign?.is_active));
 
-        if (!campaignError && campaign) {
-          setFirstEventFreeCampaignActive(campaign.is_active);
-        } else if (campaignError) {
-          console.error('Error fetching First Event Free campaign:', campaignError);
-          setFirstEventFreeCampaignActive(false);
-        }
-
-        // Get organizer profile to check first_event_free_eligible
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('first_event_free_eligible, first_event_free_used')
-          .eq('id', user.id)
-          .single();
-
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
+        const profile = await fetchUserProfile().unwrap();
+        if (profile) {
+          const legacy = mapLegacyProfile(profile as unknown as Record<string, unknown>);
+          setFirstEventFreeEligible(Boolean(legacy.first_event_free_eligible));
+          setFirstEventFreeUsed(Boolean(legacy.first_event_free_used));
+        } else {
           setFirstEventFreeEligible(false);
           setFirstEventFreeUsed(false);
-        } else if (profile) {
-          setFirstEventFreeEligible(profile.first_event_free_eligible || false);
-          setFirstEventFreeUsed(profile.first_event_free_used || false);
         }
 
-        // Check if this is their first published event
-        let query = supabase
-          .from('retreats')
-          .select('id')
-          .eq('instructor_id', user.id)
-          .eq('published', true);
-        
-        // Only exclude current event if editingId is a number (existing event)
-        if (typeof editingId === 'number') {
-          query = query.neq('id', editingId);
-        }
-        
-        const { data: existingEvents, error: eventsError } = await query;
-
-        if (eventsError) {
-          console.error('Error checking existing events:', eventsError);
-          setIsFirstEvent(false);
-          return;
-        }
-
-        setIsFirstEvent(!existingEvents || existingEvents.length === 0);
+        const publishedRetreats = await fetchMyRetreats({ limit: 200, status: "published" }).unwrap();
+        const existingEvents = publishedRetreats.filter((r) => {
+          if (typeof editingId === "number" && String(r.id) === String(editingId)) return false;
+          return true;
+        });
+        setIsFirstEvent(existingEvents.length === 0);
       } catch (error) {
         console.error('Error checking first event free:', error);
         setIsFirstEvent(false);
@@ -535,23 +515,10 @@ const InstructorRetreatForm = () => {
       if (!editingId || editingId === 'new' || !user) return;
 
       try {
-        const { data, error } = await supabase
-          .from('retreats')
-          .select('*')
-          .eq('id', Number(editingId))
-          .eq('instructor_id', user.id)
-          .single();
+        const dataRaw = await fetchRetreatById(String(editingId)).unwrap();
+        const data = toLegacyRetreat(dataRaw) as Retreat & Record<string, unknown>;
 
-        if (error) {
-          console.error('Error fetching retreat:', error);
-          toast({
-            title: "Error",
-            description: "Failed to load retreat data",
-            variant: "destructive",
-          });
-          setEditingId(null);
-        } else if (data) {
-          setFormData({
+        setFormData({
             title: data.title,
             level: data.level,
             location: data.location,
@@ -593,31 +560,26 @@ const InstructorRetreatForm = () => {
             setEventMode(data.mode as 'IN_PERSON' | 'ONLINE');
           }
           if (data.video_provider) {
-            setVideoProvider(data.video_provider);
+            setVideoProvider(String(data.video_provider));
           }
           if (data.meeting_url) {
-            setMeetingUrl(data.meeting_url);
+            setMeetingUrl(String(data.meeting_url));
           }
           if (data.venue_usage_type) {
             setVenueUsageType(data.venue_usage_type as 'AT_LOCATION' | 'OFFSITE');
           }
           if (data.seat_capacity) {
-            setSeatCapacity(data.seat_capacity);
+            setSeatCapacity(Number(data.seat_capacity));
           }
           if (data.sleep_capacity) {
-            setSleepCapacity(data.sleep_capacity);
+            setSleepCapacity(Number(data.sleep_capacity));
           }
           // Load venue if attached
           if (data.venue_id) {
-            const { data: venueData } = await supabase
-              .from('properties')
-              .select('*')
-              .eq('id', data.venue_id)
-              .single();
-            if (venueData) {
-              setSelectedVenue(venueData);
-              handleLocationChange(venueData.location, venueData);
-            }
+            const venueRaw = await fetchVenueById(String(data.venue_id)).unwrap();
+            const venueData = toLegacyProperty(venueRaw);
+            setSelectedVenue(venueData as typeof selectedVenue);
+            handleLocationChange(String(venueData.location), venueData as typeof selectedVenue);
           }
           if (data.schedule && Array.isArray(data.schedule) && data.schedule.length > 0) {
             if (data.itinerary_blocks && Array.isArray(data.itinerary_blocks)) {
@@ -629,9 +591,14 @@ const InstructorRetreatForm = () => {
               }
             }
           }
-        }
       } catch (error) {
-        console.error('Unexpected error:', error);
+        console.error('Error fetching retreat:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load retreat data",
+          variant: "destructive",
+        });
+        setEditingId(null);
       }
     };
 
@@ -723,38 +690,26 @@ const InstructorRetreatForm = () => {
 
       if (editingId === 'new') {
         if (autoSaveDraftId === null) {
-          const { data, error } = await supabase
-            .from('retreats')
-            .insert([retreatData])
-            .select()
-            .single();
-
-          if (error) {
+          try {
+            const created = await createRetreat(fromLegacyRetreatPayload(retreatData)).unwrap();
+            const data = toLegacyRetreat(created) as Retreat;
+            setAutoSaveDraftId(data.id);
+            setEditingId(data.id);
+            setDraftRetreats(prev => [data, ...prev]);
+          } catch (error) {
             console.error('Error auto-saving draft:', error);
             return;
           }
-          
-          setAutoSaveDraftId(data.id);
-          setEditingId(data.id);
-          setDraftRetreats(prev => [data, ...prev]);
         } else {
-          const { error } = await supabase
-            .from('retreats')
-            .update({
-              ...retreatData,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', autoSaveDraftId)
-            .eq('instructor_id', user.id);
-
-          if (error) {
+          try {
+            await updateRetreat({ id: String(autoSaveDraftId), body: fromLegacyRetreatPayload(retreatData) }).unwrap();
+            setDraftRetreats(prev => prev.map(r => 
+              r.id === autoSaveDraftId ? { ...r, ...retreatData } : r
+            ));
+          } catch (error) {
             console.error('Error auto-saving draft:', error);
             return;
           }
-
-          setDraftRetreats(prev => prev.map(r => 
-            r.id === autoSaveDraftId ? { ...r, ...retreatData } : r
-          ));
         }
       } else if (typeof editingId === 'number') {
         // Get current retreat to calculate spots_available correctly
@@ -769,13 +724,8 @@ const InstructorRetreatForm = () => {
         let newSpotsAvailable = newTotalSpots;
         if (currentSpotsAvailable === 0 && currentTotalSpots > 0) {
           // Check if there are actual bookings to determine if spots_available should be 0 or new_total_spots
-          const { count } = await supabase
-            .from('bookings')
-            .select('*', { count: 'exact', head: true })
-            .eq('retreat_id', editingId)
-            .eq('status', 'confirmed');
-          
-          const bookedSpots = count || 0;
+          const retreatRaw = await fetchRetreatById(String(editingId)).unwrap();
+          const bookedSpots = Number(retreatRaw.bookedCount ?? 0);
           if (bookedSpots === 0) {
             // No bookings, so spots_available should match new total_spots
             newSpotsAvailable = newTotalSpots;
@@ -789,24 +739,15 @@ const InstructorRetreatForm = () => {
         }
         
         const { spots_available, ...updateData } = retreatData;
-        const { error } = await supabase
-          .from('retreats')
-          .update({
-            ...updateData,
-            spots_available: newSpotsAvailable,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', editingId)
-          .eq('instructor_id', user.id);
-
-        if (error) {
+        try {
+          await updateRetreat({ id: String(editingId), body: fromLegacyRetreatPayload({ ...updateData, spots_available: newSpotsAvailable }) }).unwrap();
+          setDraftRetreats(prev => prev.map(r => 
+            r.id === editingId ? { ...r, ...updateData, spots_available: newSpotsAvailable } : r
+          ));
+        } catch (error) {
           console.error('Error auto-saving draft:', error);
           return;
         }
-
-        setDraftRetreats(prev => prev.map(r => 
-          r.id === editingId ? { ...r, ...updateData, spots_available: newSpotsAvailable } : r
-        ));
       }
 
       setLastSaved(new Date());
@@ -1054,15 +995,10 @@ const InstructorRetreatForm = () => {
     
     // Refresh drafts list
     if (user) {
-      supabase
-        .from('retreats')
-        .select('*')
-        .eq('instructor_id', user.id)
-        .eq('published', false)
-        .order('updated_at', { ascending: false })
-        .then(({ data }) => {
-          if (data) setDraftRetreats(data);
-        });
+      fetchMyRetreats({ limit: 200, status: "draft" })
+        .unwrap()
+        .then((items) => setDraftRetreats(items.map((r) => toLegacyRetreat(r) as Retreat)))
+        .catch(() => undefined);
     }
   };
 
@@ -1091,30 +1027,7 @@ const InstructorRetreatForm = () => {
     setUploadingImage(true);
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-      const filePath = `retreats/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Error uploading image:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload image",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-images')
-        .getPublicUrl(filePath);
+      const publicUrl = await uploadFile({ bucket: "retreat-images", file }).unwrap();
 
       setFormData(prev => ({ ...prev, image: publicUrl }));
       setImagePreview(publicUrl);
@@ -1161,31 +1074,7 @@ const InstructorRetreatForm = () => {
     setUploadingLocationImage(true);
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/locations/${Date.now()}.${fileExt}`;
-      const filePath = fileName;
-
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-location-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Error uploading location image:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload image",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-location-images')
-        .getPublicUrl(filePath);
-
+      const publicUrl = await uploadFile({ bucket: "retreat-location-images", file }).unwrap();
       setLocationImages(prev => [...prev, publicUrl]);
 
       toast({
@@ -1315,13 +1204,8 @@ const InstructorRetreatForm = () => {
           let newSpotsAvailable = newTotalSpots;
           if (currentSpotsAvailable === 0 && currentTotalSpots > 0) {
             // Check if there are actual bookings to determine if spots_available should be 0 or new_total_spots
-            const { count } = await supabase
-              .from('bookings')
-              .select('*', { count: 'exact', head: true })
-              .eq('retreat_id', autoSaveDraftId)
-              .eq('status', 'confirmed');
-            
-            const bookedSpots = count || 0;
+            const retreatRaw = await fetchRetreatById(String(autoSaveDraftId)).unwrap();
+            const bookedSpots = Number(retreatRaw.bookedCount ?? 0);
             if (bookedSpots === 0) {
               // No bookings, so spots_available should match new total_spots
               newSpotsAvailable = newTotalSpots;
@@ -1335,24 +1219,19 @@ const InstructorRetreatForm = () => {
           }
           
           const { spots_available, ...updateData } = retreatData;
-          const { error } = await supabase
-            .from('retreats')
-            .update({
-              ...updateData,
-              spots_available: newSpotsAvailable,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', autoSaveDraftId)
-            .eq('instructor_id', user.id);
-
-          if (error) {
+          try {
+            await updateRetreat({ id: String(autoSaveDraftId), body: fromLegacyRetreatPayload({ ...updateData, spots_available: newSpotsAvailable }) }).unwrap();
+          } catch (error) {
             console.error('Error updating retreat:', error);
             toast({
               title: "Error",
-              description: error.message || "Failed to update retreat",
+              description: error instanceof Error ? error.message : "Failed to update retreat",
               variant: "destructive",
             });
-          } else {
+            return;
+          }
+
+          {
             if (retreatData.published) {
               const updatedRetreat = draftRetreats.find(r => r.id === autoSaveDraftId);
               if (updatedRetreat) {
@@ -1373,10 +1252,7 @@ const InstructorRetreatForm = () => {
             
             // Mark first_event_free_used if this was their first event and they were eligible
             if (retreatData.published && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
-              await supabase
-                .from('profiles')
-                .update({ first_event_free_used: true })
-                .eq('id', user.id);
+              await markFirstEventFreeUsed().unwrap();
               setFirstEventFreeUsed(true);
             }
 
@@ -1414,27 +1290,13 @@ const InstructorRetreatForm = () => {
             cancelEditing();
           }
         } else {
-          const { data, error } = await supabase
-            .from('retreats')
-            .insert([retreatData])
-            .select()
-            .single();
-
-          if (error) {
-            console.error('Error creating retreat:', error);
-            toast({
-              title: "Error",
-              description: error.message || "Failed to create retreat",
-              variant: "destructive",
-            });
-          } else {
+          try {
+            const created = await createRetreat(fromLegacyRetreatPayload(retreatData)).unwrap();
+            const data = toLegacyRetreat(created) as Retreat;
             if (data.published) {
               // Mark first_event_free_used if this was their first event and they were eligible
               if (firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
-                await supabase
-                  .from('profiles')
-                  .update({ first_event_free_used: true })
-                  .eq('id', user.id);
+                await markFirstEventFreeUsed().unwrap();
                 setFirstEventFreeUsed(true);
               }
 
@@ -1483,6 +1345,13 @@ const InstructorRetreatForm = () => {
               setDraftRetreats(prev => [data, ...prev]);
             }
             cancelEditing();
+          } catch (error) {
+            console.error('Error creating retreat:', error);
+            toast({
+              title: "Error",
+              description: error instanceof Error ? error.message : "Failed to create retreat",
+              variant: "destructive",
+            });
           }
         }
       } else if (typeof editingId === 'number') {
@@ -1502,33 +1371,25 @@ const InstructorRetreatForm = () => {
         }
         
         const { spots_available, ...updateData } = retreatData;
-        const { error } = await supabase
-          .from('retreats')
-          .update({
-            ...updateData,
-            spots_available: newSpotsAvailable,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', editingId)
-          .eq('instructor_id', user.id);
-
-        if (error) {
+        try {
+          await updateRetreat({ id: String(editingId), body: fromLegacyRetreatPayload({ ...updateData, spots_available: newSpotsAvailable }) }).unwrap();
+        } catch (error) {
           console.error('Error updating retreat:', error);
           toast({
             title: "Error",
-            description: error.message || "Failed to update retreat",
+            description: error instanceof Error ? error.message : "Failed to update retreat",
             variant: "destructive",
           });
-        } else {
+          return;
+        }
+
+        {
           const wasDraft = draftRetreats.find(r => r.id === editingId)?.published === false;
           const isNowPublished = retreatData.published;
           
           // Mark first_event_free_used if this was their first event and they were eligible
           if (isNowPublished && firstEventFreeEligible && !firstEventFreeUsed && isFirstEvent) {
-            await supabase
-              .from('profiles')
-              .update({ first_event_free_used: true })
-              .eq('id', user.id);
+                await markFirstEventFreeUsed().unwrap();
             setFirstEventFreeUsed(true);
           }
 
@@ -1547,11 +1408,8 @@ const InstructorRetreatForm = () => {
           }
           
           if (wasDraft && isNowPublished) {
-            const { data: updatedRetreat } = await supabase
-              .from('retreats')
-              .select('*')
-              .eq('id', editingId)
-              .single();
+            const updatedRetreatRaw = await fetchRetreatById(String(editingId)).unwrap();
+            const updatedRetreat = toLegacyRetreat(updatedRetreatRaw) as Retreat;
             
             if (updatedRetreat) {
               notifyStudentsAboutNewRetreat({
@@ -1600,21 +1458,13 @@ const InstructorRetreatForm = () => {
     if (!retreat || !user) return;
 
     try {
-      const { error } = await supabase
-        .from('retreats')
-        .update({ published: !retreat.published })
-        .eq('id', id)
-        .eq('instructor_id', user.id);
-
-      if (error) {
-        console.error('Error updating retreat:', error);
-        toast({
-          title: "Error",
-          description: "Failed to update retreat status",
-          variant: "destructive",
-        });
+      if (!retreat.published) {
+        await publishRetreat(String(id)).unwrap();
       } else {
-        const newPublishedStatus = !retreat.published;
+        await updateRetreat({ id: String(id), body: { status: "draft", published: false } }).unwrap();
+      }
+
+      const newPublishedStatus = !retreat.published;
         setDraftRetreats(prev => prev.map(r => 
           r.id === id ? { ...r, published: newPublishedStatus } : r
         ));
@@ -1644,7 +1494,6 @@ const InstructorRetreatForm = () => {
         if (newPublishedStatus) {
           setDraftRetreats(prev => prev.filter(r => r.id !== id));
         }
-      }
     } catch (error) {
       console.error('Unexpected error:', error);
       toast({
@@ -1751,31 +1600,17 @@ const InstructorRetreatForm = () => {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('retreats')
-        .delete()
-        .eq('id', retreatId)
-        .eq('instructor_id', user.id);
-
-      if (error) {
-        console.error('Error deleting retreat:', error);
-        toast({
-          title: "Error",
-          description: "Failed to delete retreat",
-          variant: "destructive",
-        });
-      } else {
-        setDraftRetreats(prev => prev.filter(r => r.id !== retreatId));
-        toast({
-          title: "Success",
-          description: "Retreat deleted successfully",
-        });
-      }
+      await deleteRetreat(String(retreatId)).unwrap();
+      setDraftRetreats(prev => prev.filter(r => r.id !== retreatId));
+      toast({
+        title: "Success",
+        description: "Retreat deleted successfully",
+      });
     } catch (error) {
-      console.error('Unexpected error:', error);
+      console.error('Error deleting retreat:', error);
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: "Failed to delete retreat",
         variant: "destructive",
       });
     }
@@ -1888,30 +1723,7 @@ const InstructorRetreatForm = () => {
     setUploadingContentCardImage(true);
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/content-cards/${Date.now()}.${fileExt}`;
-      const filePath = `retreats/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Error uploading content card image:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload image",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-images')
-        .getPublicUrl(filePath);
+      const publicUrl = await uploadFile({ bucket: "retreat-images", file }).unwrap();
 
       setNewContentCardImages(prev => [...prev, publicUrl]);
 
@@ -1967,30 +1779,7 @@ const InstructorRetreatForm = () => {
     setUploadingContentCardVideo(true);
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/content-cards/videos/${Date.now()}.${fileExt}`;
-      const filePath = `retreats/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Error uploading content card video:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload video",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-images')
-        .getPublicUrl(filePath);
+      const publicUrl = await uploadFile({ bucket: "retreat-images", file }).unwrap();
 
       // Replace existing video (only one allowed)
       setNewContentCardVideos([publicUrl]);
@@ -2072,30 +1861,7 @@ const InstructorRetreatForm = () => {
     setUploadingContentCardImage(true);
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/content-cards/${Date.now()}.${fileExt}`;
-      const filePath = `retreats/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Error uploading content card image:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload image",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-images')
-        .getPublicUrl(filePath);
+      const publicUrl = await uploadFile({ bucket: "retreat-images", file }).unwrap();
 
       updateContentCard(cardId, {
         images: [...(contentCards.find(c => c.id === cardId)?.images || []), publicUrl]
@@ -2153,30 +1919,7 @@ const InstructorRetreatForm = () => {
     setUploadingContentCardVideo(true);
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/content-cards/videos/${Date.now()}.${fileExt}`;
-      const filePath = `retreats/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('retreat-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
-
-      if (uploadError) {
-        console.error('Error uploading content card video:', uploadError);
-        toast({
-          title: "Error",
-          description: uploadError.message || "Failed to upload video",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('retreat-images')
-        .getPublicUrl(filePath);
+      const publicUrl = await uploadFile({ bucket: "retreat-images", file }).unwrap();
 
       updateContentCard(cardId, {
         videos: [publicUrl],

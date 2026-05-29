@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, Send, Heart, Shield } from "lucide-react";
-import { expressInterest } from "@/services/discover";
+import { expressInterest } from "@/services/server/quiltmatch/discover";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import type { DraftListing } from "@/types/draft-listing";
