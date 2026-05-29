@@ -29,8 +29,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { searchQuiltMatch, getExampleQueries } from "@/services/quiltmatch";
-import { discoverRetreats } from "@/services/discover";
+import { searchQuiltMatch, getExampleQueries } from "@/services/server/quiltmatch/helpers";
+import { discoverRetreats } from "@/services/server/quiltmatch/discover";
 import { MatchCard } from "@/components/quiltmatch/MatchCard";
 import { DemoListingCard } from "@/components/quiltmatch/DemoListingCard";
 import { DraftListingCard, getDismissedIds } from "@/components/quiltmatch/DraftListingCard";

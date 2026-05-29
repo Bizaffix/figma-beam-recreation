@@ -5,8 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Clock, Edit } from "lucide-react";
 import calendar, { createGoogleCalendarUrl } from "@/lib/calendar";
-import { convertReferral, getCurrentAffiliate, createPassiveCommission } from "@/lib/affiliate-tracking";
-import { supabase } from "@/lib/supabase";
+import { convertReferral, createReferral, createPassiveCommission, getCurrentAffiliate } from "@/lib/affiliate-tracking";
 import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 import { getBedDetailsFromAssignment, getSeatDetailsFromAssignment, fetchEventRooms, fetchEventSeats, EventBed, EventRoom, EventSeat } from "@/lib/event-capacity";
 
@@ -93,55 +92,27 @@ const Confirmation = () => {
       if (!affiliateData) return;
 
       try {
-        // Find the referral for this user
-        const { data: referrals, error: referralError } = await supabase
-          .from('affiliate_referrals')
-          .select('id')
-          .eq('affiliate_id', affiliateData.affiliateId)
-          .eq('campaign_id', affiliateData.campaignId)
-          .eq('referral_type', 'student')
-          .eq('converted', false)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (referralError || !referrals || referrals.length === 0) {
-          return; // No referral found
-        }
-
-        const referralId = referrals[0].id;
         const transactionAmount = retreat.price || 0;
         const platformFee = transactionAmount * instructorFeeRate;
 
-        await convertReferral(
-          referralId,
-          'booking',
-          bookingId,
-          transactionAmount,
-          platformFee
-        );
+        const referralId = await createReferral("student");
+        if (referralId) {
+          await convertReferral(
+            referralId,
+            "booking",
+            bookingId,
+            transactionAmount,
+          );
+        }
 
-        // Create passive commission for organizer referrals when booking is completed
-        // Find organizer referral for this retreat's instructor
         if (retreat?.instructor_id) {
-          const { data: organizerReferrals } = await supabase
-            .from('affiliate_referrals')
-            .select('id')
-            .eq('referred_user_id', retreat.instructor_id)
-            .eq('referral_type', 'organizer')
-            .eq('converted', true);
-
-          if (organizerReferrals && organizerReferrals.length > 0) {
-            // Create passive commission for each organizer referral
-            for (const referral of organizerReferrals) {
-              await createPassiveCommission(
-                retreat.instructor_id,
-                'booking_completed',
-                transactionAmount,
-                platformFee,
-                bookingId
-              );
-            }
-          }
+          await createPassiveCommission(
+            retreat.instructor_id,
+            "booking_completed",
+            transactionAmount,
+            platformFee,
+            bookingId,
+          );
         }
       } catch (error) {
         console.error('Error converting affiliate referral:', error);

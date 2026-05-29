@@ -7,16 +7,19 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MapPin, Calendar, Clock, Users, Info, DollarSign, CreditCard } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { MapPin, Calendar, Clock, Users, Info, CreditCard } from "lucide-react";
+import {
+  useLazyGetRetreatByIdQuery,
+  useGetUserProfileQuery,
+  useCreateBookingMutation,
+} from "@/services/server";
+import { mapRetreatForDetail } from "@/services/mappers";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { sendCustomEmail } from "@/lib/email-notifications";
 import { TicketTypeSelector } from "@/components/TicketTypeSelector";
 import { BedSelection } from "@/components/BedSelection";
 import { SeatSelection } from "@/components/SeatSelection";
-import { expireHeldInventory } from "@/lib/event-capacity";
-import { createBedAssignment, createSeatAssignment } from "@/lib/booking-assignments";
 
 interface ContentCard {
   id: string;
@@ -78,6 +81,9 @@ const Booking = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+  const [triggerGetRetreat] = useLazyGetRetreatByIdQuery();
+  const { data: userProfile } = useGetUserProfileQuery(undefined, { skip: !user });
+  const [createBooking] = useCreateBookingMutation();
   const [retreat, setRetreat] = useState<RetreatData | null>(null);
   const [loading, setLoading] = useState(true);
   const [processingManualPayment, setProcessingManualPayment] = useState(false);
@@ -260,53 +266,23 @@ const Booking = () => {
 
     try {
       const totalPrice = calculateTotalPrice();
-      
-      // Create booking with manual payment status (pending approval)
-      const { data: booking, error } = await supabase
-        .from('bookings')
-        .insert({
-          retreat_id: retreat.id,
-          user_id: user.id,
-          payment_intent_id: `manual_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`, // Unique ID for manual payments
-          full_name: fullName.trim(),
-          email: email.trim(),
-          skill_level: skillLevel,
-          amount: totalPrice,
-          status: 'confirmed', // Set status for database consistency
-          payment_status: 'paid_manual',
-          manual_payment_status: 'pending_approval', // Requires organizer approval
-          full_amount: totalPrice,
-          price_variant: selectedPriceVariant || null,
-          add_ons: selectedAddOns.length > 0 ? selectedAddOns : null,
-          ticket_type: ticketType || null,
-          booking_date: new Date().toISOString(),
-        })
-        .select()
-        .single();
 
-      if (error) {
-        throw error;
-      }
-
-      // Create bed/seat assignment if applicable
-      if (booking && ticketType === 'STAY' && selectedBed) {
-        const assignmentResult = await createBedAssignment(booking.id, selectedBed.bedId);
-        if (!assignmentResult.success) {
-          // Rollback booking if assignment fails
-          await supabase.from('bookings').delete().eq('id', booking.id);
-          throw new Error(assignmentResult.error || 'Failed to assign bed');
-        }
-      } else if (booking && ticketType === 'SEAT_ONLY' && selectedSeat) {
-        const assignmentResult = await createSeatAssignment(booking.id, selectedSeat.seatId);
-        if (!assignmentResult.success) {
-          // Rollback booking if assignment fails
-          await supabase.from('bookings').delete().eq('id', booking.id);
-          throw new Error(assignmentResult.error || 'Failed to assign seat');
-        }
-      }
-
-      // Update retreat spots available
-      await supabase.rpc('decrement_spots', { retreat_id: retreat.id });
+      const booking = await createBooking({
+        retreatId: String(retreat.id),
+        fullName: fullName.trim(),
+        email: email.trim(),
+        skillLevel,
+        amount: totalPrice,
+        status: "confirmed",
+        paymentStatus: "paid_manual",
+        manualPaymentStatus: "pending_approval",
+        fullAmount: totalPrice,
+        priceVariantId: selectedPriceVariant || undefined,
+        addOnIds: selectedAddOns.length > 0 ? selectedAddOns : undefined,
+        ticketType: ticketType || undefined,
+        bedId: selectedBed?.bedId,
+        seatId: selectedSeat?.seatId,
+      }).unwrap();
 
       // Send initial email notification about manual payment submission
       const emailSubject = `Registration Submitted: ${retreat.title}`;
@@ -407,35 +383,17 @@ BookMyQuiltRetreat Team
     }
   };
 
-  // Fetch user profile to auto-fill name and email
+  // Auto-fill name and email from profile
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!user) return;
+    if (!userProfile) return;
 
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('full_name, email')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          console.error('Error fetching user profile:', error);
-        } else if (data) {
-          if (data.full_name) {
-            setFullName(data.full_name);
-          }
-          if (data.email || user.email) {
-            setEmail(data.email || user.email || "");
-          }
-        }
-      } catch (error) {
-        console.error('Unexpected error fetching profile:', error);
-      }
-    };
-
-    fetchUserProfile();
-  }, [user]);
+    if (userProfile.fullName) {
+      setFullName(userProfile.fullName);
+    }
+    if (userProfile.email || user?.email) {
+      setEmail(userProfile.email || user?.email || "");
+    }
+  }, [userProfile, user]);
 
   // Try to get retreat from navigation state first, then fetch by id
   useEffect(() => {
@@ -503,33 +461,24 @@ BookMyQuiltRetreat Team
       }
       setLoading(false);
     } else if (id) {
-      // Fetch from Supabase - get all fields
       const fetchRetreat = async () => {
         try {
-          const { data, error } = await supabase
-            .from('retreats')
-            .select('*')
-            .eq('id', Number(id))
-            .eq('published', true)
-            .single();
-
-          if (error) {
-            console.error('Error fetching retreat:', error);
-          } else if (data) {
-            setRetreat(data);
-            // Load event mode and venue data
+          const data = await triggerGetRetreat(id).unwrap();
+          if (!data || (data.status !== "published" && !data.published)) {
+            setRetreat(null);
+          } else {
+            const mapped = mapRetreatForDetail(data);
+            setRetreat(mapped as unknown as RetreatData);
             if (data.mode) {
-              setEventMode(data.mode as 'IN_PERSON' | 'ONLINE');
+              setEventMode(data.mode as "IN_PERSON" | "ONLINE");
             }
-            if (data.venue_id) {
-              setVenueId(data.venue_id);
-              setVenueUsageType(data.venue_usage_type as 'AT_LOCATION' | 'OFFSITE' | null);
+            if (data.venueId ?? data.venue_id) {
+              setVenueId(String(data.venueId ?? data.venue_id));
+              setVenueUsageType((data.venueUsageType ?? data.venue_usage_type) as "AT_LOCATION" | "OFFSITE" | null);
             }
-            if (data.seat_capacity) {
-              setSeatCapacity(data.seat_capacity);
+            if (data.seatCapacity ?? data.seat_capacity) {
+              setSeatCapacity(Number(data.seatCapacity ?? data.seat_capacity));
             }
-            // Expire held inventory on page load
-            expireHeldInventory();
           }
         } catch (error) {
           console.error('Unexpected error:', error);
@@ -542,7 +491,7 @@ BookMyQuiltRetreat Team
     } else {
       setLoading(false);
     }
-  }, [id, location.state]);
+  }, [id, location.state, triggerGetRetreat]);
 
   if (loading) {
     return (

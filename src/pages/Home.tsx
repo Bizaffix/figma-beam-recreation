@@ -1,11 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Star, Award, GraduationCap, Heart } from "lucide-react";
+import { Calendar, GraduationCap, Heart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import {
+  useGetUserProfileQuery,
+  useGetFavoritesQuery,
+  useLazyGetRetreatByIdQuery,
+} from "@/services/server";
+import { mapRetreatForCard } from "@/services/mappers";
 import { useToast } from "@/hooks/use-toast";
 import { RetreatCard } from "@/components/RetreatCard";
 
@@ -16,7 +21,7 @@ interface SavedRetreat {
   location: string;
   date: string;
   duration: string;
-  level: "Beginner" | "Intermediate" | "Advanced";
+  level: "Beginner" | "Intermediate" | "Advanced" | "Any";
   price: number;
   total_spots: number;
   spots_available: number;
@@ -36,146 +41,92 @@ const Home = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
   const { toast } = useToast();
-  const [firstName, setFirstName] = useState<string>("");
   const [creatingProfile, setCreatingProfile] = useState(false);
   const [savedRetreats, setSavedRetreats] = useState<SavedRetreat[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(true);
 
-  // Fetch user's first name from profile
+  const { data: profile } = useGetUserProfileQuery(undefined, { skip: !user });
+  const { data: favorites = [], isLoading: loadingFavorites } = useGetFavoritesQuery(undefined, {
+    skip: !user || role !== "student",
+  });
+  const [triggerGetRetreat] = useLazyGetRetreatByIdQuery();
+
+  const firstName = useMemo(() => {
+    const displayName = profile?.fullName ?? profile?.firstName;
+    if (!displayName) return "";
+    return displayName.trim().split(" ")[0] || "";
+  }, [profile]);
+
   useEffect(() => {
-    const fetchFirstName = async () => {
-      if (!user) return;
+    if (!user || role !== "student") {
+      setSavedRetreats([]);
+      setLoadingSaved(false);
+      return;
+    }
+    if (loadingFavorites) return;
 
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', user.id)
-          .single();
+    let cancelled = false;
 
-        if (error) {
-          console.error('Error fetching user profile:', error);
-        } else if (data?.full_name) {
-          // Extract first name from full_name
-          const nameParts = data.full_name.trim().split(' ');
-          const first = nameParts[0] || "";
-          setFirstName(first);
+    const loadSavedRetreats = async () => {
+      if (favorites.length === 0) {
+        if (!cancelled) {
+          setSavedRetreats([]);
+          setLoadingSaved(false);
         }
-      } catch (error) {
-        console.error('Unexpected error fetching profile:', error);
-      }
-    };
-
-    fetchFirstName();
-  }, [user]);
-
-  // Fetch saved retreats
-  useEffect(() => {
-    const fetchSavedRetreats = async () => {
-      if (!user || role !== 'student') {
-        setLoadingSaved(false);
         return;
       }
 
       try {
-        // First, get all saved retreat IDs for this user
-        const { data: savedData, error: savedError } = await supabase
-          .from('saved_retreats')
-          .select('retreat_id')
-          .eq('user_id', user.id);
+        const retreats = await Promise.all(
+          favorites.map(async (favorite) => {
+            if (favorite.retreat) {
+              return mapRetreatForCard(favorite.retreat as Record<string, unknown>);
+            }
+            if (!favorite.retreatId) return null;
+            try {
+              const retreat = await triggerGetRetreat(favorite.retreatId).unwrap();
+              if (!retreat || (retreat.status !== "published" && !retreat.published)) {
+                return null;
+              }
+              return mapRetreatForCard(retreat);
+            } catch {
+              return null;
+            }
+          }),
+        );
 
-        if (savedError) {
-          console.error('Error fetching saved retreats:', savedError);
-          setLoadingSaved(false);
-          return;
-        }
-
-        if (!savedData || savedData.length === 0) {
-          setSavedRetreats([]);
-          setLoadingSaved(false);
-          return;
-        }
-
-        // Then fetch the actual retreat data
-        const retreatIds = savedData.map(item => item.retreat_id);
-        const { data: retreatsData, error: retreatsError } = await supabase
-          .from('retreats')
-          .select(`
-            *,
-            instructor:profiles!instructor_id(
-              full_name,
-              avatar_url,
-              bio
-            )
-          `)
-          .in('id', retreatIds)
-          .eq('published', true)
-          .order('created_at', { ascending: false });
-
-        if (retreatsError) {
-          console.error('Error fetching retreat details:', retreatsError);
-        } else if (retreatsData) {
-          const transformedRetreats = retreatsData.map((retreat: any) => ({
-            id: retreat.id,
-            title: retreat.title,
-            description: retreat.description,
-            location: retreat.location,
-            date: retreat.date,
-            duration: retreat.duration,
-            level: retreat.level,
-            price: retreat.price,
-            total_spots: retreat.total_spots,
-            spots_available: retreat.spots_available,
-            image: retreat.image,
-            includes: retreat.includes || [],
-            schedule: retreat.schedule || [],
-            published: retreat.published,
-            instructor_id: retreat.instructor_id,
-            instructor: {
-              name: retreat.instructor?.full_name || 'Instructor',
-              avatar: retreat.instructor?.avatar_url || '',
-              bio: retreat.instructor?.bio || '',
-            },
-          }));
-          setSavedRetreats(transformedRetreats);
+        if (!cancelled) {
+          setSavedRetreats(
+            retreats.filter((retreat) => retreat !== null && retreat.published) as SavedRetreat[],
+          );
         }
       } catch (error) {
-        console.error('Unexpected error fetching saved retreats:', error);
+        console.error("Unexpected error fetching saved retreats:", error);
       } finally {
-        setLoadingSaved(false);
+        if (!cancelled) {
+          setLoadingSaved(false);
+        }
       }
     };
 
-    fetchSavedRetreats();
-  }, [user, role]);
+    setLoadingSaved(true);
+    loadSavedRetreats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, role, favorites, loadingFavorites, triggerGetRetreat]);
 
   const handleCreateInstructorProfile = async () => {
     if (!user) return;
 
     setCreatingProfile(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: 'instructor' })
-        .eq('id', user.id);
-
-      if (error) {
-        console.error('Error creating instructor profile:', error);
-        toast({
-          title: "Error",
-          description: error.message || "Failed to create instructor profile",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: "Instructor profile created! Redirecting to instructor dashboard...",
-        });
-        // Reload the page to update the role in AuthContext
-        setTimeout(() => {
-          window.location.href = '/instructor/dashboard';
-        }, 1500);
-      }
+      toast({
+        title: "Admin approval required",
+        description:
+          "Instructor profiles require admin approval. We'll notify you once your account is upgraded.",
+      });
     } catch (error) {
       console.error('Unexpected error:', error);
       toast({

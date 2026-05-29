@@ -5,7 +5,15 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, MapPin, Calendar, Users, Clock, Heart, MessageSquare, CreditCard } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetRetreatByIdQuery,
+  useLazyGetMyRetreatsQuery,
+  useLazyGetVenueByIdQuery,
+  useLazyGetFavoritesQuery,
+  useAddFavoriteMutation,
+  useRemoveFavoriteMutation,
+} from "@/services/server";
+import { mapRetreatForDetail, toLegacyProperty } from "@/services/mappers";
 import { Header } from "@/components/Header";
 import { useToast } from "@/hooks/use-toast";
 import MessagingSystem from "@/components/MessagingSystem";
@@ -89,6 +97,12 @@ const RetreatDetail = () => {
   const [venueId, setVenueId] = useState<string | null>(null);
   const [venueUsageType, setVenueUsageType] = useState<'AT_LOCATION' | 'OFFSITE' | null>(null);
   const [venueData, setVenueData] = useState<any>(null);
+  const [fetchRetreatById] = useLazyGetRetreatByIdQuery();
+  const [fetchMyRetreats] = useLazyGetMyRetreatsQuery();
+  const [fetchVenueById] = useLazyGetVenueByIdQuery();
+  const [fetchFavorites] = useLazyGetFavoritesQuery();
+  const [addFavorite] = useAddFavoriteMutation();
+  const [removeFavorite] = useRemoveFavoriteMutation();
 
   // Auto-select first price variant if available and none selected
   useEffect(() => {
@@ -100,113 +114,66 @@ const RetreatDetail = () => {
     }
   }, [retreat?.price_variants, selectedPriceVariant]);
 
-  // Fetch retreat from Supabase
+  // Fetch retreat from backend API
   useEffect(() => {
     const fetchRetreat = async () => {
       if (!id) return;
 
       try {
-        let query = supabase
-          .from('retreats')
-          .select(`
-            *,
-            instructor:profiles!instructor_id(
-              full_name,
-              avatar_url,
-              bio,
-              facebook_url,
-              instagram_url,
-              pinterest_url
-            )
-          `)
-          .eq('id', Number(id));
+        let data: Record<string, unknown> | null = null;
 
-        // Public users and students can only see published retreats
-        if (role === 'student' || !user) {
-          query = query.eq('published', true);
-        } else if (role === 'instructor' && user) {
-          // Instructors can see their own retreats (published or not)
-          query = query.eq('instructor_id', user.id);
+        try {
+          data = await fetchRetreatById(id).unwrap();
+        } catch {
+          data = null;
         }
-        // Admins can see all retreats (published or not) - no additional filter needed
 
-        const { data, error } = await query.maybeSingle();
+        if (!data && role === "instructor" && user) {
+          const mine = await fetchMyRetreats({ limit: 200 }).unwrap();
+          data = mine.find((retreat) => String(retreat.id) === String(id)) ?? null;
+        }
 
-        if (error) {
-          // Only log if it's not a "no rows" error
-          if (error.code !== 'PGRST116' && error.code !== '406') {
-            console.error('Error fetching retreat:', error);
-          }
+        if (!data) {
           setRetreat(null);
-        } else if (data) {
-          // Transform data to match component expectations - include all fields
-          const transformedRetreat = {
-            id: data.id,
-            title: data.title,
-            description: data.description,
-            location: data.location,
-            date: data.date,
-            duration: data.duration,
-            level: data.level,
-            price: data.price,
-            total_spots: data.total_spots,
-            spots_available: data.spots_available,
-            image: data.image,
-            includes: data.includes || [],
-            schedule: data.schedule || [],
-            published: data.published,
-            instructor_id: data.instructor_id,
-            deposit_amount: data.deposit_amount,
-            deposit_refundable: data.deposit_refundable,
-            deposit_refund_days_before: data.deposit_refund_days_before,
-            payment_days_before_event: data.payment_days_before_event,
-            full_payment_non_refundable: data.full_payment_non_refundable,
-            discount_coupon: data.discount_coupon,
-            price_variants: data.price_variants,
-            add_ons: data.add_ons,
-            content_cards: data.content_cards,
-            itinerary_blocks: data.itinerary_blocks,
-            location_images: data.location_images,
-            mode: data.mode,
-            venue_id: data.venue_id,
-            venue_usage_type: data.venue_usage_type,
-            seat_capacity: data.seat_capacity,
-            instructor: {
-              name: data.instructor?.full_name || 'Instructor',
-              avatar: data.instructor?.avatar_url || '',
-              bio: data.instructor?.bio || '',
-              facebook: data.instructor?.facebook_url || '',
-              instagram: data.instructor?.instagram_url || '',
-              pinterest: data.instructor?.pinterest_url || '',
-            },
-          };
-          setRetreat(transformedRetreat);
-          
-          // Set event mode and venue data
-          if (data.mode) {
-            setEventMode(data.mode as 'IN_PERSON' | 'ONLINE');
-          }
-          if (data.venue_id) {
-            setVenueId(data.venue_id);
-            setVenueUsageType(data.venue_usage_type as 'AT_LOCATION' | 'OFFSITE' | null);
-            
-            // Fetch venue data
-            const { data: venue } = await supabase
-              .from('properties')
-              .select('*')
-              .eq('id', data.venue_id)
-              .single();
-            
+          return;
+        }
+
+        const isPublished = data.status === "published" || Boolean(data.published);
+        const instructorId = String(data.instructorId ?? data.instructor_id ?? "");
+
+        if ((role === "student" || !user) && !isPublished) {
+          setRetreat(null);
+          return;
+        }
+
+        if (role === "instructor" && user && instructorId !== user.id && !isPublished) {
+          setRetreat(null);
+          return;
+        }
+
+        const transformedRetreat = mapRetreatForDetail(data);
+        setRetreat(transformedRetreat as unknown as RetreatData);
+
+        if (data.mode) {
+          setEventMode(data.mode as "IN_PERSON" | "ONLINE");
+        }
+
+        const resolvedVenueId = (data.venueId ?? data.venue_id) as string | null;
+        if (resolvedVenueId) {
+          setVenueId(resolvedVenueId);
+          setVenueUsageType((data.venueUsageType ?? data.venue_usage_type) as "AT_LOCATION" | "OFFSITE" | null);
+
+          try {
+            const venue = await fetchVenueById(resolvedVenueId).unwrap();
             if (venue) {
-              setVenueData(venue);
+              setVenueData(toLegacyProperty(venue));
             }
+          } catch (venueError) {
+            console.error("Error fetching venue:", venueError);
           }
-        } else {
-          // No retreat found
-          setRetreat(null);
         }
       } catch (error) {
-        console.error('Unexpected error:', error);
+        console.error("Unexpected error:", error);
         setRetreat(null);
       } finally {
         setLoading(false);
@@ -214,7 +181,7 @@ const RetreatDetail = () => {
     };
 
     fetchRetreat();
-  }, [id, role, user]);
+  }, [id, role, user, fetchRetreatById, fetchMyRetreats, fetchVenueById]);
 
   // Update meta tags when retreat data is loaded
   useEffect(() => {
@@ -263,22 +230,8 @@ const RetreatDetail = () => {
       }
 
       try {
-        const { data, error } = await supabase
-          .from('saved_retreats')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('retreat_id', Number(id))
-          .maybeSingle(); // Use maybeSingle() instead of single() to handle no rows gracefully
-
-        if (error) {
-          // Only log if it's not a "no rows" error
-          if (error.code !== 'PGRST116' && error.code !== '406') {
-            console.error('Error checking saved status:', error);
-          }
-          setIsSaved(false);
-        } else {
-          setIsSaved(!!data);
-        }
+        const favorites = await fetchFavorites().unwrap();
+        setIsSaved(favorites.some((favorite) => String(favorite.retreatId) === String(id)));
       } catch (error) {
         console.error('Unexpected error checking saved status:', error);
         setIsSaved(false);
@@ -286,7 +239,7 @@ const RetreatDetail = () => {
     };
 
     checkIfSaved();
-  }, [user, id]);
+  }, [user, id, fetchFavorites]);
 
   const handleSaveClick = async () => {
     if (!user) {
@@ -300,46 +253,25 @@ const RetreatDetail = () => {
     setSaving(true);
     try {
       if (isSaved) {
-        // Unsave the retreat
-        const { error } = await supabase
-          .from('saved_retreats')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('retreat_id', Number(id));
-
-        if (error) {
-          throw error;
-        }
-
+        await removeFavorite(String(id)).unwrap();
         setIsSaved(false);
         toast({
           title: "Retreat unsaved",
           description: "This retreat has been removed from your saved list.",
         });
       } else {
-        // Save the retreat
-        const { error } = await supabase
-          .from('saved_retreats')
-          .insert({
-            user_id: user.id,
-            retreat_id: Number(id),
-          });
-
-        if (error) {
-          throw error;
-        }
-
+        await addFavorite(String(id)).unwrap();
         setIsSaved(true);
         toast({
           title: "Retreat saved!",
           description: "You can find this retreat in your saved list.",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving/unsaving retreat:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to save retreat. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to save retreat. Please try again.",
         variant: "destructive",
       });
     } finally {

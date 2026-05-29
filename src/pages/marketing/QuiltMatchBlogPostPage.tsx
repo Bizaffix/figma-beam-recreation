@@ -1,9 +1,8 @@
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { QuiltMatchSiteHeader } from "@/components/quilt-match-home/site-header";
 import { QuiltMatchSiteFooter } from "@/components/quilt-match-home/site-footer";
-import { fetchBlogPostBySlug } from "@/lib/content/blog";
+import { useGetBlogPostBySlugQuery } from "@/services/server";
 import { renderMarkdown } from "@/lib/markdown";
 
 function BlogLoadingOrNotFound({ children }: { children: React.ReactNode }) {
@@ -18,10 +17,8 @@ function BlogLoadingOrNotFound({ children }: { children: React.ReactNode }) {
 
 export default function QuiltMatchBlogPostPage() {
   const { slug = "" } = useParams<{ slug: string }>();
-  const { data: post, isLoading, isError } = useQuery({
-    queryKey: ["blog", "post", slug],
-    queryFn: () => fetchBlogPostBySlug(slug),
-    enabled: Boolean(slug),
+  const { data: post, isLoading, isError } = useGetBlogPostBySlugQuery(slug, {
+    skip: !slug,
   });
 
   useEffect(() => {

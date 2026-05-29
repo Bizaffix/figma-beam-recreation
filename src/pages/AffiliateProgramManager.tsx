@@ -11,8 +11,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  useLazyListAllAffiliatesQuery,
+  useLazyGetCampaignsQuery,
+  useLazyListAllAffiliateLinksQuery,
+  useLazyListAllReferralsQuery,
+  useLazyListAllCommissionsQuery,
+  useLazyListPayoutsQuery,
+  useCreateAffiliateMutation,
+  useUpdateAffiliateMutation,
+  useCreateCampaignMutation,
+  useUpdateCampaignMutation,
+  useCreateAdminAffiliateLinkMutation,
+} from "@/services/server";
 import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, 
@@ -141,6 +153,108 @@ interface Payout {
   affiliate?: Affiliate;
 }
 
+const mapAffiliate = (row: Record<string, unknown>): Affiliate => ({
+  id: String(row.id),
+  user_id: (row.userId ?? row.user_id ?? null) as string | null,
+  name: String(row.name ?? ""),
+  email: String(row.email ?? ""),
+  affiliate_type: (row.affiliateType ?? row.affiliate_type ?? "other") as Affiliate["affiliate_type"],
+  payout_method: (row.payoutMethod ?? row.payout_method ?? null) as Affiliate["payout_method"],
+  payout_details: row.payoutDetails ?? row.payout_details,
+  tax_info_status: (row.taxInfoStatus ?? row.tax_info_status ?? "pending") as Affiliate["tax_info_status"],
+  country: (row.country ?? null) as string | null,
+  status: (row.status ?? "pending") as Affiliate["status"],
+  notes: (row.notes ?? null) as string | null,
+  created_at: String(row.createdAt ?? row.created_at ?? ""),
+  updated_at: String(row.updatedAt ?? row.updated_at ?? ""),
+  profile: row.profile as Affiliate["profile"],
+});
+
+const mapCampaign = (row: Record<string, unknown>): Campaign => ({
+  id: String(row.id),
+  name: String(row.name ?? ""),
+  description: (row.description ?? null) as string | null,
+  target_type: (row.targetType ?? row.target_type ?? "student") as Campaign["target_type"],
+  conversion_event: String(row.conversionEvent ?? row.conversion_event ?? ""),
+  active_commission_type: (row.activeCommissionType ?? row.active_commission_type ?? null) as Campaign["active_commission_type"],
+  active_commission_value: (row.activeCommissionValue ?? row.active_commission_value ?? null) as number | null,
+  active_commission_base: (row.activeCommissionBase ?? row.active_commission_base ?? null) as string | null,
+  passive_commission_enabled: Boolean(row.passiveCommissionEnabled ?? row.passive_commission_enabled),
+  passive_commission_rate: (row.passiveCommissionRate ?? row.passive_commission_rate ?? null) as number | null,
+  passive_commission_duration_months: (row.passiveCommissionDurationMonths ?? row.passive_commission_duration_months ?? null) as number | null,
+  cookie_window_days: Number(row.cookieWindowDays ?? row.cookie_window_days ?? 30),
+  attribution_model: (row.attributionModel ?? row.attribution_model ?? "last_click") as Campaign["attribution_model"],
+  is_active: Boolean(row.isActive ?? row.is_active ?? true),
+  created_at: String(row.createdAt ?? row.created_at ?? ""),
+  updated_at: String(row.updatedAt ?? row.updated_at ?? ""),
+});
+
+const mapAffiliateLink = (row: Record<string, unknown>): AffiliateLink => ({
+  id: String(row.id),
+  affiliate_id: String(row.affiliateId ?? row.affiliate_id ?? ""),
+  campaign_id: String(row.campaignId ?? row.campaign_id ?? ""),
+  link_code: String(row.linkCode ?? row.link_code ?? ""),
+  base_url: String(row.baseUrl ?? row.base_url ?? ""),
+  full_url: String(row.fullUrl ?? row.full_url ?? ""),
+  coupon_code: (row.couponCode ?? row.coupon_code ?? null) as string | null,
+  clicks: Number(row.clicks ?? 0),
+  created_at: String(row.createdAt ?? row.created_at ?? ""),
+  affiliate: row.affiliate ? mapAffiliate(row.affiliate as Record<string, unknown>) : undefined,
+  campaign: row.campaign ? mapCampaign(row.campaign as Record<string, unknown>) : undefined,
+});
+
+const mapReferral = (row: Record<string, unknown>): Referral => ({
+  id: String(row.id),
+  affiliate_id: String(row.affiliateId ?? row.affiliate_id ?? ""),
+  campaign_id: String(row.campaignId ?? row.campaign_id ?? ""),
+  referral_type: (row.referralType ?? row.referral_type ?? "student") as Referral["referral_type"],
+  referred_user_id: (row.referredUserId ?? row.referred_user_id ?? null) as string | null,
+  referred_venue_id: (row.referredVenueId ?? row.referred_venue_id ?? null) as string | null,
+  converted: Boolean(row.converted),
+  conversion_event_id: (row.conversionEventId ?? row.conversion_event_id ?? null) as string | null,
+  conversion_event_type: (row.conversionEventType ?? row.conversion_event_type ?? null) as string | null,
+  converted_at: (row.convertedAt ?? row.converted_at ?? null) as string | null,
+  created_at: String(row.createdAt ?? row.created_at ?? ""),
+  affiliate: row.affiliate ? mapAffiliate(row.affiliate as Record<string, unknown>) : undefined,
+  campaign: row.campaign ? mapCampaign(row.campaign as Record<string, unknown>) : undefined,
+});
+
+const mapCommission = (row: Record<string, unknown>): Commission => ({
+  id: String(row.id),
+  affiliate_id: String(row.affiliateId ?? row.affiliate_id ?? ""),
+  referral_id: String(row.referralId ?? row.referral_id ?? ""),
+  campaign_id: String(row.campaignId ?? row.campaign_id ?? ""),
+  commission_type: (row.commissionType ?? row.commission_type ?? "active") as Commission["commission_type"],
+  amount: Number(row.amount ?? 0),
+  currency: String(row.currency ?? "USD"),
+  transaction_id: (row.transactionId ?? row.transaction_id ?? null) as string | null,
+  transaction_amount: (row.transactionAmount ?? row.transaction_amount ?? null) as number | null,
+  platform_fee: (row.platformFee ?? row.platform_fee ?? null) as number | null,
+  status: (row.status ?? "pending") as Commission["status"],
+  payout_id: (row.payoutId ?? row.payout_id ?? null) as string | null,
+  notes: (row.notes ?? null) as string | null,
+  created_at: String(row.createdAt ?? row.created_at ?? ""),
+  approved_at: (row.approvedAt ?? row.approved_at ?? null) as string | null,
+  paid_at: (row.paidAt ?? row.paid_at ?? null) as string | null,
+  affiliate: row.affiliate ? mapAffiliate(row.affiliate as Record<string, unknown>) : undefined,
+  referral: row.referral ? mapReferral(row.referral as Record<string, unknown>) : undefined,
+});
+
+const mapPayout = (row: Record<string, unknown>): Payout => ({
+  id: String(row.id),
+  affiliate_id: String(row.affiliateId ?? row.affiliate_id ?? ""),
+  total_amount: Number(row.totalAmount ?? row.total_amount ?? 0),
+  currency: String(row.currency ?? "USD"),
+  payout_method: (row.payoutMethod ?? row.payout_method ?? "manual") as Payout["payout_method"],
+  payout_details: row.payoutDetails ?? row.payout_details,
+  status: (row.status ?? "queued") as Payout["status"],
+  requested_at: String(row.requestedAt ?? row.requested_at ?? ""),
+  processed_at: (row.processedAt ?? row.processed_at ?? null) as string | null,
+  confirmed_at: (row.confirmedAt ?? row.confirmed_at ?? null) as string | null,
+  notes: (row.notes ?? null) as string | null,
+  affiliate: row.affiliate ? mapAffiliate(row.affiliate as Record<string, unknown>) : undefined,
+});
+
 const AffiliateProgramManager = () => {
   const { role, user } = useAuth();
   const { toast } = useToast();
@@ -248,6 +362,17 @@ const AffiliateProgramManager = () => {
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [loadingPayouts, setLoadingPayouts] = useState(false);
   const [payoutDialogOpen, setPayoutDialogOpen] = useState(false);
+  const [triggerListAllAffiliates] = useLazyListAllAffiliatesQuery();
+  const [triggerGetCampaigns] = useLazyGetCampaignsQuery();
+  const [triggerListAllAffiliateLinks] = useLazyListAllAffiliateLinksQuery();
+  const [triggerListAllReferrals] = useLazyListAllReferralsQuery();
+  const [triggerListAllCommissions] = useLazyListAllCommissionsQuery();
+  const [triggerListPayouts] = useLazyListPayoutsQuery();
+  const [createAffiliateMutation] = useCreateAffiliateMutation();
+  const [updateAffiliateMutation] = useUpdateAffiliateMutation();
+  const [createCampaignMutation] = useCreateCampaignMutation();
+  const [updateCampaignMutation] = useUpdateCampaignMutation();
+  const [createAdminAffiliateLinkMutation] = useCreateAdminAffiliateLinkMutation();
 
   useEffect(() => {
     if (role !== 'admin' || !user) {
@@ -265,60 +390,36 @@ const AffiliateProgramManager = () => {
 
   const fetchOverviewStats = async () => {
     try {
-      // Total affiliates
-      const { count: totalCount } = await supabase
-        .from('affiliates')
-        .select('*', { count: 'exact', head: true });
+      const [affiliateRows, referralRows, commissionRows, linkRows] = await Promise.all([
+        triggerListAllAffiliates().unwrap(),
+        triggerListAllReferrals().unwrap(),
+        triggerListAllCommissions().unwrap(),
+        triggerListAllAffiliateLinks().unwrap(),
+      ]);
 
-      const { count: activeCount } = await supabase
-        .from('affiliates')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'approved');
+      const affiliatesMapped = affiliateRows.map((row) => mapAffiliate(row as Record<string, unknown>));
+      const referralsMapped = referralRows.map((row) => mapReferral(row));
+      const commissionsMapped = commissionRows.map((row) => mapCommission(row as Record<string, unknown>));
 
-      const { count: pendingCount } = await supabase
-        .from('affiliates')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-
-      const { count: blockedCount } = await supabase
-        .from('affiliates')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['blocked', 'suspended']);
-
-      // Total clicks
-      const { data: clicksData } = await supabase
-        .from('affiliate_link_clicks')
-        .select('id', { count: 'exact', head: true });
-
-      // Total referrals (signups)
-      const { count: signupsCount } = await supabase
-        .from('affiliate_referrals')
-        .select('*', { count: 'exact', head: true });
-
-      // Total conversions
-      const { count: conversionsCount } = await supabase
-        .from('affiliate_referrals')
-        .select('*', { count: 'exact', head: true })
-        .eq('converted', true);
-
-      // Commissions
-      const { data: commissionsData } = await supabase
-        .from('affiliate_commissions')
-        .select('amount, status');
-
-      const totalCommissions = commissionsData?.reduce((sum, c) => sum + Number(c.amount || 0), 0) || 0;
-      const pendingCommissions = commissionsData?.filter(c => c.status === 'pending').reduce((sum, c) => sum + Number(c.amount || 0), 0) || 0;
-      const approvedCommissions = commissionsData?.filter(c => c.status === 'approved').reduce((sum, c) => sum + Number(c.amount || 0), 0) || 0;
-      const paidCommissions = commissionsData?.filter(c => c.status === 'paid').reduce((sum, c) => sum + Number(c.amount || 0), 0) || 0;
+      const totalCommissions = commissionsMapped.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+      const pendingCommissions = commissionsMapped
+        .filter((c) => c.status === 'pending')
+        .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+      const approvedCommissions = commissionsMapped
+        .filter((c) => c.status === 'approved')
+        .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+      const paidCommissions = commissionsMapped
+        .filter((c) => c.status === 'paid')
+        .reduce((sum, c) => sum + Number(c.amount || 0), 0);
 
       setOverviewStats({
-        totalAffiliates: totalCount || 0,
-        activeAffiliates: activeCount || 0,
-        pendingAffiliates: pendingCount || 0,
-        blockedAffiliates: blockedCount || 0,
-        totalClicks: clicksData?.length || 0,
-        totalSignups: signupsCount || 0,
-        totalConversions: conversionsCount || 0,
+        totalAffiliates: affiliatesMapped.length,
+        activeAffiliates: affiliatesMapped.filter((a) => a.status === 'approved').length,
+        pendingAffiliates: affiliatesMapped.filter((a) => a.status === 'pending').length,
+        blockedAffiliates: affiliatesMapped.filter((a) => a.status === 'blocked' || a.status === 'suspended').length,
+        totalClicks: linkRows.reduce((sum, link) => sum + Number((link as Record<string, unknown>).clicks ?? 0), 0),
+        totalSignups: referralsMapped.length,
+        totalConversions: referralsMapped.filter((r) => r.converted).length,
         totalCommissions,
         pendingCommissions,
         approvedCommissions,
@@ -334,34 +435,8 @@ const AffiliateProgramManager = () => {
   const fetchAffiliates = async () => {
     setLoadingAffiliates(true);
     try {
-      const { data, error } = await supabase
-        .from('affiliates')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      // Optionally fetch profile data separately if user_id exists
-      if (data && data.length > 0) {
-        const userIds = data.filter(a => a.user_id).map(a => a.user_id);
-        if (userIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, full_name, email')
-            .in('id', userIds);
-          
-          // Merge profile data into affiliates
-          const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
-          const affiliatesWithProfiles = data.map(affiliate => ({
-            ...affiliate,
-            profile: affiliate.user_id ? profilesMap.get(affiliate.user_id) : null
-          }));
-          setAffiliates(affiliatesWithProfiles);
-          return;
-        }
-      }
-      
-      setAffiliates(data || []);
+      const data = await triggerListAllAffiliates().unwrap();
+      setAffiliates(data.map((row) => mapAffiliate(row as Record<string, unknown>)));
     } catch (error: any) {
       toast({
         title: "Error",
@@ -376,13 +451,8 @@ const AffiliateProgramManager = () => {
   const fetchCampaigns = async () => {
     setLoadingCampaigns(true);
     try {
-      const { data, error } = await supabase
-        .from('affiliate_campaigns')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setCampaigns(data || []);
+      const data = await triggerGetCampaigns().unwrap();
+      setCampaigns(data.map((row) => mapCampaign(row as Record<string, unknown>)));
     } catch (error: any) {
       toast({
         title: "Error",
@@ -397,17 +467,8 @@ const AffiliateProgramManager = () => {
   const fetchLinks = async () => {
     setLoadingLinks(true);
     try {
-      const { data, error } = await supabase
-        .from('affiliate_links')
-        .select(`
-          *,
-          affiliate:affiliates(*),
-          campaign:affiliate_campaigns(*)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setLinks(data || []);
+      const data = await triggerListAllAffiliateLinks().unwrap();
+      setLinks(data.map((row) => mapAffiliateLink(row as Record<string, unknown>)));
     } catch (error: any) {
       toast({
         title: "Error",
@@ -422,29 +483,13 @@ const AffiliateProgramManager = () => {
   const fetchReferrals = async () => {
     setLoadingReferrals(true);
     try {
-      let query = supabase
-        .from('affiliate_referrals')
-        .select(`
-          *,
-          affiliate:affiliates(*),
-          campaign:affiliate_campaigns(*)
-        `)
-        .order('created_at', { ascending: false });
+      const params: Record<string, string | boolean> = {};
+      if (referralFilters.affiliate_id) params.affiliateId = referralFilters.affiliate_id;
+      if (referralFilters.referral_type) params.referralType = referralFilters.referral_type;
+      if (referralFilters.converted !== '') params.converted = referralFilters.converted === 'true';
 
-      if (referralFilters.affiliate_id) {
-        query = query.eq('affiliate_id', referralFilters.affiliate_id);
-      }
-      if (referralFilters.referral_type) {
-        query = query.eq('referral_type', referralFilters.referral_type);
-      }
-      if (referralFilters.converted !== '') {
-        query = query.eq('converted', referralFilters.converted === 'true');
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setReferrals(data || []);
+      const data = await triggerListAllReferrals(params).unwrap();
+      setReferrals(data.map((row) => mapReferral(row)));
     } catch (error: any) {
       toast({
         title: "Error",
@@ -459,18 +504,8 @@ const AffiliateProgramManager = () => {
   const fetchCommissions = async () => {
     setLoadingCommissions(true);
     try {
-      const { data, error } = await supabase
-        .from('affiliate_commissions')
-        .select(`
-          *,
-          affiliate:affiliates(*),
-          referral:affiliate_referrals(*)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) throw error;
-      setCommissions(data || []);
+      const data = await triggerListAllCommissions().unwrap();
+      setCommissions(data.slice(0, 100).map((row) => mapCommission(row as Record<string, unknown>)));
     } catch (error: any) {
       toast({
         title: "Error",
@@ -485,16 +520,8 @@ const AffiliateProgramManager = () => {
   const fetchPayouts = async () => {
     setLoadingPayouts(true);
     try {
-      const { data, error } = await supabase
-        .from('affiliate_payouts')
-        .select(`
-          *,
-          affiliate:affiliates(*)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setPayouts(data || []);
+      const data = await triggerListPayouts().unwrap();
+      setPayouts(data.map((row) => mapPayout(row as Record<string, unknown>)));
     } catch (error: any) {
       toast({
         title: "Error",
@@ -508,23 +535,24 @@ const AffiliateProgramManager = () => {
 
   const handleSaveAffiliate = async () => {
     try {
-      if (editingAffiliate) {
-        const { error } = await supabase
-          .from('affiliates')
-          .update(affiliateForm)
-          .eq('id', editingAffiliate.id);
+      const body = {
+        name: affiliateForm.name,
+        email: affiliateForm.email,
+        affiliateType: affiliateForm.affiliate_type,
+        payoutMethod: affiliateForm.payout_method,
+        country: affiliateForm.country,
+        status: affiliateForm.status,
+        notes: affiliateForm.notes,
+      };
 
-        if (error) throw error;
+      if (editingAffiliate) {
+        await updateAffiliateMutation({ id: editingAffiliate.id, body }).unwrap();
         toast({
           title: "Success",
           description: "Affiliate updated successfully",
         });
       } else {
-        const { error } = await supabase
-          .from('affiliates')
-          .insert([affiliateForm]);
-
-        if (error) throw error;
+        await createAffiliateMutation(body).unwrap();
         toast({
           title: "Success",
           description: "Affiliate created successfully",
@@ -554,23 +582,30 @@ const AffiliateProgramManager = () => {
 
   const handleSaveCampaign = async () => {
     try {
-      if (editingCampaign) {
-        const { error } = await supabase
-          .from('affiliate_campaigns')
-          .update(campaignForm)
-          .eq('id', editingCampaign.id);
+      const body = {
+        name: campaignForm.name,
+        description: campaignForm.description,
+        targetType: campaignForm.target_type,
+        conversionEvent: campaignForm.conversion_event,
+        activeCommissionType: campaignForm.active_commission_type,
+        activeCommissionValue: campaignForm.active_commission_value,
+        activeCommissionBase: campaignForm.active_commission_base,
+        passiveCommissionEnabled: campaignForm.passive_commission_enabled,
+        passiveCommissionRate: campaignForm.passive_commission_rate,
+        passiveCommissionDurationMonths: campaignForm.passive_commission_duration_months,
+        cookieWindowDays: campaignForm.cookie_window_days,
+        attributionModel: campaignForm.attribution_model,
+        isActive: campaignForm.is_active,
+      };
 
-        if (error) throw error;
+      if (editingCampaign) {
+        await updateCampaignMutation({ id: editingCampaign.id, body }).unwrap();
         toast({
           title: "Success",
           description: "Campaign updated successfully",
         });
       } else {
-        const { error } = await supabase
-          .from('affiliate_campaigns')
-          .insert([campaignForm]);
-
-        if (error) throw error;
+        await createCampaignMutation(body).unwrap();
         toast({
           title: "Success",
           description: "Campaign created successfully",
@@ -599,24 +634,11 @@ const AffiliateProgramManager = () => {
     }
 
     try {
-      const baseUrl = window.location.origin;
-      const linkCode = `ref_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const fullUrl = `${baseUrl}?ref=${linkCode}`;
-
-      const { data, error } = await supabase
-        .from('affiliate_links')
-        .insert([{
-          affiliate_id: linkForm.affiliate_id,
-          campaign_id: linkForm.campaign_id,
-          link_code: linkCode,
-          base_url: baseUrl,
-          full_url: fullUrl,
-          coupon_code: linkForm.coupon_code || null,
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
+      await createAdminAffiliateLinkMutation({
+        affiliateId: linkForm.affiliate_id,
+        campaignId: linkForm.campaign_id,
+        couponCode: linkForm.coupon_code || undefined,
+      }).unwrap();
 
       toast({
         title: "Success",

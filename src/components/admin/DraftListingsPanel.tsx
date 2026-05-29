@@ -33,7 +33,11 @@ import {
   Mail,
   Sparkles,
 } from "lucide-react";
-import { getBackendAccessToken } from "@/lib/backendAuth";
+import {
+  useLazyGetDraftListingsQuery,
+  useLazyGetDraftListingInterestsQuery,
+  useUpdateDraftListingMutation,
+} from "@/services/server";
 import { useToast } from "@/hooks/use-toast";
 import type { DraftListing } from "@/types/draft-listing";
 
@@ -87,31 +91,27 @@ export function DraftListingsPanel() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [adminMessage, setAdminMessage] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [fetchDraftListings] = useLazyGetDraftListingsQuery();
+  const [fetchDraftListingInterests] = useLazyGetDraftListingInterestsQuery();
+  const [updateDraftListing] = useUpdateDraftListingMutation();
 
   const fetchListings = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from("draft_listings")
-        .select("*")
-        .order("updated_at", { ascending: false })
-        .limit(50);
-
+      const params: Record<string, string | number> = { limit: 50 };
       if (filter !== "all") {
-        query = query.eq("status", filter);
+        params.status = filter;
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchDraftListings(params).unwrap();
 
-      // Fetch interest counts for each listing
       const listingsWithCounts: DraftListingWithInterests[] = [];
-      for (const listing of (data || [])) {
-        const { count } = await supabase
-          .from("listing_interests")
-          .select("*", { count: "exact", head: true })
-          .eq("draft_listing_id", listing.id);
-        listingsWithCounts.push({ ...listing, interest_count: count || 0 });
+      for (const listing of data) {
+        const interests = await fetchDraftListingInterests(String(listing.id)).unwrap();
+        listingsWithCounts.push({
+          ...(listing as unknown as DraftListingWithInterests),
+          interest_count: interests.length,
+        });
       }
 
       setListings(listingsWithCounts);
@@ -134,13 +134,9 @@ export function DraftListingsPanel() {
     setLoadingDetail(true);
 
     // Fetch interests for this listing
-    const { data: interests } = await supabase
-      .from("listing_interests")
-      .select("*")
-      .eq("draft_listing_id", listing.id)
-      .order("created_at", { ascending: false });
+    const interests = await fetchDraftListingInterests(String(listing.id)).unwrap();
 
-    setSelectedListing({ ...listing, interests: interests || [] });
+    setSelectedListing({ ...listing, interests: interests as unknown as ListingInterest[] });
     setLoadingDetail(false);
   };
 
@@ -154,36 +150,13 @@ export function DraftListingsPanel() {
 
     setActionLoading(true);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-      const headers: Record<string, string> = {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
-        "Content-Type": "application/json",
-      };
-
-      const accessToken = getBackendAccessToken();
-      if (accessToken) {
-        headers["Authorization"] = `Bearer ${accessToken}`;
-      }
-
-      const res = await fetch(`${supabaseUrl}/functions/v1/quiltmatch-admin`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          listing_id: selectedListing.id,
-          action,
-          message_to_organizer: adminMessage || undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody?.error || `Action failed (${res.status})`);
-      }
-
-      const result = await res.json();
+      const result = await updateDraftListing({
+        id: String(selectedListing.id),
+        body: {
+          status: action === "approve" ? "CLAIMED" : action === "reject" ? "REJECTED" : "DISCOVERED",
+          adminNotes: adminMessage || undefined,
+        },
+      }).unwrap() as { message?: string };
 
       toast({
         title: action === "approve" ? "Listing approved!" : 

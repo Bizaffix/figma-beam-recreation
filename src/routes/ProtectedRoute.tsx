@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { useAppSelector } from "@/app/hooks";
+import { useAppSelector } from "@/redux/hooks";
 import {
   selectAuthHydrated,
   selectAuthRole,
   selectAuthStatus,
   selectIsAuthenticated,
-} from "@/features/auth/authSelectors";
+} from "@/redux/auth/authSelectors";
 import { RoleGuard } from "@/routes/RoleGuard";
 import type { AppUserRole } from "@/types/auth.types";
 

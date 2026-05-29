@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { createAiSubscriptionCheckout } from "@/services/ai-subscription";
+import { createAiSubscriptionCheckout } from "@/services/server/quiltmatch/ai-subscription";
 import { Header } from "@/components/Header";
 import { usePlatformSettings } from "@/contexts/PlatformSettingsContext";
 

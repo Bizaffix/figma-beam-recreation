@@ -1,17 +1,14 @@
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { QuiltMatchSiteHeader } from "@/components/quilt-match-home/site-header";
 import { QuiltMatchSiteFooter } from "@/components/quilt-match-home/site-footer";
-import { fetchPublishedNewsItems, newsTimeBucket } from "@/lib/content/news";
+import { useGetNewsItemsQuery } from "@/services/server";
+import { newsTimeBucket } from "@/lib/content/news";
 import type { NewsItemSummary } from "@/lib/content/types";
 
 const BUCKET_LABELS = ["Today", "This week", "Earlier"] as const;
 
 export default function QuiltMatchNewsPage() {
-  const { data: items = [], isLoading, isError } = useQuery({
-    queryKey: ["news", "published"],
-    queryFn: () => fetchPublishedNewsItems(),
-  });
+  const { data: items = [], isLoading, isError } = useGetNewsItemsQuery();
 
   const groups: Record<(typeof BUCKET_LABELS)[number], NewsItemSummary[]> = {
     Today: [],
@@ -41,7 +38,7 @@ export default function QuiltMatchNewsPage() {
           {isLoading && <p className="text-muted-foreground">Loading news…</p>}
           {isError && (
             <p className="text-muted-foreground">
-              Could not load news. Run the blog migration in Supabase if tables are missing.
+              Could not load news. Check that the backend API is running and reachable.
             </p>
           )}
           {!isLoading &&

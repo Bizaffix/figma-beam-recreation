@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { MapPin, ExternalLink } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import type { EventRoom } from "@/lib/event-capacity";
+import { useLazyGetVenueByIdQuery } from "@/services/server";
+import { toLegacyProperty } from "@/services/mappers";
+import { fetchEventRooms, type EventRoom } from "@/lib/event-capacity";
 
 interface EventVenuePreviewProps {
   venueId: string;
@@ -28,36 +29,19 @@ export const EventVenuePreview = ({
   const [venueDetails, setVenueDetails] = useState<any>(null);
   const [rooms, setRooms] = useState<EventRoom[]>([]);
   const [loading, setLoading] = useState(false);
+  const [triggerGetVenue] = useLazyGetVenueByIdQuery();
 
   const handleViewFullDetails = async () => {
     setShowFullDetails(true);
     setLoading(true);
     
     try {
-      // Fetch venue details
-      const { data: venue, error: venueError } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('id', venueId)
-        .single();
-
-      if (venueError) throw venueError;
-
+      const venueRaw = await triggerGetVenue(venueId).unwrap();
+      const venue = toLegacyProperty(venueRaw);
       setVenueDetails(venue);
 
-      // Fetch event rooms (snapshot)
-      const { data: roomsData, error: roomsError } = await supabase
-        .from('event_rooms')
-        .select(`
-          *,
-          beds:event_beds(*)
-        `)
-        .eq('event_id', eventId)
-        .order('sort_order', { ascending: true });
-
-      if (roomsError) throw roomsError;
-
-      setRooms(roomsData || []);
+      const roomsData = await fetchEventRooms(eventId);
+      setRooms(roomsData);
     } catch (error) {
       console.error('Error fetching venue details:', error);
     } finally {

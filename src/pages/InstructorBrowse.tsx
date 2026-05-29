@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { RetreatCard } from "@/components/RetreatCard";
 import { BottomNav } from "@/components/BottomNav";
 import { Input } from "@/components/ui/input";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { useGetRetreatsQuery } from "@/services/server";
+import { mapRetreatForCard } from "@/services/mappers";
 
 interface RetreatData {
   id: number;
@@ -32,79 +33,23 @@ interface RetreatData {
 
 const InstructorBrowse = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [retreats, setRetreats] = useState<RetreatData[]>([]);
-  const [loading, setLoading] = useState(true);
   const { role, user } = useAuth();
-  
-  // Only show this page to instructors
-  if (role !== 'instructor') {
+  const { data: retreatsRaw = [], isLoading: loading } = useGetRetreatsQuery(
+    { status: "published" },
+    { skip: role !== "instructor" || !user },
+  );
+
+  const retreats = useMemo(
+    () =>
+      retreatsRaw
+        .filter((retreat) => String(retreat.instructorId ?? retreat.instructor_id) !== user?.id)
+        .map((retreat) => mapRetreatForCard(retreat)) as RetreatData[],
+    [retreatsRaw, user?.id],
+  );
+
+  if (role !== "instructor") {
     return null;
   }
-
-  // Fetch published retreats from other organizers
-  useEffect(() => {
-    const fetchRetreats = async () => {
-      if (!user) return;
-
-      try {
-        // Fetch published retreats with instructor info, excluding current instructor's retreats
-        const { data, error } = await supabase
-          .from('retreats')
-          .select(`
-            *,
-            instructor:profiles!instructor_id(
-              full_name,
-              avatar_url,
-              bio,
-              facebook_url,
-              instagram_url,
-              pinterest_url
-            )
-          `)
-          .eq('published', true)
-          .neq('instructor_id', user.id) // Exclude current instructor's retreats
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching retreats:', error);
-        } else if (data) {
-          // Transform data to match component expectations
-          const transformedRetreats = data.map((retreat: any) => ({
-            id: retreat.id,
-            title: retreat.title,
-            description: retreat.description,
-            location: retreat.location,
-            date: retreat.date,
-            duration: retreat.duration,
-            level: retreat.level,
-            price: retreat.price,
-            total_spots: retreat.total_spots,
-            spots_available: retreat.spots_available,
-            image: retreat.image,
-            includes: retreat.includes || [],
-            schedule: retreat.schedule || [],
-            published: retreat.published,
-            instructor_id: retreat.instructor_id,
-            instructor: {
-              name: retreat.instructor?.full_name || 'Instructor',
-              avatar: retreat.instructor?.avatar_url || '',
-              bio: retreat.instructor?.bio || '',
-              facebook: retreat.instructor?.facebook_url || '',
-              instagram: retreat.instructor?.instagram_url || '',
-              pinterest: retreat.instructor?.pinterest_url || '',
-            },
-          }));
-          setRetreats(transformedRetreats);
-        }
-      } catch (error) {
-        console.error('Unexpected error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchRetreats();
-  }, [user]);
 
   // Filter retreats by search query
   const filteredRetreats = retreats.filter((retreat) => {

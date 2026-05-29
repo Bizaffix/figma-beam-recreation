@@ -8,7 +8,20 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetConversationsQuery,
+  useLazyGetConversationQuery,
+  useSendMessageMutation,
+  useLazyGetEventRequestsQuery,
+} from "@/services/server";
+import {
+  sumUnreadCount,
+  getOtherParticipant,
+  getUserDisplayName,
+  toLegacyMessage,
+  conversationUnreadCount,
+  toLegacyEventRequest,
+} from "@/services/mappers";
 import { format, isToday, isYesterday, formatDistanceToNow } from "date-fns";
 import { 
   Send, 
@@ -57,7 +70,10 @@ interface EventRequest {
   created_at: string;
 }
 
+const POLL_MS = 30000;
+
 interface Conversation {
+  conversation_id: string;
   event_request_id: string;
   event_title: string;
   property_name: string;
@@ -83,6 +99,10 @@ const VenueOwnerMessages = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEventFilter, setSelectedEventFilter] = useState<string>("all");
   const [eventRequests, setEventRequests] = useState<EventRequest[]>([]);
+  const [triggerGetConversations] = useLazyGetConversationsQuery();
+  const [triggerGetConversation] = useLazyGetConversationQuery();
+  const [sendMessageMutation] = useSendMessageMutation();
+  const [triggerGetEventRequests] = useLazyGetEventRequestsQuery();
 
   useEffect(() => {
     if (role !== 'location_owner') {
@@ -104,295 +124,150 @@ const VenueOwnerMessages = () => {
     return matchesEvent && matchesSearch;
   });
 
-  // Real-time subscription for new messages
   useEffect(() => {
-    if (!user || role !== 'location_owner') return;
-
-    const channel = supabase
-      .channel('venue-messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `receiver_id=eq.${user.id}`
-        },
-        (payload) => {
-          const newMessage = payload.new as Message;
-          
-          // Update conversations list to show new message
-          fetchConversations();
-          
-          // If currently viewing the conversation with this sender, update messages
-          // Handle both event request and direct message conversations
-          if (selectedConversation && 
-              selectedConversation.participant_id === newMessage.sender_id) {
-            
-            // Check if this message belongs to the current conversation
-            const isCurrentEventRequest = selectedConversation.event_request_id === newMessage.related_id;
-            const isCurrentDirectMessage = !newMessage.related_id && 
-              selectedConversation.event_request_id.startsWith('direct-');
-            
-            if (isCurrentEventRequest || isCurrentDirectMessage) {
-              fetchMessages(selectedConversation.event_request_id);
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, role, selectedConversation]);
+    if (!user || role !== "location_owner") return;
+    const interval = setInterval(fetchConversations, POLL_MS);
+    return () => clearInterval(interval);
+  }, [user, role]);
 
   useEffect(() => {
-    if (selectedConversation) {
-      fetchMessages(selectedConversation.event_request_id);
-    }
-  }, [selectedConversation]);
+    if (!selectedConversation?.conversation_id) return;
+    fetchMessages(selectedConversation.conversation_id);
+    const interval = setInterval(
+      () => fetchMessages(selectedConversation.conversation_id),
+      POLL_MS,
+    );
+    return () => clearInterval(interval);
+  }, [selectedConversation?.conversation_id]);
 
   const fetchConversations = async () => {
+    if (!user?.id) return;
     try {
-      // Get all properties for this venue owner
-      const { data: properties, error: propertiesError } = await supabase
-        .from('properties')
-        .select('id, property_name')
-        .eq('owner_id', user?.id);
+      const [eventRequestItems, conversationItems] = await Promise.all([
+        triggerGetEventRequests({ limit: 100 }).unwrap(),
+        triggerGetConversations(undefined).unwrap(),
+      ]);
 
-      if (propertiesError) throw propertiesError;
+      const legacyEvents = eventRequestItems.map((er) => toLegacyEventRequest(er));
+      setEventRequests(legacyEvents);
+      const eventById = new Map(legacyEvents.map((er) => [er.id, er]));
 
-      // Get event requests for all properties
-      const propertyIds = properties?.map(p => p.id) || [];
-      const { data: eventRequestsData, error: requestsError } = await supabase
-        .from('event_requests')
-        .select('*')
-        .in('property_id', propertyIds);
-
-      if (requestsError) throw requestsError;
-      
-      setEventRequests(eventRequestsData || []);
-
-      // Also get any messages sent directly to this venue owner
-      const { data: directMessages, error: directMessagesError } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('receiver_id', user?.id)
-        .eq('message_type', 'event_request')
-        .eq('sender_role', 'instructor')
-        .order('created_at', { ascending: false });
-
-      if (directMessagesError) throw directMessagesError;
-
-      // For each event request, get conversations with instructors
       const conversationsData: Conversation[] = [];
-      const processedEventIds = new Set<string>();
 
-      // Process event requests from properties
-      for (const eventRequest of eventRequestsData || []) {
-        processedEventIds.add(eventRequest.id);
-        
-        // Get all messages between this venue owner and instructor for this event request
-        const { data: eventMessages, error: eventMessagesError } = await supabase
-          .from('messages')
-          .select('id, sender_id, sender_name, sender_role, created_at, content, read, receiver_id')
-          .eq('related_id', eventRequest.id)
-          .eq('message_type', 'event_request')
-          .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-          .order('created_at', { ascending: false });
+      for (const raw of conversationItems) {
+        const c = raw as Record<string, unknown>;
+        const other = getOtherParticipant(c, user.id);
+        const otherUser = (other?.user ?? {}) as Record<string, unknown>;
+        const otherId = String(other?.userId ?? otherUser.id ?? "");
+        const lastRaw = Array.isArray(c.messages) ? (c.messages[0] as Record<string, unknown>) : null;
+        const lastMessage = toLegacyMessage(lastRaw, { currentUserId: user.id });
+        if (!lastMessage) continue;
 
-        if (eventMessagesError) throw eventMessagesError;
+        const unread = conversationUnreadCount(c, user.id);
+        const venue = c.venue as Record<string, unknown> | undefined;
 
-        if (eventMessages && eventMessages.length > 0) {
-          const lastMessage = eventMessages[0];
-          
-          // Count unread messages from instructor
-          const unreadCount = eventMessages.filter(m => 
-            m.sender_id !== user?.id && 
-            m.receiver_id && m.receiver_id === user?.id && 
-            m.read === false
-          ).length;
-
+        if (c.eventRequestId) {
+          const er = eventById.get(String(c.eventRequestId));
           conversationsData.push({
-            event_request_id: eventRequest.id,
-            event_title: eventRequest.event_title,
-            property_name: eventRequest.property_name,
-            start_date: eventRequest.start_date,
-            end_date: eventRequest.end_date,
-            status: eventRequest.status,
-            last_message: {
-              id: lastMessage.id,
-              sender_id: lastMessage.sender_id,
-              sender_name: lastMessage.sender_name,
-              sender_role: lastMessage.sender_role,
-              content: lastMessage.content,
-              created_at: lastMessage.created_at,
-              read: lastMessage.read || false,
-              message_type: 'event_request',
-              related_id: eventRequest.id,
-              receiver_id: lastMessage.receiver_id
-            },
-            unread_count: unreadCount,
-            participant_id: eventRequest.instructor_id,
-            participant_name: eventRequest.instructor_name,
-            participant_role: 'instructor'
+            conversation_id: String(c.id),
+            event_request_id: String(c.eventRequestId),
+            event_title: er?.event_title ?? String((c.retreat as Record<string, unknown>)?.title ?? "Event"),
+            property_name: er?.property_name ?? String(venue?.name ?? ""),
+            start_date: er?.start_date ?? "",
+            end_date: er?.end_date ?? "",
+            status: er?.status ?? "pending",
+            last_message: { ...lastMessage, message_type: "event_request" },
+            unread_count: unread,
+            participant_id: otherId,
+            participant_name: getUserDisplayName(otherUser),
+            participant_role: "instructor",
+          });
+        } else if (c.venueId || c.context === "VENUE_REQUEST" || c.context === "GENERAL") {
+          conversationsData.push({
+            conversation_id: String(c.id),
+            event_request_id: `direct-${otherId}`,
+            event_title: "Venue Inquiry",
+            property_name: String(venue?.name ?? "Direct Message"),
+            start_date: new Date().toISOString().split("T")[0],
+            end_date: new Date().toISOString().split("T")[0],
+            status: "pending",
+            last_message: { ...lastMessage, message_type: "event_request" },
+            unread_count: unread,
+            participant_id: otherId,
+            participant_name: getUserDisplayName(otherUser),
+            participant_role: "instructor",
           });
         }
       }
 
-      // Process direct messages that aren't associated with existing event requests
-      const groupedDirectMessages = directMessages?.reduce((groups: Record<string, any[]>, message) => {
-        // Group by sender (instructor) ID to avoid duplicates
-        const key = `direct-${message.sender_id}`;
-        if (!groups[key]) {
-          groups[key] = [];
-        }
-        groups[key].push(message);
-        return groups;
-      }, {});
-
-      for (const [key, messages] of Object.entries(groupedDirectMessages || {})) {
-        if (processedEventIds.has(key)) continue; // Skip if already processed
-        
-        const messageGroup = messages as any[];
-        const lastMessage = messageGroup[0];
-        
-        // Count unread messages
-        const unreadCount = messageGroup.filter(m => 
-          m.sender_id !== user?.id && 
-          m.receiver_id === user?.id && 
-          m.read === false
-        ).length;
-
-        conversationsData.push({
-          event_request_id: key,
-          event_title: 'Venue Inquiry',
-          property_name: 'Direct Message',
-          start_date: new Date().toISOString().split('T')[0],
-          end_date: new Date().toISOString().split('T')[0],
-          status: 'pending',
-          last_message: {
-            id: lastMessage.id,
-            sender_id: lastMessage.sender_id,
-            sender_name: lastMessage.sender_name,
-            sender_role: lastMessage.sender_role,
-            content: lastMessage.content,
-            created_at: lastMessage.created_at,
-            read: lastMessage.read || false,
-            message_type: 'event_request',
-            related_id: lastMessage.related_id,
-            receiver_id: lastMessage.receiver_id
-          },
-          unread_count: unreadCount,
-          participant_id: lastMessage.sender_id,
-          participant_name: lastMessage.sender_name,
-          participant_role: 'instructor'
-        });
-      }
-
-      // Sort conversations by most recent message
-      conversationsData.sort((a, b) => 
-        new Date(b.last_message.created_at).getTime() - new Date(a.last_message.created_at).getTime()
+      conversationsData.sort(
+        (a, b) =>
+          new Date(b.last_message.created_at).getTime() -
+          new Date(a.last_message.created_at).getTime(),
       );
 
       setConversations(conversationsData);
     } catch (error) {
-      console.error('Error fetching conversations:', error);
+      console.error("Error fetching conversations:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchMessages = async (eventRequestId: string) => {
-    if (!selectedConversation) return;
-    
+  const fetchMessages = async (conversationId: string) => {
+    if (!user?.id) return;
     try {
-      // Determine if this is a direct message or event request conversation
-      const isDirectMessage = eventRequestId.startsWith('direct-');
-      const actualId = isDirectMessage ? null : eventRequestId;
-      
-      let data;
-      
-      if (isDirectMessage) {
-        // For direct messages, fetch by participant and message type
-        const { data: directData, error: directError } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('message_type', 'event_request')
-          .or(`and(sender_id.eq.${user?.id},receiver_id.eq.${selectedConversation.participant_id}),and(sender_id.eq.${selectedConversation.participant_id},receiver_id.eq.${user?.id})`)
-          .order('created_at', { ascending: true });
-        
-        if (directError) throw directError;
-        data = directData;
-      } else {
-        // For event request messages, fetch by related_id
-        const { data: eventData, error: eventError } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('related_id', eventRequestId)
-          .eq('message_type', 'event_request')
-          .or(`sender_id.eq.${user?.id},receiver_id.eq.${user?.id}`)
-          .order('created_at', { ascending: true });
-
-        if (eventError) throw eventError;
-        data = eventData;
-      }
-
-      setMessages(data || []);
-
-      // Mark messages as read
-      const unreadMessages = data?.filter(m => m.receiver_id === user.id && !m.read);
-      if (unreadMessages && unreadMessages.length > 0) {
-        await supabase
-          .from('messages')
-          .update({ read: true })
-          .eq('receiver_id', user.id)
-          .eq('message_type', 'event_request')
-          .in('id', unreadMessages.map(m => m.id));
-      }
+      const data = await triggerGetConversation(conversationId).unwrap();
+      const mapped = (data.messages ?? [])
+        .map((m) => toLegacyMessage(m as Record<string, unknown>, { currentUserId: user.id }))
+        .filter((m) => m != null) as Message[];
+      setMessages(mapped);
+      fetchConversations();
     } catch (error) {
-      console.error('Error fetching messages:', error);
+      console.error("Error fetching messages:", error);
     }
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedConversation || sending) return;
+    if (!newMessage.trim() || !selectedConversation || !user?.id || sending) return;
 
     setSending(true);
+    const senderName =
+      user.fullName ??
+      [user.firstName, user.lastName].filter(Boolean).join(" ") ??
+      user.email?.split("@")[0] ??
+      "Venue Owner";
+
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      sender_id: user.id,
+      sender_name: senderName,
+      sender_role: "location_owner",
+      receiver_id: selectedConversation.participant_id,
+      content: newMessage.trim(),
+      created_at: new Date().toISOString(),
+      read: false,
+      message_type: "event_request",
+      related_id: selectedConversation.event_request_id,
+    };
+
+    setMessages((prev) => [...prev, optimisticMessage]);
+    const body = newMessage.trim();
+    setNewMessage("");
+
     try {
-      // Determine if this is a direct message or event request conversation
-      const isDirectMessage = selectedConversation.event_request_id.startsWith('direct-');
-      const relatedId = isDirectMessage ? selectedConversation.event_request_id : selectedConversation.event_request_id;
-      
-      const messageData = {
-        sender_id: user?.id,
-        sender_name: user?.user_metadata?.first_name && user?.user_metadata?.last_name 
-          ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-          : user?.email?.split('@')[0] || 'Venue Owner',
-        sender_role: 'location_owner' as const,
-        receiver_id: selectedConversation.participant_id,
-        content: newMessage.trim(),
-        message_type: 'event_request' as const,
-        related_id: relatedId,
-        read: false
-      };
-
-      const { data, error } = await supabase
-        .from('messages')
-        .insert(messageData)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setMessages(prev => [...prev, data]);
-      setNewMessage("");
-      
-      // Update conversations list
+      const sent = await sendMessageMutation({
+        conversationId: selectedConversation.conversation_id,
+        body: { body },
+      }).unwrap();
+      const legacy = toLegacyMessage(sent as Record<string, unknown>, { currentUserId: user.id });
+      if (legacy) {
+        setMessages((prev) => prev.map((msg) => (msg.id === optimisticMessage.id ? legacy : msg)));
+      }
       fetchConversations();
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error("Error sending message:", error);
+      setMessages((prev) => prev.filter((msg) => msg.id !== optimisticMessage.id));
     } finally {
       setSending(false);
     }
@@ -455,15 +330,15 @@ const VenueOwnerMessages = () => {
             <div>
               <h1 className="text-xl font-semibold">Messages</h1>
               <p className="text-sm text-muted-foreground">
-                {conversations.reduce((acc, conv) => acc + conv.unread_count, 0) > 0 
-                  ? `${conversations.reduce((acc, conv) => acc + conv.unread_count, 0)} unread` 
-                  : 'All caught up!'}
+                {sumUnreadCount(conversations, user?.id) > 0
+                  ? `${sumUnreadCount(conversations, user?.id)} unread`
+                  : "All caught up!"}
               </p>
             </div>
           </div>
-          {conversations.reduce((acc, conv) => acc + conv.unread_count, 0) > 0 && (
+          {sumUnreadCount(conversations, user?.id) > 0 && (
             <Badge variant="destructive" className="animate-pulse">
-              {conversations.reduce((acc, conv) => acc + conv.unread_count, 0)}
+              {sumUnreadCount(conversations, user?.id)}
             </Badge>
           )}
         </div>

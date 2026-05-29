@@ -1,32 +1,32 @@
-// Event capacity management utilities
-
-import { supabase } from './supabase';
+import { runApiEndpoint } from "@/redux/apiDispatch";
+import { retreatApi } from "@/services/server/retreat/api";
+import { bookingApi } from "@/services/server/booking/api";
 
 export interface EventBed {
   id: string;
-  event_id: number;
+  event_id: number | string;
   event_room_id: string;
   source_bed_id?: string;
   title: string;
   image_url?: string;
-  status: 'AVAILABLE' | 'BOOKED' | 'HELD';
+  status: "AVAILABLE" | "BOOKED" | "HELD";
   held_until?: string;
   sort_order?: number;
 }
 
 export interface EventSeat {
   id: string;
-  event_id: number;
+  event_id: number | string;
   seat_index: number;
   row: number;
   col: number;
-  status: 'AVAILABLE' | 'BOOKED' | 'HELD';
+  status: "AVAILABLE" | "BOOKED" | "HELD";
   held_until?: string;
 }
 
 export interface EventRoom {
   id: string;
-  event_id: number;
+  event_id: number | string;
   source_room_id: string;
   name: string;
   image_url?: string;
@@ -36,320 +36,195 @@ export interface EventRoom {
   beds?: EventBed[];
 }
 
-/**
- * Create event venue snapshot (copy rooms/beds from venue to event)
- */
+type BackendBed = {
+  id: string;
+  roomId: string;
+  title: string;
+  imageUrl?: string | null;
+  status?: string;
+  sortOrder?: number;
+};
+
+type BackendRoom = {
+  id: string;
+  retreatId?: string | null;
+  sourceRoomId?: string | null;
+  name: string;
+  imageUrl?: string | null;
+  description?: string | null;
+  bedCount?: number;
+  sortOrder?: number;
+  beds?: BackendBed[];
+};
+
+type BackendSeat = {
+  id: string;
+  retreatId?: string;
+  seatIndex: number;
+  row: number;
+  col: number;
+  status?: string;
+};
+
+const mapBed = (bed: BackendBed, eventId: number | string, roomId: string): EventBed => ({
+  id: bed.id,
+  event_id: eventId,
+  event_room_id: roomId,
+  title: bed.title,
+  image_url: bed.imageUrl ?? undefined,
+  status: (bed.status?.toUpperCase() as EventBed["status"]) || "AVAILABLE",
+  sort_order: bed.sortOrder,
+});
+
+const mapRoom = (room: BackendRoom, eventId: number | string): EventRoom => ({
+  id: room.id,
+  event_id: eventId,
+  source_room_id: room.sourceRoomId ?? room.id,
+  name: room.name,
+  image_url: room.imageUrl ?? undefined,
+  description: room.description ?? undefined,
+  bed_count: room.bedCount ?? room.beds?.length ?? 0,
+  sort_order: room.sortOrder,
+  beds: (room.beds ?? []).map((bed) => mapBed(bed, eventId, room.id)),
+});
+
+const mapSeat = (seat: BackendSeat, eventId: number | string): EventSeat => ({
+  id: seat.id,
+  event_id: eventId,
+  seat_index: seat.seatIndex,
+  row: seat.row,
+  col: seat.col,
+  status: (seat.status?.toUpperCase() as EventSeat["status"]) || "AVAILABLE",
+});
+
 export async function createEventVenueSnapshot(
-  eventId: number,
-  venueId: string
+  eventId: number | string,
+  venueId: string,
 ): Promise<{ success: boolean; error?: string; snapshotId?: string }> {
   try {
-    const { data, error } = await supabase.rpc('create_event_venue_snapshot', {
-      p_event_id: eventId,
-      p_venue_id: venueId
+    await runApiEndpoint(retreatApi.endpoints.snapshotVenueToRetreat, {
+      retreatId: String(eventId),
+      venueId,
     });
-
-    if (error) throw error;
-
-    return { success: true, snapshotId: data };
-  } catch (error: any) {
-    console.error('Error creating event venue snapshot:', error);
-    return { success: false, error: error.message };
+    return { success: true };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Snapshot failed";
+    return { success: false, error: message };
   }
 }
 
-/**
- * Create event seats grid
- */
 export async function createEventSeatsGrid(
-  eventId: number,
+  eventId: number | string,
   seatCapacity: number,
-  rows: number = 10,
-  cols: number = 10
+  rows = 10,
+  cols = 10,
 ): Promise<{ success: boolean; error?: string; seatCount?: number }> {
   try {
-    const { data, error } = await supabase.rpc('create_event_seats_grid', {
-      p_event_id: eventId,
-      p_seat_capacity: seatCapacity,
-      p_rows: rows,
-      p_cols: cols
+    await runApiEndpoint(retreatApi.endpoints.updateRetreatSeatGrid, {
+      id: String(eventId),
+      body: { seatCapacity, rows, cols },
     });
-
-    if (error) throw error;
-
-    return { success: true, seatCount: data };
-  } catch (error: any) {
-    console.error('Error creating event seats grid:', error);
-    return { success: false, error: error.message };
+    return { success: true, seatCount: seatCapacity };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Seat grid failed";
+    return { success: false, error: message };
   }
 }
 
-/**
- * Fetch event rooms with beds
- */
-export async function fetchEventRooms(eventId: number): Promise<EventRoom[]> {
+export async function fetchEventRooms(eventId: number | string): Promise<EventRoom[]> {
   try {
-    // Fetch rooms
-    const { data: rooms, error: roomsError } = await supabase
-      .from('event_rooms')
-      .select('*')
-      .eq('event_id', eventId)
-      .order('sort_order', { ascending: true });
-
-    if (roomsError) throw roomsError;
-
-    if (!rooms || rooms.length === 0) {
-      return [];
-    }
-
-    // Fetch beds for each room
-    const { data: beds, error: bedsError } = await supabase
-      .from('event_beds')
-      .select('*')
-      .eq('event_id', eventId)
-      .order('sort_order', { ascending: true });
-
-    if (bedsError) throw bedsError;
-
-    // Group beds by room
-    const roomsWithBeds: EventRoom[] = rooms.map(room => ({
-      ...room,
-      beds: (beds || []).filter(bed => bed.event_room_id === room.id)
-    }));
-
-    return roomsWithBeds;
-  } catch (error: any) {
-    console.error('Error fetching event rooms:', error);
+    const rooms = await runApiEndpoint(retreatApi.endpoints.getRetreatRooms, String(eventId));
+    return (rooms as BackendRoom[]).map((room) => mapRoom(room, eventId));
+  } catch (error) {
+    console.error("Error fetching event rooms:", error);
     return [];
   }
 }
 
-/**
- * Fetch event seats
- */
-export async function fetchEventSeats(eventId: number): Promise<EventSeat[]> {
+export async function fetchEventSeats(eventId: number | string): Promise<EventSeat[]> {
   try {
-    const { data, error } = await supabase
-      .from('event_seats')
-      .select('*')
-      .eq('event_id', eventId)
-      .order('row', { ascending: true })
-      .order('col', { ascending: true });
-
-    if (error) throw error;
-
-    return data || [];
-  } catch (error: any) {
-    console.error('Error fetching event seats:', error);
+    const seats = await runApiEndpoint(retreatApi.endpoints.getRetreatSeats, String(eventId));
+    return (seats as BackendSeat[]).map((seat) => mapSeat(seat, eventId));
+  } catch (error) {
+    console.error("Error fetching event seats:", error);
     return [];
   }
 }
 
-/**
- * Hold a bed for booking (15 minute expiration)
- */
 export async function holdBed(
-  eventBedId: string
+  eventBedId: string,
+  retreatId?: number | string,
 ): Promise<{ success: boolean; error?: string }> {
+  if (!retreatId) return { success: false, error: "Retreat ID required" };
   try {
-    const heldUntil = new Date();
-    heldUntil.setMinutes(heldUntil.getMinutes() + 15);
-
-    const { error } = await supabase
-      .from('event_beds')
-      .update({
-        status: 'HELD',
-        held_until: heldUntil.toISOString()
-      })
-      .eq('id', eventBedId)
-      .eq('status', 'AVAILABLE'); // Only hold if still available
-
-    if (error) throw error;
-
+    await runApiEndpoint(bookingApi.endpoints.holdInventory, {
+      retreatId: String(retreatId),
+      body: { bedId: eventBedId },
+    });
     return { success: true };
-  } catch (error: any) {
-    console.error('Error holding bed:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Hold failed";
+    return { success: false, error: message };
   }
 }
 
-/**
- * Hold a seat for booking (15 minute expiration)
- */
 export async function holdSeat(
-  eventSeatId: string
+  eventSeatId: string,
+  retreatId?: number | string,
 ): Promise<{ success: boolean; error?: string }> {
+  if (!retreatId) return { success: false, error: "Retreat ID required" };
   try {
-    const heldUntil = new Date();
-    heldUntil.setMinutes(heldUntil.getMinutes() + 15);
-
-    const { error } = await supabase
-      .from('event_seats')
-      .update({
-        status: 'HELD',
-        held_until: heldUntil.toISOString()
-      })
-      .eq('id', eventSeatId)
-      .eq('status', 'AVAILABLE'); // Only hold if still available
-
-    if (error) throw error;
-
+    await runApiEndpoint(bookingApi.endpoints.holdInventory, {
+      retreatId: String(retreatId),
+      body: { seatId: eventSeatId },
+    });
     return { success: true };
-  } catch (error: any) {
-    console.error('Error holding seat:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Hold failed";
+    return { success: false, error: message };
   }
 }
 
-/**
- * Get attendee profile for booked bed/seat
- */
 export async function getAttendeeProfileForBed(eventBedId: string) {
   try {
-    const { data, error } = await supabase
-      .from('bed_assignments')
-      .select(`
-        booking:bookings!inner(
-          user_id,
-          full_name,
-          profile:profiles!bookings_user_id_fkey(
-            id,
-            full_name,
-            avatar_url,
-            bio
-          )
-        )
-      `)
-      .eq('event_bed_id', eventBedId)
-      .single();
-
-    if (error) throw error;
-
-    return data?.booking?.profile || null;
-  } catch (error: any) {
-    console.error('Error fetching attendee profile for bed:', error);
+    return await runApiEndpoint(retreatApi.endpoints.getBedAttendee, eventBedId);
+  } catch {
     return null;
   }
 }
 
 export async function getAttendeeProfileForSeat(eventSeatId: string) {
   try {
-    const { data, error } = await supabase
-      .from('seat_assignments')
-      .select(`
-        booking:bookings!inner(
-          user_id,
-          full_name,
-          profile:profiles!bookings_user_id_fkey(
-            id,
-            full_name,
-            avatar_url,
-            bio
-          )
-        )
-      `)
-      .eq('event_seat_id', eventSeatId)
-      .single();
-
-    if (error) throw error;
-
-    return data?.booking?.profile || null;
-  } catch (error: any) {
-    console.error('Error fetching attendee profile for seat:', error);
+    return await runApiEndpoint(retreatApi.endpoints.getSeatAttendee, eventSeatId);
+  } catch {
     return null;
   }
 }
 
-/**
- * Expire held inventory (call this periodically or on page load)
- */
 export async function expireHeldInventory(): Promise<void> {
-  try {
-    await supabase.rpc('expire_held_inventory');
-  } catch (error) {
-    console.error('Error expiring held inventory:', error);
-  }
+  // Handled by backend background job
 }
 
-/**
- * Get bed details from assignment (for confirmation page)
- */
-export async function getBedDetailsFromAssignment(bookingId: string): Promise<{
-  bed: EventBed | null;
-  room: EventRoom | null;
-} | null> {
+export async function getBedDetailsFromAssignment(bookingId: string) {
   try {
-    const { data: assignment, error: assignmentError } = await supabase
-      .from('bed_assignments')
-      .select(`
-        event_bed_id,
-        bed:event_beds!inner(
-          id,
-          event_id,
-          event_room_id,
-          title,
-          image_url,
-          status
-        )
-      `)
-      .eq('booking_id', bookingId)
-      .single();
-
-    if (assignmentError || !assignment?.bed) {
-      return null;
-    }
-
-    const bed = assignment.bed as EventBed;
-
-    // Fetch room details
-    const { data: room, error: roomError } = await supabase
-      .from('event_rooms')
-      .select('*')
-      .eq('id', bed.event_room_id)
-      .single();
-
-    if (roomError || !room) {
-      return { bed, room: null };
-    }
-
+    const booking = await runApiEndpoint(bookingApi.endpoints.getBookingById, bookingId);
+    const item = (booking as { items?: { bed?: BackendBed; room?: BackendRoom }[] }).items?.[0];
+    if (!item?.bed) return null;
     return {
-      bed,
-      room: room as EventRoom
+      bed: mapBed(item.bed, "", item.room?.id ?? ""),
+      room: item.room ? mapRoom(item.room, "") : null,
     };
-  } catch (error: any) {
-    console.error('Error fetching bed details from assignment:', error);
+  } catch {
     return null;
   }
 }
 
-/**
- * Get seat details from assignment (for confirmation page)
- */
 export async function getSeatDetailsFromAssignment(bookingId: string): Promise<EventSeat | null> {
   try {
-    const { data: assignment, error: assignmentError } = await supabase
-      .from('seat_assignments')
-      .select(`
-        event_seat_id,
-        seat:event_seats!inner(
-          id,
-          event_id,
-          seat_index,
-          row,
-          col,
-          status
-        )
-      `)
-      .eq('booking_id', bookingId)
-      .single();
-
-    if (assignmentError || !assignment?.seat) {
-      return null;
-    }
-
-    return assignment.seat as EventSeat;
-  } catch (error: any) {
-    console.error('Error fetching seat details from assignment:', error);
+    const booking = await runApiEndpoint(bookingApi.endpoints.getBookingById, bookingId);
+    const seat = (booking as { items?: { seat?: BackendSeat }[] }).items?.[0]?.seat;
+    return seat ? mapSeat(seat, "") : null;
+  } catch {
     return null;
   }
 }

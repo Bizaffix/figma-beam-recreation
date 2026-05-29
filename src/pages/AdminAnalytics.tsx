@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { getBackendAccessToken } from "@/lib/backendAuth";
+import { env } from "@/lib/env";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -33,7 +34,7 @@ import {
   fetchRevenueReport,
   fetchUtmReport,
   fetchSessions,
-} from "@/services/reports";
+} from "@/services/server/reports/api";
 
 interface AnalyticsStats {
   visitors: number;
@@ -118,12 +119,8 @@ const AdminAnalytics = () => {
         return;
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
       const headers = {
         Authorization: `Bearer ${accessToken}`,
-        apikey: supabaseAnonKey,
       };
 
       const now = Date.now();
@@ -141,7 +138,7 @@ const AdminAnalytics = () => {
         return body as T;
       };
 
-      const base = `${supabaseUrl}/functions/v1/analytics`;
+      const base = `${env.apiUrl}/analytics`;
 
       const [overview, ts, pages, ev] = await Promise.all([
         requestJson<AnalyticsStats>(`${base}/overview?${qs}`),

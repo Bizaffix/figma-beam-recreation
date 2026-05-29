@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { env } from "@/lib/env";
-import { consumePostAuthRedirect, setPostAuthRedirect } from "@/lib/post-auth";
+import { redirectAfterAuth, setPostAuthRedirect } from "@/lib/post-auth";
+import { buildGoogleOAuthStartUrl } from "@/lib/google-oauth";
 
 const ResendConfirmationForm = () => {
   const [resendEmail, setResendEmail] = useState("");
@@ -88,21 +88,7 @@ const Login = () => {
     if (nextPath) {
       setPostAuthRedirect(nextPath);
     }
-    const redirectPath = consumePostAuthRedirect();
-    if (redirectPath && redirectPath !== "/home") {
-      navigate(redirectPath);
-      return;
-    }
-
-    if (role === "instructor") {
-      navigate("/instructor/dashboard");
-    } else if (role === "admin") {
-      navigate("/admin/dashboard");
-    } else if (role === "location_owner") {
-      navigate("/location-owner/dashboard");
-    } else {
-      navigate("/home");
-    }
+    redirectAfterAuth(navigate, role);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -135,9 +121,12 @@ const Login = () => {
     }
   };
 
-  const handleGoogle = async () => {
+  const handleGoogle = () => {
+    if (nextPath) {
+      setPostAuthRedirect(nextPath);
+    }
     setGoogleLoading(true);
-    window.location.href = `${env.apiUrl}/auth/oauth/google`;
+    window.location.href = buildGoogleOAuthStartUrl();
   };
 
   const signupHref = nextPath ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup";

@@ -1,14 +1,10 @@
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { QuiltMatchSiteHeader } from "@/components/quilt-match-home/site-header";
 import { QuiltMatchSiteFooter } from "@/components/quilt-match-home/site-footer";
-import { fetchPublishedBlogPosts } from "@/lib/content/blog";
+import { useGetBlogPostsQuery } from "@/services/server";
 
 export default function QuiltMatchBlogPage() {
-  const { data: posts = [], isLoading, isError } = useQuery({
-    queryKey: ["blog", "published"],
-    queryFn: () => fetchPublishedBlogPosts(),
-  });
+  const { data: posts = [], isLoading, isError } = useGetBlogPostsQuery();
 
   return (
     <div className="quilt-match-home min-h-screen bg-background text-foreground">
@@ -27,7 +23,7 @@ export default function QuiltMatchBlogPage() {
           {isLoading && <p className="text-muted-foreground">Loading articles…</p>}
           {isError && (
             <p className="text-muted-foreground">
-              Could not load articles. Run the blog migration in Supabase if tables are missing.
+              Could not load articles. Check that the backend API is running and reachable.
             </p>
           )}
           {!isLoading && !isError && posts.length === 0 && (

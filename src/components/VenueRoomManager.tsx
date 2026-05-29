@@ -7,7 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Plus, Edit, Trash2, Upload, X, AlertCircle, CheckCircle2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetVenueRoomsQuery,
+  useCreateVenueRoomMutation,
+  useUpdateVenueRoomMutation,
+  useDeleteVenueRoomMutation,
+  useCreateVenueBedMutation,
+  useUpdateVenueBedMutation,
+  useDeleteVenueBedMutation,
+  useUploadFileMutation,
+} from "@/services/server";
+import { mapVenueRoomFromApi } from "@/services/mappers";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { validateVenueRooms, type VenueRoom, type VenueBed, type VenueValidationResult } from "@/lib/venue-validation";
@@ -27,6 +37,14 @@ export const VenueRoomManager = ({ venueId, onValidationChange }: VenueRoomManag
   const [editingBed, setEditingBed] = useState<{ bed: VenueBed; roomId: string } | null>(null);
   const [roomDialogOpen, setRoomDialogOpen] = useState(false);
   const [bedDialogOpen, setBedDialogOpen] = useState(false);
+  const [triggerGetVenueRooms] = useLazyGetVenueRoomsQuery();
+  const [createVenueRoomMutation] = useCreateVenueRoomMutation();
+  const [updateVenueRoomMutation] = useUpdateVenueRoomMutation();
+  const [deleteVenueRoomMutation] = useDeleteVenueRoomMutation();
+  const [createVenueBedMutation] = useCreateVenueBedMutation();
+  const [updateVenueBedMutation] = useUpdateVenueBedMutation();
+  const [deleteVenueBedMutation] = useDeleteVenueBedMutation();
+  const [uploadFile] = useUploadFileMutation();
 
   useEffect(() => {
     if (venueId) {
@@ -44,59 +62,10 @@ export const VenueRoomManager = ({ venueId, onValidationChange }: VenueRoomManag
   const fetchRooms = async () => {
     try {
       setLoading(true);
-      const { data: roomsData, error: roomsError } = await supabase
-        .from('venue_rooms')
-        .select('*')
-        .eq('venue_id', venueId)
-        .order('sort_order', { ascending: true });
-
-      if (roomsError) throw roomsError;
-
-      // Fetch beds for each room
-      if (roomsData && roomsData.length > 0) {
-        const roomIds = roomsData.map(r => r.id);
-        const { data: bedsData, error: bedsError } = await supabase
-          .from('venue_beds')
-          .select('*')
-          .in('room_id', roomIds)
-          .order('sort_order', { ascending: true });
-
-        if (bedsError) throw bedsError;
-
-        // Group beds by room
-        const roomsWithBeds: VenueRoom[] = roomsData.map(room => {
-          // Parse image_url if it's a JSON array, otherwise use as single image
-          let images: string[] = [];
-          if (room.image_url) {
-            try {
-              const parsed = JSON.parse(room.image_url);
-              if (Array.isArray(parsed)) {
-                images = parsed;
-              } else {
-                images = [room.image_url];
-              }
-            } catch {
-              // Not JSON, treat as single image URL
-              images = [room.image_url];
-            }
-          }
-          
-          return {
-            id: room.id,
-            name: room.name,
-            image_url: images[0] || undefined, // Keep first image as primary for backward compatibility
-            images: images, // Store all images
-            description: room.description || '',
-            bed_count: room.bed_count,
-            beds: (bedsData || []).filter(bed => bed.room_id === room.id)
-          };
-        });
-
-        setRooms(roomsWithBeds);
-      } else {
-        setRooms([]);
-      }
-    } catch (error: any) {
+      const roomsData = await triggerGetVenueRooms(venueId).unwrap();
+      const roomsWithBeds = roomsData.map((room) => mapVenueRoomFromApi(room));
+      setRooms(roomsWithBeds);
+    } catch (error: unknown) {
       console.error('Error fetching rooms:', error);
       toast({
         title: "Error",
@@ -111,100 +80,65 @@ export const VenueRoomManager = ({ venueId, onValidationChange }: VenueRoomManag
   const handleSaveRoom = async (room: VenueRoom) => {
     try {
       setSaving(true);
-      // Store images as JSON array (use images array if available, otherwise use image_url)
       const imagesArray = room.images && room.images.length > 0 
         ? room.images.filter(img => img && img.trim() !== '')
         : (room.image_url ? [room.image_url] : []);
       
-      const roomData = {
-        venue_id: venueId,
+      const roomBody = {
         name: room.name,
-        image_url: imagesArray.length > 0 ? JSON.stringify(imagesArray) : null,
+        imageUrl: imagesArray.length > 0 ? JSON.stringify(imagesArray) : null,
         description: room.description,
-        bed_count: room.bed_count,
-        sort_order: rooms.length
+        bedCount: room.bed_count,
+        sortOrder: rooms.length,
       };
 
       if (room.id) {
-        // Update existing room
-        const { error } = await supabase
-          .from('venue_rooms')
-          .update(roomData)
-          .eq('id', room.id);
+        await updateVenueRoomMutation({ venueId, roomId: room.id, body: roomBody }).unwrap();
 
-        if (error) throw error;
-
-        // Handle beds: delete old beds if bed_count changed
         if (room.bed_count === 1) {
-          // Delete all beds for single-bed room
-          await supabase
-            .from('venue_beds')
-            .delete()
-            .eq('room_id', room.id);
+          const existing = room.beds?.filter((b) => b.id) ?? [];
+          await Promise.all(existing.map((bed) => deleteVenueBedMutation({ venueId, bedId: bed.id! }).unwrap()));
         } else if (room.beds) {
-          // Update beds
           const existingBedIds = room.beds.filter(b => b.id).map(b => b.id!);
-          
-          // Delete beds that are no longer needed
-          const { data: currentBeds } = await supabase
-            .from('venue_beds')
-            .select('id')
-            .eq('room_id', room.id);
-          
-          const bedsToDelete = (currentBeds || [])
+          const currentRoom = rooms.find((r) => r.id === room.id);
+          const currentBeds = currentRoom?.beds ?? [];
+          const bedsToDelete = currentBeds
             .map(b => b.id)
-            .filter(id => !existingBedIds.includes(id));
-          
-          if (bedsToDelete.length > 0) {
-            await supabase
-              .from('venue_beds')
-              .delete()
-              .in('id', bedsToDelete);
-          }
+            .filter((id): id is string => Boolean(id && !existingBedIds.includes(id)));
 
-          // Upsert beds
-          for (const bed of room.beds) {
-            const bedData = {
-              room_id: room.id,
+          await Promise.all(bedsToDelete.map((bedId) => deleteVenueBedMutation({ venueId, bedId }).unwrap()));
+
+          for (const [index, bed] of (room.beds ?? []).entries()) {
+            const bedBody = {
               title: bed.title,
-              image_url: bed.image_url || null,
-              sort_order: bed.sort_order || 0
+              imageUrl: bed.image_url || null,
+              sortOrder: bed.sort_order ?? index,
             };
 
             if (bed.id) {
-              await supabase
-                .from('venue_beds')
-                .update(bedData)
-                .eq('id', bed.id);
+              await updateVenueBedMutation({ venueId, bedId: bed.id, body: bedBody }).unwrap();
             } else {
-              await supabase
-                .from('venue_beds')
-                .insert(bedData);
+              await createVenueBedMutation({ venueId, roomId: room.id, body: bedBody }).unwrap();
             }
           }
         }
       } else {
-        // Create new room
-        const { data: newRoom, error } = await supabase
-          .from('venue_rooms')
-          .insert(roomData)
-          .select()
-          .single();
+        const newRoom = await createVenueRoomMutation({ venueId, body: roomBody }).unwrap();
 
-        if (error) throw error;
-
-        // Create beds if bed_count > 1
         if (newRoom && room.bed_count > 1 && room.beds) {
-          const bedsToInsert = room.beds.map((bed, index) => ({
-            room_id: newRoom.id,
-            title: bed.title,
-            image_url: bed.image_url || null,
-            sort_order: index
-          }));
-
-          await supabase
-            .from('venue_beds')
-            .insert(bedsToInsert);
+          await Promise.all(
+            room.beds.map((bed, index) =>
+              createVenueBedMutation({
+                venueId,
+                roomId: String(newRoom.id),
+                body: {
+                  title: bed.title,
+                  imageUrl: bed.image_url || null,
+                  sortOrder: index,
+                },
+              }).unwrap(),
+            ),
+          );
         }
       }
 
@@ -216,11 +150,11 @@ export const VenueRoomManager = ({ venueId, onValidationChange }: VenueRoomManag
       setRoomDialogOpen(false);
       setEditingRoom(null);
       fetchRooms();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving room:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to save room",
+        description: error instanceof Error ? error.message : "Failed to save room",
         variant: "destructive",
       });
     } finally {
@@ -234,12 +168,7 @@ export const VenueRoomManager = ({ venueId, onValidationChange }: VenueRoomManag
     }
 
     try {
-      const { error } = await supabase
-        .from('venue_rooms')
-        .delete()
-        .eq('id', roomId);
-
-      if (error) throw error;
+      await deleteVenueRoomMutation({ venueId, roomId }).unwrap();
 
       toast({
         title: "Success",
@@ -247,7 +176,7 @@ export const VenueRoomManager = ({ venueId, onValidationChange }: VenueRoomManag
       });
 
       fetchRooms();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting room:', error);
       toast({
         title: "Error",
@@ -439,6 +368,7 @@ interface RoomDialogProps {
 const RoomDialog = ({ open, onOpenChange, room, onSave, saving }: RoomDialogProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [uploadFile] = useUploadFileMutation();
   const [formData, setFormData] = useState<VenueRoom>({
     name: '',
     description: '',
@@ -487,27 +417,9 @@ const RoomDialog = ({ open, onOpenChange, room, onSave, saving }: RoomDialogProp
       // Handle multiple room images
       setUploadingImage(true);
       try {
-        const uploadPromises = Array.from(files).map(async (file) => {
-          const fileExt = file.name.split('.').pop();
-          const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-          const filePath = `${user.id}/${fileName}`;
-
-          const { error: uploadError } = await supabase.storage
-            .from('venue-images')
-            .upload(filePath, file, {
-              cacheControl: '3600',
-              upsert: false
-            });
-
-          if (uploadError) throw uploadError;
-
-          const { data: { publicUrl } } = supabase.storage
-            .from('venue-images')
-            .getPublicUrl(filePath);
-
-          return publicUrl;
-        });
-
+        const uploadPromises = Array.from(files).map((file) =>
+          uploadFile({ bucket: "venue-images", file }).unwrap(),
+        );
         const uploadedUrls = await Promise.all(uploadPromises);
         
         setFormData(prev => ({
@@ -536,22 +448,7 @@ const RoomDialog = ({ open, onOpenChange, room, onSave, saving }: RoomDialogProp
       const file = files[0];
       setUploadingImageIndex(bedIndex);
       try {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}.${fileExt}`;
-        const filePath = `${user.id}/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('venue-images')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('venue-images')
-          .getPublicUrl(filePath);
+        const publicUrl = await uploadFile({ bucket: "venue-images", file }).unwrap();
 
         setFormData(prev => ({
           ...prev,

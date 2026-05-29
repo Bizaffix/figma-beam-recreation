@@ -8,7 +8,14 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/contexts/PermissionsContext";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetAdminUsersQuery,
+  useLazyGetEventCoHostsQuery,
+  useAddEventCoHostMutation,
+  useUpdateEventCoHostMutation,
+  useDeleteEventCoHostMutation,
+} from "@/services/server";
+import { mapLegacyProfile } from "@/services/mappers";
 import { 
   Users, 
   Settings, 
@@ -55,6 +62,11 @@ const CoManagementSystem = ({
   const [availableOwners, setAvailableOwners] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [triggerGetEventCoHosts] = useLazyGetEventCoHostsQuery();
+  const [triggerGetAdminUsers] = useLazyGetAdminUsersQuery();
+  const [addEventCoHostMutation] = useAddEventCoHostMutation();
+  const [updateEventCoHostMutation] = useUpdateEventCoHostMutation();
+  const [deleteEventCoHostMutation] = useDeleteEventCoHostMutation();
 
   useEffect(() => {
     if (eventId) {
@@ -65,31 +77,15 @@ const CoManagementSystem = ({
 
   const fetchCoHosts = async () => {
     try {
-      const { data: coHosts, error } = await supabase
-        .from('event_co_hosts')
-        .select(`
-          user_id,
-          name,
-          email,
-          permissions,
-          added_at,
-          profiles!inner(
-            role
-          )
-        `)
-        .eq('event_id', eventId)
-        .eq('profiles.role', 'location_owner');
+      const coHostsData = await triggerGetEventCoHosts(eventId).unwrap();
 
-      if (error) throw error;
-
-      // Transform the data to match the CoHost interface
-      const transformedCoHosts = (coHosts || []).map((host: any) => ({
-        user_id: host.user_id,
-        name: host.name,
-        email: host.email,
+      const transformedCoHosts = coHostsData.map((host) => ({
+        user_id: String(host.userId ?? host.user_id ?? ""),
+        name: String(host.name ?? ""),
+        email: String(host.email ?? ""),
         role: 'location_owner' as const,
-        permissions: host.permissions,
-        added_at: host.added_at
+        permissions: (host.permissions ?? {}) as CoHost['permissions'],
+        added_at: String(host.addedAt ?? host.added_at ?? ""),
       }));
 
       setCoHosts(transformedCoHosts);
@@ -102,17 +98,12 @@ const CoManagementSystem = ({
 
   const fetchAvailableOwners = async () => {
     try {
-      const { data: owners, error } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, email')
-        .eq('role', 'location_owner');
+      const owners = await triggerGetAdminUsers({ role: "location_owner", limit: 200 }).unwrap();
+      const mapped = owners.map((o) => mapLegacyProfile(o));
 
-      if (error) throw error;
-
-      // Filter out owners who are already co-hosts
-      const available = owners?.filter(owner => 
+      const available = mapped.filter(owner => 
         !coHosts.some(coHost => coHost.user_id === owner.id)
-      ) || [];
+      );
 
       setAvailableOwners(available);
     } catch (error) {
@@ -139,14 +130,17 @@ const CoManagementSystem = ({
         }
       };
 
-      const { error } = await supabase
-        .from('event_co_hosts')
-        .insert({
-          event_id: eventId,
-          ...newCoHost
-        });
-
-      if (error) throw error;
+      await addEventCoHostMutation({
+        eventRequestId: eventId,
+        body: {
+          userId: owner.id,
+          user_id: owner.id,
+          name: `${owner.first_name} ${owner.last_name}`,
+          email: owner.email,
+          role: "location_owner",
+          permissions: newCoHost.permissions,
+        },
+      }).unwrap();
 
       fetchCoHosts();
       fetchAvailableOwners();
@@ -160,13 +154,11 @@ const CoManagementSystem = ({
   const updateCoHostPermissions = async (coHostId: string, permissions: CoHost['permissions']) => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('event_co_hosts')
-        .update({ permissions })
-        .eq('event_id', eventId)
-        .eq('user_id', coHostId);
-
-      if (error) throw error;
+      await updateEventCoHostMutation({
+        eventRequestId: eventId,
+        coHostId,
+        body: { permissions },
+      }).unwrap();
 
       fetchCoHosts();
     } catch (error) {
@@ -179,13 +171,7 @@ const CoManagementSystem = ({
   const removeCoHost = async (coHostId: string) => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('event_co_hosts')
-        .delete()
-        .eq('event_id', eventId)
-        .eq('user_id', coHostId);
-
-      if (error) throw error;
+      await deleteEventCoHostMutation({ eventRequestId: eventId, coHostId }).unwrap();
 
       fetchCoHosts();
       fetchAvailableOwners();

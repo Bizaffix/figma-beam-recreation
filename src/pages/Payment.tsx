@@ -3,13 +3,20 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
+import {
+  useLazyGetRetreatByIdQuery,
+  useGetRetreatRoomsQuery,
+  useGetRetreatSeatsQuery,
+  useCreateBookingMutation,
+  useCreatePaymentIntentMutation,
+  useConfirmPaymentMutation,
+} from "@/services/server";
+import { toLegacyRetreat } from "@/services/mappers";
 import { useStripe, useElements, CardElement } from "@stripe/react-stripe-js";
-import { createPaymentIntent, confirmPayment } from "@/lib/stripe-payment";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Edit } from "lucide-react";
-import { fetchEventRooms, fetchEventSeats, EventBed, EventRoom, EventSeat } from "@/lib/event-capacity";
+import type { EventBed, EventRoom, EventSeat } from "@/lib/event-capacity";
 
 interface RetreatData {
   id: number;
@@ -39,17 +46,29 @@ const Payment = () => {
   const { user } = useAuth();
   const stripe = useStripe();
   const elements = useElements();
+  const [triggerGetRetreat] = useLazyGetRetreatByIdQuery();
+  const [createBooking] = useCreateBookingMutation();
+  const [createPaymentIntent] = useCreatePaymentIntentMutation();
+  const [confirmPayment] = useConfirmPaymentMutation();
   
   const [retreat, setRetreat] = useState<RetreatData | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
   const bookingFromState = (location.state as any)?.booking;
   const selectedPriceVariant = bookingFromState?.price_variant || null;
   const selectedAddOns = bookingFromState?.selected_add_ons || [];
   const ticketType = bookingFromState?.ticket_type;
   const bedAssignment = bookingFromState?.bed_assignment;
   const seatAssignment = bookingFromState?.seat_assignment;
+
+  const { data: roomsData } = useGetRetreatRoomsQuery(String(retreat?.id ?? ""), {
+    skip: !retreat?.id || ticketType !== "STAY" || !bedAssignment,
+  });
+  const { data: seatsData } = useGetRetreatSeatsQuery(String(retreat?.id ?? ""), {
+    skip: !retreat?.id || ticketType !== "SEAT_ONLY" || !seatAssignment,
+  });
 
   // Stripe Card Element error state
   const [cardError, setCardError] = useState<string>("");
@@ -83,45 +102,89 @@ const Payment = () => {
     return basePrice + addOnsTotal;
   };
 
-  // Fetch bed/seat details for confirmation display
+  // Derive bed/seat details for confirmation display
   useEffect(() => {
-    const fetchAssignmentDetails = async () => {
-      if (!retreat?.id) return;
-
-      try {
-        if (ticketType === 'STAY' && bedAssignment) {
-          // Fetch all rooms and find the bed
-          // bedAssignment structure: { bedId, roomId, bedTitle, roomName }
-          const rooms = await fetchEventRooms(retreat.id);
-          for (const room of rooms) {
-            const bed = room.beds?.find(b => b.id === bedAssignment.bedId);
-            if (bed) {
-              setBedDetails({ bed, room });
-              break;
-            }
-          }
-        } else if (ticketType === 'SEAT_ONLY' && seatAssignment) {
-          // Fetch all seats and find the selected one
-          // seatAssignment structure: { seatId, seatIndex, row, col }
-          const seats = await fetchEventSeats(retreat.id);
-          const seat = seats.find(s => s.id === seatAssignment.seatId);
-          if (seat) {
-            setSeatDetails(seat);
-          }
+    if (ticketType === "STAY" && bedAssignment && roomsData && retreat?.id) {
+      for (const room of roomsData) {
+        const beds = (room.beds as Record<string, unknown>[]) ?? [];
+        const bed = beds.find((b) => String(b.id) === bedAssignment.bedId);
+        if (bed) {
+          setBedDetails({
+            bed: {
+              id: String(bed.id),
+              event_id: retreat.id,
+              event_room_id: String(room.id),
+              title: String(bed.title ?? ""),
+              image_url: (bed.imageUrl ?? bed.image_url) as string | undefined,
+              status: "AVAILABLE",
+            },
+            room: {
+              id: String(room.id),
+              event_id: retreat.id,
+              source_room_id: String(room.sourceRoomId ?? room.source_room_id ?? room.id),
+              name: String(room.name ?? ""),
+              image_url: (room.imageUrl ?? room.image_url) as string | undefined,
+              description: (room.description as string | undefined) ?? undefined,
+              bed_count: Number(room.bedCount ?? room.bed_count ?? beds.length),
+            },
+          });
+          break;
         }
-      } catch (error) {
-        console.error('Error fetching assignment details:', error);
       }
-    };
-
-    if (retreat) {
-      fetchAssignmentDetails();
+    } else if (ticketType === "SEAT_ONLY" && seatAssignment && seatsData && retreat?.id) {
+      const seat = seatsData.find((s) => String(s.id) === seatAssignment.seatId);
+      if (seat) {
+        setSeatDetails({
+          id: String(seat.id),
+          event_id: retreat.id,
+          seat_index: Number(seat.seatIndex ?? seat.seat_index ?? 0),
+          row: Number(seat.row ?? 0),
+          col: Number(seat.col ?? 0),
+          status: "AVAILABLE",
+        });
+      }
     }
-  }, [retreat, ticketType, bedAssignment, seatAssignment]);
+  }, [retreat, ticketType, bedAssignment, seatAssignment, roomsData, seatsData]);
 
   // Fetch retreat and create payment intent
   useEffect(() => {
     const retreatFromState = (location.state as any)?.retreat;
+
+    const calculatePriceForRetreat = (retreatData: RetreatData) => {
+      let basePrice = retreatData.price || 0;
+
+      if (retreatData.price_variants && retreatData.price_variants.length > 0 && selectedPriceVariant) {
+        const variant = retreatData.price_variants.find(v => v.id === selectedPriceVariant);
+        if (variant) {
+          basePrice = variant.price;
+        }
+      }
+
+      let addOnsTotal = 0;
+      if (retreatData.add_ons) {
+        retreatData.add_ons.forEach(addOn => {
+          if (addOn.required || selectedAddOns.includes(addOn.id)) {
+            addOnsTotal += addOn.price;
+          }
+        });
+      }
+
+      return basePrice + addOnsTotal;
+    };
+
+    const buildBookingBody = (retreatData: RetreatData) => ({
+      retreatId: String(retreatData.id),
+      fullName: bookingFromState.fullName,
+      email: bookingFromState.email,
+      skillLevel: bookingFromState.skillLevel,
+      amount: calculatePriceForRetreat(retreatData),
+      status: "pending",
+      priceVariant: bookingFromState.price_variant || null,
+      addOns: bookingFromState.selected_add_ons?.length ? bookingFromState.selected_add_ons : null,
+      ticketType: bookingFromState.ticket_type || null,
+      bedAssignment: bookingFromState.bed_assignment || null,
+      seatAssignment: bookingFromState.seat_assignment || null,
+    });
     
     const initializePayment = async (retreatData: RetreatData) => {
       if (!bookingFromState || !user) {
@@ -134,28 +197,19 @@ const Payment = () => {
       }
 
       try {
-        // Create payment intent
-        const totalPrice = calculateTotalPrice();
-        const { clientSecret: secret, error } = await createPaymentIntent(
-          retreatData.id,
-          totalPrice,
-          bookingFromState
-        );
+        const booking = await createBooking(buildBookingBody(retreatData)).unwrap();
+        const bookingId = String(booking.id);
+        setPendingBookingId(bookingId);
 
-        if (error) {
-          toast({
-            title: "Error",
-            description: error,
-            variant: "destructive",
-          });
-        } else if (secret) {
+        const { clientSecret: secret } = await createPaymentIntent({ bookingId }).unwrap();
+        if (secret) {
           setClientSecret(secret);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Error initializing payment:', error);
         toast({
           title: "Error",
-          description: "Failed to initialize payment",
+          description: error instanceof Error ? error.message : "Failed to initialize payment",
           variant: "destructive",
         });
       }
@@ -166,29 +220,22 @@ const Payment = () => {
       setLoading(false);
       initializePayment(retreatFromState);
     } else if (id) {
-      // Fetch from Supabase
       const fetchRetreat = async () => {
         try {
-          const { data, error } = await supabase
-            .from('retreats')
-            .select('*')
-            .eq('id', Number(id))
-            .eq('published', true)
-            .single();
-
-          if (error) {
-            console.error('Error fetching retreat:', error);
-            toast({
-              title: "Error",
-              description: "Failed to load retreat details",
-              variant: "destructive",
-            });
-          } else if (data) {
-            setRetreat(data);
-            await initializePayment(data);
+          const data = await triggerGetRetreat(id).unwrap();
+          const mapped = toLegacyRetreat(data) as RetreatData;
+          if (mapped.published === false) {
+            throw new Error("Retreat not found");
           }
+          setRetreat(mapped);
+          await initializePayment(mapped);
         } catch (error) {
-          console.error('Unexpected error:', error);
+          console.error('Error fetching retreat:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load retreat details",
+            variant: "destructive",
+          });
         } finally {
           setLoading(false);
         }
@@ -198,7 +245,7 @@ const Payment = () => {
     } else {
       setLoading(false);
     }
-  }, [id, location.state, bookingFromState, user, toast]);
+  }, [id, location.state, bookingFromState, user, toast, createBooking, createPaymentIntent, triggerGetRetreat]);
 
   // Handle payment submission
   const handleConfirmPayment = async (event: React.FormEvent) => {
@@ -250,21 +297,22 @@ const Payment = () => {
       }
 
       if (paymentIntent && paymentIntent.status === 'succeeded') {
-        // Confirm payment and create booking in database
-        const { success, bookingId, error: confirmError } = await confirmPayment(
-          paymentIntent.id,
-          retreat.id,
-          bookingFromState,
-          user?.id
-        );
+        const confirmResult = await confirmPayment({
+          paymentIntentId: paymentIntent.id,
+          bookingId: pendingBookingId,
+          retreatId: String(retreat.id),
+          bookingDetails: bookingFromState,
+          userId: user?.id,
+        }).unwrap() as { booking?: { id: string }; bookingId?: string };
 
-        if (success) {
+        const bookingId = confirmResult.booking?.id ?? confirmResult.bookingId ?? pendingBookingId;
+
+        if (bookingId) {
           toast({
             title: "Payment Successful",
             description: "Your booking has been confirmed!",
           });
           
-          // Navigate to confirmation page
           navigate(`/retreat/${id}/confirmed`, {
             state: {
               retreat,
@@ -274,10 +322,9 @@ const Payment = () => {
             },
           });
         } else {
-          console.error('Booking creation failed:', confirmError);
           toast({
             title: "Error",
-            description: confirmError || "Payment succeeded but booking creation failed. Please contact support.",
+            description: "Payment succeeded but booking creation failed. Please contact support.",
             variant: "destructive",
           });
           setProcessing(false);

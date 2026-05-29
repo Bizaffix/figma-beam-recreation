@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useRef, ReactNode } from 'react';
-import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { authActions } from '@/features/auth/authSlice';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { authActions } from '@/redux/auth/authSlice';
 import {
   selectAccessToken,
   selectAuthRole,
   selectAuthStatus,
   selectAuthUser,
-} from '@/features/auth/authSelectors';
+} from '@/redux/auth/authSelectors';
 import {
   useChangePasswordMutation,
   useForgotPasswordMutation,
@@ -16,8 +16,9 @@ import {
   useResendVerificationMutation,
   useResetPasswordMutation,
   useSignupMutation,
-} from '@/services/api/authApi';
+} from '@/services/server/auth/api';
 import type { AuthUser, BackendUserRole } from '@/types/auth.types';
+import { env } from '@/lib/env';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -32,6 +33,7 @@ interface AuthContextType {
   resendConfirmationEmail: (email: string) => Promise<{ error: any }>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   updatePassword: (password: string, token?: string, currentPassword?: string) => Promise<{ error: any }>;
+  completeGoogleOAuth: (accessToken: string) => Promise<{ error: { message: string } | null; role?: BackendUserRole; userId?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -190,6 +192,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const completeGoogleOAuth = async (accessToken: string) => {
+    try {
+      const response = await fetch(`${env.apiUrl}/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+        credentials: 'include',
+      });
+      const body = (await response.json()) as {
+        data?: { user: AuthUser };
+        message?: string;
+      };
+      if (!response.ok || !body.data?.user) {
+        throw new Error(body.message || 'Could not load your profile after Google sign-in');
+      }
+      dispatch(authActions.setCredentials({ user: body.data.user, accessToken }));
+      return { error: null, role: body.data.user.role, userId: body.data.user.id };
+    } catch (error) {
+      return { error: asError(error) };
+    }
+  };
+
   const aiSubscriptionStatus = user?.aiSubscriptionStatus || null;
   const session = accessToken ? { access_token: accessToken, user } : null;
   const loading = authStatus === 'idle' || authStatus === 'loading';
@@ -209,6 +234,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         resendConfirmationEmail,
         resetPassword,
         updatePassword,
+        completeGoogleOAuth,
       }}
     >
       {children}
